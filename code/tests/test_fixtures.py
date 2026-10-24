@@ -58,7 +58,8 @@ class FixtureTests(unittest.TestCase):
                 root = base / 'input'
                 context = load_context(root)
                 requests = load_requests(root / 'deletion_requests.csv')
-                validate_output(read_output(base / 'expected_output.csv'), requests, context.evidence)
+                validate_output(read_output(base / 'expected_output.csv'), requests, context.evidence,
+                                FIXTURES[name].fallback_ids)
                 for ident in context.identities:  # identity rows are self-consistent
                     self.assertEqual(ident.email_hash, hashlib.sha256(ident.email.encode()).hexdigest())
 

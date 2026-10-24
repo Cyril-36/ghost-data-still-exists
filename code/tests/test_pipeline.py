@@ -35,13 +35,14 @@ class FixturePredictionTests(unittest.TestCase):
                     answer = base / 'expected_output.csv'
                     os.chmod(answer, 0)
                     try:
-                        run_audit(base / 'input', base / 'input/deletion_requests.csv',
-                                  base / 'predicted.csv', base / 'run')
+                        summary = run_audit(base / 'input', base / 'input/deletion_requests.csv',
+                                            base / 'predicted.csv', base / 'run')
                     finally:
                         os.chmod(answer, 0o644)
                     predicted, expected = read_output(base / 'predicted.csv'), read_output(answer)
                     result = score(predicted, expected)
                     self.assertEqual(result['exact_row_accuracy']['rate'], 1.0, result['diffs'])
+                    self.assertEqual(set(summary['fallback_ids']), set(fixture.fallback_ids))
 
     def test_fallback_rows_need_their_run_disclosures(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -141,8 +142,11 @@ class DatasetRegressionTests(unittest.TestCase):
 
     def test_all_structured_sources_parse(self):
         status = {r.source_id: r.status for r in self.corpus.reports}
-        self.assertEqual(sorted({s for s in status.values()}), ['PARSED', 'UNSUPPORTED_MEDIA'])
-        self.assertEqual(sum(s == 'UNSUPPORTED_MEDIA' for s in status.values()), 15)
+        # Offline: PDFs yield native text (no state without a document-kind decision);
+        # screenshots stay unsupported because no vision reader is configured.
+        from collections import Counter
+        self.assertEqual(Counter(status.values()), Counter({'PARSED': 79, 'UNSUPPORTED_MEDIA': 11,
+                                                            'TEXT_EXTRACTED': 4}))
         self.assertEqual(self.policy.issues, [])
 
     def test_tombstone_exposing_identifiers_is_discovered_from_inputs(self):

@@ -1,7 +1,11 @@
 """Deterministic, time-aware identity resolution.
 
 1. Rebuild each user's identifier history from the current snapshot plus the
-   identity audit log, so a value is known with its validity interval.
+   identity audit log. Each value carries its validity interval AND the time the
+   evidence establishing it became available: snapshot values at the snapshot's
+   updated_at, audit values at the audit entry's event_time. A value is known at
+   a cutoff only if it was valid by then and some establishing source was
+   available by then (a later audit entry cannot reveal an earlier alias).
 2. Match the request email (casefolded key) against any value valid at or
    before audit_at. Zero or several matching users is reported, never guessed.
 3. Close over explicit evidence: profile/tombstone rows and catalog links that
@@ -32,7 +36,8 @@ class Identifier:
     original: str       # literal value as supplied
     valid_from: datetime | None
     valid_to: datetime | None
-    provenance: str     # user_identities | audit_id | evidence source id | derived
+    provenance: str     # user_identities | audit_id | evidence source id | request
+    available_at: datetime | None = None   # earliest availability of a source establishing it; None = request input
 
 
 @dataclass
@@ -64,7 +69,7 @@ class IdentityIndex:
 
     def __init__(self, context):
         self.history = defaultdict(list)          # user_id -> [Identifier]
-        self.owner = defaultdict(set)             # (kind, key) -> {user_id}
+        self.owner = defaultdict(set)             # (kind, key) -> {user_id}; time-agnostic, for conflict guards
         self.issues = defaultdict(list)
         changes = defaultdict(list)
         for change in context.audit_log:
@@ -72,38 +77,60 @@ class IdentityIndex:
         for ident in context.identities:
             uid = ident.user_id
             current = {f: getattr(ident, f) for f in FIELD_KIND}
-            since = {f: None for f in FIELD_KIND}
-            # Walk changes newest-first, peeling each back to recover earlier values.
-            for ch in sorted(changes.pop(uid, []), key=lambda c: c.event_time, reverse=True):
+            since = {f: None for f in FIELD_KIND}          # start of the current value's validity
+            # Earliest availability of evidence for the value currently being walked back:
+            # the snapshot first, then each audit entry that names it.
+            evidence = {f: ident.updated_at for f in FIELD_KIND}
+            source = {f: 'user_identities' for f in FIELD_KIND}
+            own_changes = changes.pop(uid, [])
+            user_known = min([ident.updated_at] + [c.event_time for c in own_changes])
+            for ch in sorted(own_changes, key=lambda c: c.event_time, reverse=True):
                 if ch.field_name not in FIELD_KIND:
                     continue
-                if current[ch.field_name] != ch.new_value:
+                f = ch.field_name
+                if current[f] != ch.new_value:
                     self.issues[uid].append(f'TEMPORAL_CONFLICT: {ch.audit_id} new_value does not match '
-                                            f'the later {ch.field_name}')
-                self._add(uid, ch.field_name, ch.new_value, ch.event_time, since[ch.field_name], ch.audit_id)
-                current[ch.field_name], since[ch.field_name] = ch.old_value, ch.event_time
+                                            f'the later {f}')
+                self._add(uid, f, ch.new_value, ch.event_time, since[f], ch.audit_id,
+                          min(evidence[f], ch.event_time))
+                # The old value is established by this entry (available at its event_time) and,
+                # if an earlier entry set it, by that earlier entry too (handled on the next step).
+                current[f], since[f], evidence[f], source[f] = ch.old_value, ch.event_time, ch.event_time, ch.audit_id
             for f in FIELD_KIND:
-                self._add(uid, f, current[f], None, since[f], 'user_identities')
-            self.history[uid].append(Identifier('user', uid, uid, None, None, 'user_identities'))
+                self._add(uid, f, current[f], None, since[f], source[f], evidence[f])
+            self.history[uid].append(Identifier('user', uid, uid, None, None, 'user_identities', user_known))
             self.owner[('user', uid)].add(uid)
         for uid in changes:
             self.issues[uid].append('INPUT_SCHEMA_ERROR: audit entries for a user missing from user_identities')
+        # An earlier audit entry that set a value also establishes it: keep the earliest availability.
+        for uid, items in self.history.items():
+            earliest = {}
+            for i in items:
+                k = (i.kind, i.key, i.valid_from, i.valid_to)
+                if i.available_at is not None:
+                    earliest[k] = min(earliest.get(k, i.available_at), i.available_at)
+            self.history[uid] = [Identifier(i.kind, i.key, i.original, i.valid_from, i.valid_to, i.provenance,
+                                            earliest.get((i.kind, i.key, i.valid_from, i.valid_to), i.available_at))
+                                 for i in items]
 
-    def _add(self, uid, field_name, value, valid_from, valid_to, provenance):
+    def _add(self, uid, field_name, value, valid_from, valid_to, provenance, available_at):
         if not value:
             return
         kind = FIELD_KIND[field_name]
-        ident = Identifier(kind, _key(kind, value), value, valid_from, valid_to, provenance)
+        ident = Identifier(kind, _key(kind, value), value, valid_from, valid_to, provenance, available_at)
         self.history[uid].append(ident)
         self.owner[(kind, ident.key)].add(uid)
         if kind == 'email':   # the hash a system would store for this exact email
-            h = Identifier('hash', _sha256(value), _sha256(value), valid_from, valid_to, f'sha256({provenance})')
+            h = Identifier('hash', _sha256(value), _sha256(value), valid_from, valid_to, f'sha256({provenance})',
+                           available_at)
             self.history[uid].append(h)
             self.owner[('hash', h.key)].add(uid)
 
     def known_by(self, uid, cutoff) -> list[Identifier]:
-        """Identifiers whose validity began at or before the cutoff."""
-        return [i for i in self.history[uid] if i.valid_from is None or i.valid_from <= cutoff]
+        """Identifiers valid at or before the cutoff AND established by a source available by then."""
+        return [i for i in self.history[uid]
+                if (i.valid_from is None or i.valid_from <= cutoff)
+                and (i.available_at is None or i.available_at <= cutoff)]
 
 
 def resolve_subject(email: str, cutoff: datetime, index: IdentityIndex, corpus: Corpus | None = None,
@@ -143,7 +170,8 @@ def _close(subject, uid, cutoff, index, corpus, max_rounds):
                     if others:
                         subject.issues.append(f'IDENTITY_CONFLICT: {obs.obs_id} ties {new[0]} owned by {sorted(others)}')
                         continue
-                    subject.identifiers.append(Identifier(new[0], new[1], new[1], obs.observed_at, None, obs.source_id))
+                    subject.identifiers.append(Identifier(new[0], new[1], new[1], obs.observed_at, None, obs.source_id,
+                                                         obs.available_at))
                     known = known | {new}
                     added = True
         if not added:

@@ -239,3 +239,189 @@ Outputs are byte-identical across `PYTHONHASHSEED` values (checked for 10 seeds
 on all fixtures and 4 full runs). A reference-following loop that iterated a
 list while appending to it hung for some hash seeds; it now iterates a frozen
 snapshot (`planner.discover`).
+
+---
+
+# Phase 3 decisions (correctness fixes, Jev decision layer, media)
+
+## D026 — Identifier availability is separate from identifier validity (fix)
+
+Each `Identifier` now carries `available_at`: the earliest availability of a source
+establishing it (snapshot `updated_at`; each audit entry's `event_time` for both its old
+and new value). `known_by(cutoff)` requires validity AND availability by the cutoff, so an
+earlier alias evidenced only by a later audit entry is not known. The Phase 2 test that
+permitted this was wrong and was replaced. Regression: `IdentityTimingRegression`.
+
+## D027 — Exposure is assessed per surviving copy (fix)
+
+`state.reconstruct` reads exposure from each present location's own latest exposure
+observation. Any exposing copy keeps the record non-compliant; a copy whose exposure was
+never assessed leaves the outcome unknown (never borrowed from another copy).
+Regression: `ReplicaExposureRegression` (exposing replica observed earlier than a clean primary).
+
+## D028 — Lookup context is not record identity (fix)
+
+Family D `index_queries`: the query identifier is never attached to returned documents;
+ownership comes only from each document's own fields. Logs: a trace's `*_started` lookup
+keys link a returned resource only if the trace touched exactly one resource (all 994
+traces in the corpus are single-target; all 58 search documents carry their own identity
+fields, so the fix costs no real links). Regression: `SearchOwnershipRegression`, fixture
+`fixture_mixed_search`.
+
+## D029 — Explicit scope coverage (fix; replaces D017's file-wide rule)
+
+`Scope.coverage` is `FULL_TABLE` (a table in a point-in-time database snapshot, only for
+collections that table actually holds, and for inventory files only systems declared in
+`snapshot_scope`) or `SUBJECT_SCOPED` (an export captured for an inferred subject set: the
+identities in the same file and capture time). Exact lookups, readbacks and logs are never
+listings. SUBJECT_SCOPED omission is OFF by default (`EngineConfig.subject_scoped_omission`)
+because its subject set is inferred; measured effect of enabling it on samples: none.
+Regressions: `SqlScopeRegression`, `ScopeCoverageRegression`.
+Rejected: keeping the file-wide token heuristic (any subject token in a file covered every
+collection) — that is the defect reviewed.
+
+## D030 — Retention conditions must be supplied, not presumed (fix)
+
+SECURITY_AUDIT_LOG / LEGAL_HOLD_RECORD without a supplied retention or hold end raise
+`UNPROVEN_CONDITION`; the obligation is UNRESOLVED (never deleted, never verified as
+retained). Retention evidence is taken from any eligible observation of the record
+(readbacks, logs, inventory tables, the PDF journal extract). Measured cost on samples:
+exact rows 6/32 -> 2/32 versus the `presume_retention` experiment; 38 full-set rows move
+COMPLETE -> INCOMPLETE fallback. 558 of 662 security observations carry no retention end.
+The experiment switch exists only for comparison. Regression: `RetentionRegression`,
+fixture `fixture_no_retention`. **Open decision for the project owner** (see report).
+
+## D031 — Relaxations are isolated experiments (`config.EngineConfig`)
+
+`subject_scoped_omission`, `presume_retention`, `post_cutoff_ownership_links` default to
+False and are recorded in every `run_manifest.json` (`engine_config`, `experimental`).
+Sample effect of each is reported in `evaluation/evaluation_report.md`.
+
+## D032 — Ownership-link investigation result
+
+Of 36 missed sample resources attributed to ownership/cutoff: 0 had an eligible grounded
+link the engine missed; 7 are linked only in sources available after audit_at; 29 have no
+grounded link in any source (only operation claims naming no person, or records with no
+identifier at all, e.g. 404 lookups and fully anonymized rows). No activity row except the
+12 catalog links names a subject identifier. Rejected: request-window timing attribution and
+suffix matching (unsupported associations). Tool: `evaluation/gap_analysis.ownership_details`.
+
+## D033 — Relationship edges and multi-hop discovery
+
+`SYNC_RECORD`/`RESTORE_BACKUP` rows naming a downstream resource ("repopulated downstream
+resource X") become source->destination edges (the source lives in `source_system`); the
+success flag still sets no state. Discovery traverses these edges and `source_resource_id`
+references in both directions from directly linked records: depth <= 3, visited set,
+eligible evidence only, and it stops at any record whose own evidence names another known
+person. Measured sample effect: none (no regressions).
+
+## D034 — System resolution ignores operation claims
+
+A claim's `target_system` is where work was attempted, not which system owns the record
+(two flows and a backup carried `search_service` claims). System resolution for media and
+references uses STATE/LINK evidence first; claims only when nothing else exists.
+
+## D035 — Provider architecture (plan section 21)
+
+`providers.Gateway` exposes two distinct shapes: `decide()` -> `POST {base}/decisions`
+(Jev typed answers) and `chat()` -> `POST {base}/chat/completions`. Credentials only from
+`TOKENBAZAAR_API_KEY` (a local `.env` is loaded only with `--env-file`). Every call is checked
+against a cost and call ceiling before sending; every attempt is recorded (requested and
+returned model, tokens, reasoning tokens, latency, gateway cost header, retries, cache, mode).
+Only validated responses are cached, keyed by endpoint + requested model + prompt version
+hash + input. 429 responses honour Retry-After with up to 5 bounded retries (the first full
+run lost 8 Jev calls to 429 after 2 retries; they escalated safely to the generative fallback).
+`ReplayGateway` serves recorded responses for offline tests and is always labelled `replay`.
+
+## D036 — Measured provider facts (bounded live probes, 25 Oct 2026)
+
+- `typesafe/jev-latest` returns `typesafe/jev-1.13-20260917`; response: `answers.<q>` with
+  `choice` + `probabilities` + `confidence` (choice) or `noul` (yes/no probability); usage
+  `input_tokens`, `output_tokens`, `cost` (USD). Gateway header `x-tokenbaazar-cost-paise` is
+  1 per call. Several questions about one request fit in one call.
+- `google/gemini-2.5-flash` is served as `google/gemini-3.8-flash` (consistently; billed at the
+  2.5 Flash rate by the header). `gemini-2.5-flash-lite` is served as `gemini-3.1-flash-lite`.
+  The configuration keeps the user's requested ID and records the returned one on every call;
+  this drift is disclosed, not hidden. Reasoning tokens dominate output (e.g. 577 of 594).
+- `response_format` is ignored by chat; JSON is requested in the prompt and parsed strictly.
+
+## D037 — Jev intent question design (prompts/intent_jev_v1.json)
+
+One `choice` question (`DELETE_ACCOUNT`, `VERIFY_PRIOR_DELETION`, `SCOPED_DELETION`,
+`NON_DELETION`, `AMBIGUOUS`) plus three `noul` questions about the same request:
+`preserve_account`, `marketing_only`, `conflicting_instructions`. Deterministic
+reconciliation (`intent_models.reconcile`): AMBIGUOUS, any conflicting flag not clearly "no",
+a deletion choice with preserve/marketing not clearly "no", or family probability < 0.60 ->
+UNRESOLVED; noul bands yes >= 0.70, no <= 0.30. Evidence for the extra flags: on 3 synthetic
+contradictory requests Jev's choice was DELETE_ACCOUNT and only the flags prevented an
+unsafe authorization.
+Rejected: reconstructing intent from separate binary questions only (loses the five-way
+category); mixing several requests into one Jev state (cross-contamination risk; one call
+per request is cheap at ~1 paise).
+
+## D038 — Family probability for authorization [sample-informed]
+
+The 0.60 threshold applies to the probability of the chosen label's family (all deletion
+labels together), not the sub-label: two sample requests split ~0.50/0.47 between
+VERIFY_PRIOR and SCOPED (certain deletion, uncertain sub-type). Discovered on samples;
+re-validated on the separately written synthetic set (72/72 unchanged).
+
+## D039 — Staged intent and what each layer decides
+
+- Deterministic: request parsing, language support check, English classifier as an
+  independent cross-check, reconciliation of typed answers, all evidence/state/policy/status/CSV.
+- Jev: the intent category and the three yes/no flags for every request; the document kind of
+  each PDF; `choose_candidate` (validated bounded choice among grounded handles, for the
+  investigator phase; not yet wired in).
+- Generative (gateway `google/gemini-2.5-flash`): only requests Jev leaves unresolved or that
+  disagree with a definite deterministic decision; batched (5) with opaque handles; every
+  supporting span must be a verbatim substring; validated per item; never overrides a definite
+  deterministic decision.
+- Vision (same model ID): blind screenshot reading only.
+Measured: Jev-only 72/72 synthetic and 32/32 samples, 0 unsafe; deterministic 16/72 with one
+unsafe authorization (an English hypothetical "If I were to close my account..."); generative
+72/72 and 32/32 at ~5x Jev's cost per decision. Full run: 518/518 resolved by Jev.
+Probabilities are not treated as calibrated: accuracy was 100% in every probability band, so
+there is no error signal to calibrate against.
+Rejected: generative-first (cost, reasoning-token-driven truncation: one empty batch
+invalidated 10 decisions in benchmark v1), deterministic-only (language gap and the unsafe bug).
+
+## D040 — No Jev call for rule_05 (considered, rejected)
+
+Rule_05's condition (shared customer/agent/order context) is definitional for support
+conversations/tickets; 99 of 279 support observations carry no text; the 180 with text use
+6 templates; the sample answers treat all support messages as REDACT. A Jev "no" could only
+turn REDACT into an unsupported policy gap. No other unresolved decision point in the full run
+is a choice among grounded alternatives (178 retention, 16 profile absence, 4 no category,
+3 unknown state — all need evidence, not judgement).
+
+## D041 — PDFs: native extraction + Jev document kind
+
+`parsers/pdfsrc.py` (standard library): Catalog -> Pages -> content streams (Flate, ASCII85),
+text operators, ToUnicode CMaps; pages/lines preserved. Literal harvest (IDs, identifiers,
+labels, retain-until dates) is deterministic. One Jev choice classifies the document kind;
+mapping is deterministic: SUPPORT_ATTACHMENT / SECURITY_AUDIT_RECORD -> records named in
+the text (system from structured evidence or the manifest origin); CUSTOMER_STATEMENT_OR_EXPORT
+-> the resource whose catalog link label appears verbatim; LEGAL_RETENTION_REGISTER rows are
+order-keyed and match no structured record, so nothing is attached (reported).
+Rejected: adding PyMuPDF/pypdf (dependency not needed for these files; native extraction
+measured complete on all 4 PDFs, all pages); signature rules per document (would be tuned to 4 files).
+
+## D042 — Screenshots: blind reader, conservative mapping
+
+Prompt `vision_extract_v1.md` contains no case, subject or expected answer. Output must
+parse strictly; IDs must match the record-ID pattern (malformed IDs such as `data_flow1121` are
+rejected and reported); a user key shown as a title resolves to a record only through an exact
+catalog label. A row yields PRESENT state with its own identity tokens and visibly exposed
+identifier fields only if its system/category agree with the page kind and with structured
+evidence; otherwise an identity link only. No enabled/restore flags are inferred from badges
+("Healthy", "Continuous"); not showing a field never proves it empty. Measured against a manual
+reading of all 11 screenshots: IDs 23/23 precision and recall, identifiers 18/18.
+Synthetic image rendering would need an imaging dependency; offline tests use recorded responses.
+
+## D043 — Provisional submission artifact
+
+Root `output.csv` (518 rows) is produced by the strict default configuration with staged intent
+and media, from cached validated responses; its diagnostics, disclosures, code/prompt
+fingerprints and inference modes are in `runs/phase3-provisional/` and `validate --run-dir`
+re-checks the CSV hash binding. Labelled PROVISIONAL in the manifest.

@@ -119,10 +119,15 @@ class Observation:
 
 @dataclass(frozen=True)
 class Scope:
-    """An exhaustive listing of one collection at one location and time.
+    """An exhaustive listing of one collection at one physical location and time.
 
-    Absence of a known resource from a Scope is evidence of absence at
-    `observed_at` for that location only.
+    `coverage` says for whom the listing is exhaustive:
+      FULL_TABLE      a table in a point-in-time database snapshot: complete for that
+                      table, so omission proves absence there for anyone.
+      SUBJECT_SCOPED  an export captured for a set of subjects; complete only for the
+                      subjects that capture references (`subjects`, inferred from the
+                      capture, not declared), so omission proves absence only for them.
+    Exact lookups, readbacks and log lines are never Scopes.
     """
     source_id: str
     available_at: datetime
@@ -133,6 +138,13 @@ class Scope:
     members: frozenset[str]
     member_tokens: frozenset = frozenset()   # identity tokens of every listed row
     locator: str = ''
+    coverage: str = 'SUBJECT_SCOPED'
+    subjects: frozenset = frozenset()        # SUBJECT_SCOPED: identity tokens of the whole capture
+
+    def covers(self, subject_tokens) -> bool:
+        if self.coverage == 'FULL_TABLE':
+            return True
+        return bool(subject_tokens) and bool(self.subjects & subject_tokens)
 
 
 @dataclass

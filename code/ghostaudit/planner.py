@@ -14,6 +14,7 @@ Status rules (plan sections 4.3, 16.2, 17):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from .contracts import OutputRow, Request, Step
 from .corpus import Corpus
@@ -82,7 +83,7 @@ class CasePlan:
 
 # --- discovery -----------------------------------------------------------------------------
 
-def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cutoff):
+def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cutoff, max_hops: int = 3):
     """Resources that eligible evidence ties to the subject, with the linking observations.
 
     Links come from exact identity tokens on the record (or its log trace), explicit
@@ -92,8 +93,10 @@ def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cut
     conflicts: dict[tuple[str, str], list[str]] = {}
     own = set(subject.user_ids)
     seen = set()
+    # Experiment only: ownership links from sources available after the cutoff.
+    link_cutoff = datetime.max.replace(tzinfo=timezone.utc) if corpus.config.post_cutoff_ownership_links else cutoff
     for token in subject.tokens:
-        for obs in corpus.token_observations(token, cutoff):
+        for obs in corpus.token_observations(token, link_cutoff):
             if not (obs.resource_id and obs.system_id) or obs.kind not in (STATE, LINK) or obs.obs_id in seen:
                 continue
             seen.add(obs.obs_id)
@@ -104,16 +107,39 @@ def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cut
                 if others and other not in subject.tokens:
                     conflicts.setdefault(key, []).append(
                         f'IDENTITY_CONFLICT: {obs.obs_id} also names {other[0]} of {sorted(others)}')
-    # One hop over explicit references, iterating a frozen snapshot so newly added
-    # links cannot be revisited (that would loop when two records reference each other).
-    direct = [obs for observations in linked.values() for obs in observations]
-    for obs in direct:
-        for ref in obs.refs:
-            systems = {o.system_id for o in corpus.resource_observations(ref, cutoff) if o.system_id}
-            if len(systems) == 1:
-                bucket = linked.setdefault((systems.pop(), ref), [])
-                if obs not in bucket:
-                    bucket.append(obs)
+    # Multi-hop traversal over explicit relationships (source_resource_id references and
+    # source -> destination rows), both directions, from directly linked records.
+    # Guards: eligible evidence only, depth limit, visited set (cycles), and no traversal
+    # into a record whose own evidence names a different known person (no cross-person merge).
+    edges = {}
+    for obs in corpus.observations:
+        if obs.resource_id and obs.refs and obs.available_at <= cutoff and obs.observed_at <= cutoff:
+            for ref in obs.refs:
+                edges.setdefault(obs.resource_id, set()).add((ref, obs))
+                edges.setdefault(ref, set()).add((obs.resource_id, obs))
+    frontier = [(rid, 0) for (_, rid) in linked]
+    visited = {rid for (_, rid) in linked}
+    while frontier:
+        rid, depth = frontier.pop(0)
+        if depth >= max_hops:
+            continue
+        for other, via in sorted(edges.get(rid, ()), key=lambda e: (e[0], e[1].obs_id)):
+            if other in visited:
+                continue
+            visited.add(other)
+            known = corpus.resource_observations(other, cutoff)
+            foreign = {t for o in known if o.kind == STATE for t in o.tokens
+                       if index.owner.get(t, set()) - own and t not in subject.tokens}
+            if foreign:
+                conflicts.setdefault(('?', other), []).append(
+                    f'IDENTITY_CONFLICT: {other} reached via {via.obs_id} but its records name another person')
+                continue
+            systems = {o.system_id for o in known if o.system_id and o.kind in (STATE, LINK)} or \
+                {o.system_id for o in known if o.system_id}   # claims only when nothing better exists
+            if len(systems) != 1:
+                continue
+            linked.setdefault((systems.pop(), other), []).append(via)
+            frontier.append((other, depth + 1))
     return linked, conflicts
 
 
@@ -124,6 +150,8 @@ def obligation(state: ResourceState, policy: Policy, audit_at) -> Obligation:
     if not state.categories:
         ob.issues.append('UNSUPPORTED_CATEGORY: no state evidence establishes what this record is')
         return ob
+    if len(state.categories) == 1:
+        ob.category = next(iter(state.categories))   # kept for diagnostics even if policy cannot decide
     try:
         treatments = {c: policy.treatment(c, retention_until=state.retention_until, audit_at=audit_at)
                       for c in sorted(state.categories)}
@@ -215,8 +243,10 @@ def profile_obligation(subject, corpus, cutoff) -> Obligation:
 
 # --- case plan ---------------------------------------------------------------------------------
 
-def plan_case(request: Request, corpus: Corpus, policy: Policy, index: IdentityIndex) -> CasePlan:
-    plan = CasePlan(request, classify(request.request_text))
+def plan_case(request: Request, corpus: Corpus, policy: Policy, index: IdentityIndex,
+              intent: Intent | None = None) -> CasePlan:
+    """`intent` comes from the staged intent layer; without it the offline classifier is used."""
+    plan = CasePlan(request, intent or classify(request.request_text))
     if plan.intent.decision == NON_DELETION:
         plan.status, plan.steps = 'NOT_APPLICABLE', ()
         return plan

@@ -33,7 +33,8 @@ class PolicyError(Exception):
 
 
 class Policy:
-    def __init__(self, rules):
+    def __init__(self, rules, presume_retention: bool = False):
+        self.presume_retention = presume_retention
         self.by_category = {}
         self.issues = []
         for rule in rules:
@@ -58,12 +59,17 @@ class Policy:
         if expected != rule.required_action:
             raise PolicyError(f'POLICY_CONFLICT: {rule.rule_id} {category} action {rule.required_action} not implemented')
         if category in ('SECURITY_AUDIT_LOG', 'LEGAL_HOLD_RECORD'):
-            if retention_until is not None and retention_until < audit_at:
+            if retention_until is None and self.presume_retention:   # experiment only (EngineConfig)
+                return Treatment(rule.rule_id, 'RETAIN', 'EXPERIMENT presume_retention: no retention period supplied')
+            if retention_until is None:
+                # The rule's condition needs supplied retention/hold evidence; its absence is
+                # not evidence that the condition holds.
+                raise PolicyError(f'UNPROVEN_CONDITION: {rule.rule_id} "{rule.condition}" - no eligible '
+                                  'retention or hold period was supplied for this record')
+            if retention_until < audit_at:
                 raise PolicyError(f'POLICY_CONFLICT: {rule.rule_id} retention ended {retention_until.isoformat()}; '
                                   'no supplied rule covers the expired record')
-            note = 'retention period supplied and active' if retention_until else \
-                'no retention end supplied; retained record presumed within its period'
-            return Treatment(rule.rule_id, 'RETAIN', note)
+            return Treatment(rule.rule_id, 'RETAIN', f'supplied retention/hold active until {retention_until.isoformat()}')
         if category == 'BACKUP_ARCHIVE':
             return Treatment(rule.rule_id, 'BLOCK_RESTORE', 'archive retained; restore access must be blocked')
         if category == 'SUPPORT_MESSAGE':

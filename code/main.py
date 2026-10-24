@@ -5,8 +5,9 @@ Commands:
   audit      deterministic offline audit -> predictions CSV + run diagnostics
   validate   check a predictions CSV against the output contract
 
-`audit` uses no model. Non-English intent, screenshots and PDFs are reported as
-unresolved coverage gaps, never guessed.
+`audit` is offline by default (no model calls). `--intent staged` uses Jev typed
+decisions plus a generative fallback through the configured gateway, within
+`--budget-paise`. Screenshots/PDFs not yet interpreted are reported as gaps.
 """
 from __future__ import annotations
 
@@ -66,6 +67,10 @@ def main(argv=None) -> int:
     aud.add_argument('--requests', type=Path, required=True)
     aud.add_argument('--output', type=Path, required=True)
     aud.add_argument('--run-dir', type=Path, required=True, help='diagnostics directory bound to the output')
+    aud.add_argument('--intent', choices=['offline', 'jev', 'staged'], default='offline',
+                     help='offline: deterministic English only; jev: Jev + deterministic check; staged: + generative')
+    aud.add_argument('--env-file', type=Path, help='explicitly load credentials from a local .env')
+    aud.add_argument('--budget-paise', type=float, default=1500.0, help='hard ceiling on model spend for this run')
     val = sub.add_parser('validate', help='validate a predictions CSV (structure and citations only)')
     val.add_argument('--dataset', type=Path, default=DEFAULT_DATASET)
     val.add_argument('--requests', type=Path, required=True)
@@ -83,8 +88,15 @@ def main(argv=None) -> int:
         elif args.command == 'audit':
             if args.output.resolve() == (args.dataset / 'sample_output.csv').resolve():
                 raise ContractError('refusing to overwrite supplied labels')
-            summary = run_audit(args.dataset, args.requests, args.output, args.run_dir)
-            print(json.dumps({k: v for k, v in summary.items() if k != 'fallback_ids'}, indent=2))
+            gateway = None
+            if args.intent != 'offline':
+                from ghostaudit.providers import Gateway, ProviderConfig, load_env_file
+                if args.env_file:
+                    load_env_file(args.env_file)
+                gateway = Gateway(ProviderConfig(max_cost_paise=args.budget_paise))
+            summary = run_audit(args.dataset, args.requests, args.output, args.run_dir, gateway=gateway,
+                                use_generative=args.intent == 'staged')
+            print(json.dumps({k: v for k, v in summary.items() if k not in ('fallback_ids', 'model_usage')}, indent=2))
         else:
             context = load_context(args.dataset)
             requests = load_requests(args.requests)

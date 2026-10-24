@@ -8,6 +8,7 @@ D  {service_exports:{service:{group:[...]}}}                     service readbac
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 from ..contracts import parse_utc
 from ..observations import reference_tokens, ABSENT, LOGICAL, STATE, Observation, Scope, tokens_from
@@ -40,7 +41,18 @@ def parse_json(source_id, available_at, raw: bytes):
         _family_a(ctx, data)
     else:
         ctx.issues.append(f'UNRECOGNIZED_FORMAT: keys {sorted(data)}')
-    return ctx.observations, ctx.scopes, ctx.issues
+    return ctx.observations, _with_capture_subjects(ctx.scopes, ctx.observations), ctx.issues
+
+
+def _with_capture_subjects(scopes, observations):
+    """A subject-scoped listing covers the subjects referenced by its own capture:
+    the listings and rows of the same file observed at the same capture time."""
+    by_time = {}
+    for o in observations:
+        by_time.setdefault(o.observed_at, set()).update(o.tokens)
+    for sc in scopes:
+        by_time.setdefault(sc.observed_at, set()).update(sc.member_tokens)
+    return [replace(sc, subjects=frozenset(by_time.get(sc.observed_at, ()))) for sc in scopes]
 
 
 def _lookup_record(ctx, pointer, rec, observed_at, link_field='subject_reference'):
@@ -86,7 +98,7 @@ def _listing(ctx, pointer, system, collection, observed_at, records):
         ctx.obs(f'{pointer}/records/{i}', rec, observed_at, kind=STATE, proof='SNAPSHOT_ROW',
                 system_id=system, resource_id=rec['resource_id'], category=category, **facts)
     ctx.scopes.append(Scope(ctx.source_id, ctx.available_at, observed_at, system, category, LOGICAL,
-                            frozenset(members), frozenset(member_tokens), pointer))
+                            frozenset(members), frozenset(member_tokens), pointer, 'SUBJECT_SCOPED'))
 
 
 def _family_b(ctx, data):
@@ -149,8 +161,10 @@ def _index_query(ctx, pointer, service, item, when):
                     resource_id=item['resource_id'], category='SEARCH_INDEX_ENTRY', presence=ABSENT)
         return
     for j, doc in enumerate(docs):
+        # The query is lookup context, not document identity: a query for one person can
+        # return other people's documents, so ownership comes only from the document's fields.
         facts = record_facts('SEARCH_INDEX_ENTRY', doc)
-        facts['tokens'] = facts['tokens'] | query_tokens
+        facts['attributes'] = (('query_tokens', tuple(sorted(query_tokens))),)
         ctx.obs(f'{pointer}/hits/documents/{j}', doc, when, kind=STATE, proof='READBACK', system_id=service,
                 resource_id=doc['resource_id'], category='SEARCH_INDEX_ENTRY', **facts)
 

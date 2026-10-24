@@ -187,9 +187,12 @@ def parse_log(source_id, available_at, raw: bytes):
         issues.append('NOTE: export_started without export_completed marker')
 
     trace_tokens = defaultdict(set)
+    trace_targets = defaultdict(set)
     for _, _, d, _ in parsed:
         if d.get('trace'):
             trace_tokens[(d.get('service'), d['trace'])] |= _identity(d)
+            if d.get('resource_id') and not d.get('event', '').endswith('_started'):
+                trace_targets[(d.get('service'), d['trace'])].add(d['resource_id'])
 
     unknown = 0
     for n, when, d, line in parsed:
@@ -213,7 +216,11 @@ def parse_log(source_id, available_at, raw: bytes):
             continue
         service = d.get('service', '')
         own = _identity(d)
-        tokens = own | (trace_tokens[(service, d['trace'])] if d.get('trace') else set())
+        key = (service, d.get('trace'))
+        # A trace's lookup keys describe its single target; if one trace touches several
+        # resources the keys cannot be assigned to any of them.
+        single_target = bool(d.get('trace')) and len(trace_targets[key]) == 1
+        tokens = own | (trace_tokens[key] if single_target else set())
         if facts.get('presence') == ABSENT and event != 'record_lookup':
             # A query key is the lookup's input, not an attribute of a returned record:
             # a not-found lookup cannot show that the target belongs to that person.

@@ -1,0 +1,1484 @@
+{
+ "gaps": {
+  "missed_steps": 51,
+  "causes": {
+   "OWNERSHIP_UNGROUNDED": 31,
+   "STATE_OR_POLICY": 11,
+   "POST_CUTOFF_ONLY": 5,
+   "NOT_IN_STRUCTURED_DATA": 3,
+   "CITATION_ONLY": 1
+  },
+  "details": [
+   {
+    "case_id": "case_01",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_001",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": "evidence_54"
+   },
+   {
+    "case_id": "case_02",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_002",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": "evidence_54"
+   },
+   {
+    "case_id": "case_03",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_7566",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": "evidence_94"
+   },
+   {
+    "case_id": "case_03",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "analytics_platform",
+     "resource_id": "analytics_9406",
+     "operation": "VERIFY_RECORD_ANONYMIZED",
+     "state": "ANONYMIZED"
+    },
+    "expected_evidence": "evidence_94"
+   },
+   {
+    "case_id": "case_04",
+    "cause": "NOT_IN_STRUCTURED_DATA",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_004",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": "evidence_54"
+   },
+   {
+    "case_id": "case_04",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "analytics_platform",
+     "resource_id": "analytics_901",
+     "operation": "VERIFY_RECORD_ANONYMIZED",
+     "state": "ANONYMIZED"
+    },
+    "expected_evidence": "evidence_56"
+   },
+   {
+    "case_id": "case_07",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_007",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_08",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_008",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_09",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_3960",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_09",
+    "cause": "POST_CUTOFF_ONLY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_4902",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_10",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_010",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_11",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_9394",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_12",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_9797",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_12",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_2945",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_13",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_4816",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_14",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_987",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_15",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_4745",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_15",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_1596",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_16",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_9528",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_17",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_4092",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_17",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_1797",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_18",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_5521",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_18",
+    "cause": "NOT_IN_STRUCTURED_DATA",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_6645",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_19",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_9102",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_19",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_6793",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_20",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_5037",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_20",
+    "cause": "NOT_IN_STRUCTURED_DATA",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_5569",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_21",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_6440",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": "evidence_92"
+   },
+   {
+    "case_id": "case_21",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "analytics_platform",
+     "resource_id": "analytics_5335",
+     "operation": "VERIFY_RECORD_ANONYMIZED",
+     "state": "ANONYMIZED"
+    },
+    "expected_evidence": "evidence_92"
+   },
+   {
+    "case_id": "case_22",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_4990",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_22",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_3482",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_23",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_410",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_23",
+    "cause": "POST_CUTOFF_ONLY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_4128",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_24",
+    "cause": "POST_CUTOFF_ONLY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_7095",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_25",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_3136",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": "evidence_92"
+   },
+   {
+    "case_id": "case_25",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "analytics_platform",
+     "resource_id": "analytics_1895",
+     "operation": "VERIFY_RECORD_ANONYMIZED",
+     "state": "ANONYMIZED"
+    },
+    "expected_evidence": "evidence_92"
+   },
+   {
+    "case_id": "case_26",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_5684",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": "evidence_92"
+   },
+   {
+    "case_id": "case_26",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "analytics_platform",
+     "resource_id": "analytics_4566",
+     "operation": "VERIFY_RECORD_ANONYMIZED",
+     "state": "ANONYMIZED"
+    },
+    "expected_evidence": "evidence_92"
+   },
+   {
+    "case_id": "case_27",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_3866",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": "evidence_92"
+   },
+   {
+    "case_id": "case_27",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "analytics_platform",
+     "resource_id": "analytics_4574",
+     "operation": "VERIFY_RECORD_ANONYMIZED",
+     "state": "ANONYMIZED"
+    },
+    "expected_evidence": "evidence_92"
+   },
+   {
+    "case_id": "case_28",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_5482",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": "evidence_92"
+   },
+   {
+    "case_id": "case_28",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "analytics_platform",
+     "resource_id": "analytics_6077",
+     "operation": "VERIFY_RECORD_ANONYMIZED",
+     "state": "ANONYMIZED"
+    },
+    "expected_evidence": "evidence_92"
+   },
+   {
+    "case_id": "case_29",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_7012",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_29",
+    "cause": "POST_CUTOFF_ONLY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_3954",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_30",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_4163",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_30",
+    "cause": "POST_CUTOFF_ONLY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_1707",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_31",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_4857",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": "evidence_51"
+   },
+   {
+    "case_id": "case_31",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_6909",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": "evidence_51"
+   },
+   {
+    "case_id": "case_31",
+    "cause": "CITATION_ONLY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "identity_service",
+     "resource_id": "tombstone_440",
+     "operation": "VERIFY_RECORD_REDACTED",
+     "state": "REDACTED"
+    },
+    "expected_evidence": "evidence_51"
+   },
+   {
+    "case_id": "case_32",
+    "cause": "OWNERSHIP_UNGROUNDED",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "account_service",
+     "resource_id": "account_8858",
+     "operation": "VERIFY_RECORD_ABSENT",
+     "state": "ABSENT"
+    },
+    "expected_evidence": ""
+   },
+   {
+    "case_id": "case_32",
+    "cause": "STATE_OR_POLICY",
+    "step": {
+     "phase": "VERIFICATION",
+     "system_id": "security_service",
+     "resource_id": "audit_record_7068",
+     "operation": "VERIFY_RECORD_PRESENT",
+     "state": "PRESENT"
+    },
+    "expected_evidence": ""
+   }
+  ]
+ },
+ "ownership": [
+  {
+   "case_id": "case_01",
+   "resource_id": "account_001",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3342",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_02",
+   "resource_id": "account_002",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3376",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_03",
+   "resource_id": "account_7566",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "evidence_94",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3851",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_03",
+   "resource_id": "analytics_9406",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "evidence_94",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3852",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_04",
+   "resource_id": "analytics_901",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "evidence_56",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3463",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_07",
+   "resource_id": "account_007",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3590",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_08",
+   "resource_id": "account_008",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3554",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_09",
+   "resource_id": "account_3960",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "sources": [
+    {
+     "source": "evidence_06",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3703",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_09",
+   "resource_id": "audit_record_4902",
+   "verdict": "LINK_ONLY_IN_POST_CUTOFF_SOURCE",
+   "eligible_relationships": [],
+   "post_cutoff_relationships": [
+    "DIRECT_REFERENCE"
+   ],
+   "sources": [
+    {
+     "source": "evidence_06",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "DIRECT_REFERENCE"
+    }
+   ]
+  },
+  {
+   "case_id": "case_10",
+   "resource_id": "account_010",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3595",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_12",
+   "resource_id": "account_9797",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "evidence_01",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3432",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_15",
+   "resource_id": "account_4745",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "evidence_01",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3382",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_17",
+   "resource_id": "account_4092",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "evidence_01",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3383",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_18",
+   "resource_id": "account_5521",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3732",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_19",
+   "resource_id": "account_9102",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "evidence_01",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3323",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_20",
+   "resource_id": "account_5037",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3734",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_21",
+   "resource_id": "account_6440",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "evidence_92",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "EXACT_LOOKUP",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3661",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_21",
+   "resource_id": "analytics_5335",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "evidence_92",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3665",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_22",
+   "resource_id": "account_4990",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3573",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_23",
+   "resource_id": "account_410",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3662",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_23",
+   "resource_id": "audit_record_4128",
+   "verdict": "LINK_ONLY_IN_POST_CUTOFF_SOURCE",
+   "eligible_relationships": [],
+   "post_cutoff_relationships": [
+    "DIRECT_REFERENCE"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "DIRECT_REFERENCE"
+    }
+   ]
+  },
+  {
+   "case_id": "case_24",
+   "resource_id": "audit_record_7095",
+   "verdict": "LINK_ONLY_IN_POST_CUTOFF_SOURCE",
+   "eligible_relationships": [],
+   "post_cutoff_relationships": [
+    "DIRECT_REFERENCE"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "DIRECT_REFERENCE"
+    }
+   ]
+  },
+  {
+   "case_id": "case_25",
+   "resource_id": "account_3136",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "evidence_92",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "EXACT_LOOKUP",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3597",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_25",
+   "resource_id": "analytics_1895",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "evidence_92",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3602",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_26",
+   "resource_id": "account_5684",
+   "verdict": "LINK_ONLY_IN_POST_CUTOFF_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [
+    "DIRECT_REFERENCE"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "DIRECT_REFERENCE"
+    },
+    {
+     "source": "evidence_92",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "EXACT_LOOKUP",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3600",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_26",
+   "resource_id": "analytics_4566",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "evidence_92",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3603",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_27",
+   "resource_id": "account_3866",
+   "verdict": "LINK_ONLY_IN_POST_CUTOFF_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [
+    "DIRECT_REFERENCE"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "DIRECT_REFERENCE"
+    },
+    {
+     "source": "evidence_92",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "EXACT_LOOKUP",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3530",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_27",
+   "resource_id": "analytics_4574",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "evidence_92",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3533",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_28",
+   "resource_id": "account_5482",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "evidence_92",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "EXACT_LOOKUP",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3529",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_28",
+   "resource_id": "analytics_6077",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON",
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "post_cutoff_relationships": [
+    "RECORD_WITHOUT_ANY_IDENTIFIER"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "evidence_92",
+     "eligible": true,
+     "kind": "STATE",
+     "proof": "READBACK",
+     "class": "RECORD_WITHOUT_ANY_IDENTIFIER"
+    },
+    {
+     "source": "activity_3534",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_29",
+   "resource_id": "account_7012",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3532",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_29",
+   "resource_id": "audit_record_3954",
+   "verdict": "LINK_ONLY_IN_POST_CUTOFF_SOURCE",
+   "eligible_relationships": [],
+   "post_cutoff_relationships": [
+    "DIRECT_REFERENCE"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "DIRECT_REFERENCE"
+    }
+   ]
+  },
+  {
+   "case_id": "case_30",
+   "resource_id": "account_4163",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3465",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_30",
+   "resource_id": "audit_record_1707",
+   "verdict": "LINK_ONLY_IN_POST_CUTOFF_SOURCE",
+   "eligible_relationships": [],
+   "post_cutoff_relationships": [
+    "DIRECT_REFERENCE"
+   ],
+   "sources": [
+    {
+     "source": "evidence_02",
+     "eligible": false,
+     "kind": "STATE",
+     "proof": "SNAPSHOT_ROW",
+     "class": "DIRECT_REFERENCE"
+    }
+   ]
+  },
+  {
+   "case_id": "case_31",
+   "resource_id": "account_4857",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3682",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  },
+  {
+   "case_id": "case_32",
+   "resource_id": "account_8858",
+   "verdict": "NO_GROUNDED_LINK_IN_ANY_SOURCE",
+   "eligible_relationships": [
+    "OPERATION_CLAIM_NAMES_NO_PERSON"
+   ],
+   "post_cutoff_relationships": [],
+   "sources": [
+    {
+     "source": "activity_3685",
+     "eligible": true,
+     "kind": "CLAIM",
+     "proof": "CLAIM",
+     "class": "OPERATION_CLAIM_NAMES_NO_PERSON"
+    }
+   ]
+  }
+ ]
+}

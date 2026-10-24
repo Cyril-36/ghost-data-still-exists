@@ -119,9 +119,6 @@ def parse_sql(source_id, available_at, raw: bytes):
     observed_at = max(parse_utc(s, 'snapshot time') for s in stamps)
 
     json_tables = [t for t, cols in schema.items() if 'record_json' in cols]
-    file_collections = set()
-    for t in json_tables:
-        file_collections |= {(r['origin_system'], r['collection_name']) for r in rows(con, t)}
 
     def emit(table, row, system, category, record):
         facts = record_facts(category, record)
@@ -133,7 +130,9 @@ def parse_sql(source_id, available_at, raw: bytes):
         return facts['tokens']
 
     for table in json_tables:
-        members = {key: (set(), set()) for key in file_collections}
+        # A JSON-in-SQL table establishes coverage only for the collections it holds; a
+        # collection seen in another table of the same file says nothing about this one.
+        members = {}
         for row in rows(con, table):
             record = json.loads(row['record_json'])
             if record.get('resource_id') != row['resource_id']:
@@ -146,13 +145,13 @@ def parse_sql(source_id, available_at, raw: bytes):
                 record = {**{k: v for k, v in record.items() if k != 'document'}, **record['document']}
             category = COLLECTIONS[row['collection_name']][0]
             toks = emit(table, row, row['origin_system'], category, record)
-            ids, tok = members[(row['origin_system'], row['collection_name'])]
+            ids, tok = members.setdefault((row['origin_system'], row['collection_name']), (set(), set()))
             ids.add(row['resource_id'])
             tok |= toks
         for (system, collection), (ids, tok) in members.items():
             if collection in COLLECTIONS:
                 scopes.append(Scope(source_id, available_at, observed_at, system, COLLECTIONS[collection][0],
-                                    _location(table), frozenset(ids), frozenset(tok), table))
+                                    _location(table), frozenset(ids), frozenset(tok), table, 'FULL_TABLE'))
 
     for table in schema:
         if table in json_tables or table == 'snapshot_scope':
@@ -172,6 +171,6 @@ def parse_sql(source_id, available_at, raw: bytes):
             issues.append(f'NOTE: {table} ({len(ids)} rows) not covered by snapshot_scope; no absence scope')
             continue
         scopes.append(Scope(source_id, available_at, observed_at, system, category, _location(table),
-                            frozenset(ids), frozenset(tok), table))
+                            frozenset(ids), frozenset(tok), table, 'FULL_TABLE'))
     con.close()
     return observations, scopes, issues

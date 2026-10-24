@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import helpers  # noqa: F401
+from ghostaudit.config import EngineConfig
 from ghostaudit.contracts import Identity, IdentityChange
 from ghostaudit.corpus import Corpus
 from ghostaudit.identity import IdentityIndex, resolve_subject
@@ -57,11 +58,28 @@ class IdentityTests(unittest.TestCase):
         self.assertIn(sha('Old@Example.test'), hashes)            # historical hash from original bytes
         self.assertNotIn(sha('old@example.test'), hashes)         # not from the casefolded key
 
-    def test_future_identity_change_is_not_known_at_cutoff(self):
-        s = self.tokens('before@example.test')
-        self.assertEqual(s.user_ids, ['u3'])
-        self.assertNotIn(('email', 'later@example.test'), s.tokens)  # new value only valid after audit_at
-        self.assertEqual(self.tokens('later@example.test').user_ids, [])  # unknown at the cutoff
+    def test_alias_evidenced_only_by_a_later_audit_entry_is_not_known(self):
+        # u3's earlier email was valid at the cutoff, but the only sources naming it (the
+        # audit entry and the snapshot) became available after audit_at.
+        self.assertEqual(self.tokens('before@example.test').user_ids, [])
+        self.assertTrue(self.tokens('before@example.test').issues[0].startswith('IDENTITY_UNMATCHED'))
+        self.assertEqual(self.tokens('later@example.test').user_ids, [])     # not valid until after audit_at
+
+    def test_audit_entry_before_cutoff_survives_a_later_snapshot_update(self):
+        early, late = T0 + timedelta(days=3), AUDIT + timedelta(days=2)
+        idx = index([ident('u4', 'new4@example.test', phone='+1 202 555 0199', updated=late)],
+                    [change('b1', 'u4', early, 'email', 'old4@example.test', 'new4@example.test'),
+                     change('b2', 'u4', late, 'phone', '+1 202 555 0144', '+1 202 555 0199')])
+        s = resolve_subject('old4@example.test', AUDIT, idx)
+        self.assertEqual(s.user_ids, ['u4'])                                   # entry b1 is available
+        self.assertIn(('email', 'new4@example.test'), s.tokens)                # b1 also establishes the new value
+        phones = {i.key for i in s.identifiers if i.kind == 'phone'}
+        self.assertEqual(phones, set())   # phone history is only evidenced after audit_at (b2, snapshot)
+
+    def test_identifier_records_its_evidence_availability(self):
+        s = self.tokens('old@example.test')
+        old = next(i for i in s.identifiers if i.kind == 'email' and i.key == 'old@example.test')
+        self.assertEqual((old.provenance, old.available_at), ('a1', T0 + timedelta(days=5)))
 
     def test_unrelated_and_ambiguous(self):
         self.assertEqual(self.tokens('new.person@example.test').user_ids, [])
@@ -98,8 +116,11 @@ def corpus_of(observations, scopes=()):
 class StateTests(unittest.TestCase):
     SUBJECT = frozenset({('user', 'fx_u')})
 
-    def state(self, observations, scopes=(), subject=SUBJECT):
-        return reconstruct(corpus_of(observations, scopes), 'account_service', 'fx_a', AUDIT, subject)
+    def state(self, observations, scopes=(), subject=SUBJECT, config=None):
+        corpus = corpus_of(observations, scopes)
+        if config is not None:
+            corpus.config = config
+        return reconstruct(corpus, 'account_service', 'fx_a', AUDIT, subject)
 
     def test_latest_eligible_observation_wins(self):
         s = self.state([state_obs(T0, PRESENT), state_obs(T0 + timedelta(days=3), ABSENT, source='later')])
@@ -118,13 +139,26 @@ class StateTests(unittest.TestCase):
 
     def test_omission_proves_absence_only_for_covered_subjects(self):
         listing = Scope('fx_list', T0 + timedelta(days=5), T0 + timedelta(days=5), 'account_service', 'USER_PROFILE',
-                        LOGICAL, frozenset({'fx_other'}), frozenset({('user', 'fx_other')}))
+                        LOGICAL, frozenset({'fx_other'}), frozenset({('user', 'fx_other')}),
+                        coverage='SUBJECT_SCOPED', subjects=frozenset({('user', 'fx_other')}))
         covering = Scope('fx_list2', T0 + timedelta(days=6), T0 + timedelta(days=6), 'account_service',
-                         'USER_PROFILE', LOGICAL, frozenset(), frozenset({('user', 'fx_u')}))
-        self.assertEqual(self.state([state_obs(T0, PRESENT)], [listing]).presence, PRESENT)
-        s = self.state([state_obs(T0, PRESENT)], [listing, covering])
+                         'USER_PROFILE', LOGICAL, frozenset(), frozenset(),
+                         coverage='SUBJECT_SCOPED', subjects=frozenset({('user', 'fx_u')}))
+        relaxed = EngineConfig(subject_scoped_omission=True)
+        # Default (strict): a subject-scoped export never proves absence; its coverage is inferred.
+        self.assertEqual(self.state([state_obs(T0, PRESENT)], [listing, covering]).presence, PRESENT)
+        # Experiment enabled: only a capture that references this subject counts.
+        self.assertEqual(self.state([state_obs(T0, PRESENT)], [listing], config=relaxed).presence, PRESENT)
+        s = self.state([state_obs(T0, PRESENT)], [listing, covering], config=relaxed)
         self.assertEqual((s.presence, s.presence_proof.source_id), (ABSENT, 'fx_list2'))
-        self.assertEqual(self.state([state_obs(T0, PRESENT)], [covering], subject=frozenset()).presence, PRESENT)
+        self.assertEqual(self.state([state_obs(T0, PRESENT)], [covering], subject=frozenset(), config=relaxed).presence,
+                         PRESENT)
+
+    def test_full_table_listing_proves_absence_for_anyone(self):
+        table = Scope('fx_db', T0 + timedelta(days=6), T0 + timedelta(days=6), 'account_service', 'USER_PROFILE',
+                      'failover_replica', frozenset({'fx_other'}), coverage='FULL_TABLE')
+        s = self.state([state_obs(T0, PRESENT, location='failover_replica')], [table])
+        self.assertEqual((s.presence, s.presence_proof.proof), (ABSENT, 'SNAPSHOT_OMISSION'))
 
     def test_same_time_contradiction_is_reported_not_resolved(self):
         s = self.state([state_obs(T0, PRESENT, source='a'), state_obs(T0, ABSENT, source='b')])

@@ -1,105 +1,226 @@
-# Evaluation report — INTERIM (Phase 2 deterministic engine)
+# Evaluation report — INTERIM (Phase 3: correctness fixes, Jev decision layer, media)
 
-This is an interim report on the Phase 2 baseline. It is **not** the final
-submission report: no model is used yet, screenshots/PDFs are not interpreted,
-and intent is English-only. Every number below was measured on the commit that
-contains this file, using the commands shown.
+This is an interim report, not the final submission report. The root `output.csv`
+is **PROVISIONAL**. Every number below was measured on the commit that contains
+this file. Run artifacts are in `runs/phase3-provisional/`, and benchmark artifacts
+are in `runs/phase3-provisional/benchmarks/`.
 
 ## Data roles and leakage limits
 
-- `sample_output.csv` (32 labeled cases): evaluation only. All 32 sample answers
-  were inspected while studying evidence semantics in this phase, so the sample
-  score is a development measurement, not a held-out estimate. Rules that were
-  discovered from sample evidence are flagged `[sample-informed]` in
-  `decisions.md`.
-- 518 prediction requests: unlabeled; only structural validation and coverage
-  statistics are reported.
-- 11 team-created SYNTHETIC fixtures: expected rows hand-written from each
-  scenario, in a different identifier vocabulary from the supplied data.
-- Inference never opens labels: loaders open fixed filenames only; fixture
-  answers sit outside `input/` and are made unreadable during end-to-end tests.
+- **`sample_output.csv` (32 labeled cases):** evaluation only. All 32 were inspected in earlier phases, so sample scores are development measurements. Rules discovered from samples are flagged `[sample-informed]` in `decisions.md`; in Phase 3 that is D038, family probability.
+- **Intent benchmark:** 72 cases written separately by the team (`evaluation/intent_cases.py`), covering 12 scenarios × 6 languages (en, es, pt, fr, ja, ko). They are not paraphrases of dataset requests.
+- **Synthetic audit fixtures:** 13, each in a different identifier vocabulary. Their answers are never readable during inference.
+- **Vision ground truth:** a manual reading of the 11 screenshots (`evaluation/vision_ground_truth.py`), transcribed before scoring. It covers literal IDs and identifiers only.
+- **Unlabeled requests:** the 518 are reported only through structural validation and status/fallback counts.
 
-## Sample metrics (32 cases)
+## Sample metrics (32 cases): before and after
 
-```
-python3 code/main.py audit --requests dataset/sample_deletion_requests.csv --output .runs/sample/predictions.csv --run-dir .runs/sample
-python3 code/evaluation/main.py score ... --run-dir .runs/sample --expected dataset/sample_output.csv --out-dir .runs/sample/score
-```
+| Metric | Phase 2 | Phase 3 default (strict) | + `presume_retention` (experiment) | all relaxations (experiment) |
+|---|---|---|---|---|
+| Status accuracy | 23/32 | **28/32** | 29/32 | 29/32 |
+| Step precision | 131/145 | **142/143** | 154/154 | 156/156 |
+| Step recall | 131/193 | **142/193** | 154/193 | 156/193 |
+| Step F1 | 262/338 | **284/336** | — | — |
+| Positional field accuracy | 682/1158 | 689/1158 | — | — |
+| Sequence accuracy | 5/32 | 2/32 | — | — |
+| Exact-row accuracy | 5/32 | 2/32 | 6/32 | 6/32 |
+| False COMPLETE | 0 | 0 | 0 | 0 |
 
-| Metric | Result |
-|---|---|
-| Status accuracy | 23/32 = 0.719 |
-| Step precision | 131/145 = 0.903 |
-| Step recall | 131/193 = 0.679 |
-| Step F1 | 262/338 = 0.775 |
-| Positional field accuracy | 682/1158 = 0.589 |
-| Sequence accuracy | 5/32 = 0.156 |
-| Exact-row accuracy | 5/32 = 0.156 |
+The Phase 3 default ran in staged intent with media, from cached validated
+responses (0 network calls, 47 cache hits). Status confusion:
 
-Status confusion: COMPLETE→COMPLETE 1, COMPLETE→INCOMPLETE 9,
-INCOMPLETE→INCOMPLETE 22. No false COMPLETE. No NOT_APPLICABLE in the labels.
+| Expected | Predicted | Cases |
+|---|---|---|
+| COMPLETE | COMPLETE | 6 |
+| COMPLETE | INCOMPLETE | 4 |
+| INCOMPLETE | INCOMPLETE | 22 |
 
-### Why steps are missed (`evaluation/main.py gaps`)
+### Changes against Phase 2, each with the rule that caused it
+
+| Case(s) | Change | Cause |
+|---|---|---|
+| 03 | status corrected (French request now authorized) | Jev intent (D037, D039) |
+| 14 | intent resolved (was unsupported language); status unchanged | Jev intent (D037, D039) |
+| 21, 25, 26, 27, 28 | status corrected (profile absence was unproven) | explicit FULL_TABLE coverage: the subject is absent from a full-table snapshot of the profile table (D029); no profile resource ID, so no account step |
+| 07 | +3 correct steps; unknown-category obligation resolved | PDF journal extract gives the record and its retention (D041) |
+| 11, 13, 16 | **exact row lost** (status still right) | strict retention (D030): the retained security record has no supplied retention period, so the row becomes a fallback without citations |
+| 31 | **status regressed** COMPLETE→INCOMPLETE | strict retention (D030) |
+| — | precision 0.903 → 0.993 | search query identity no longer attached to hits (D028); disclosed fallbacks emit fewer uncitable steps |
+
+The exact-row and sequence regressions all come from one rule. Policy rule
+conditions for security and legal records require a retention period, and the
+evidence does not supply one. Phase 2 presumed it. With `presume_retention`, the
+lost rows come back (6/32 exact). The strict default stays until the project
+owner decides otherwise; see the open decision in Limitations.
+
+Other experiments on the samples:
+- `post_cutoff_ownership_links` adds 2 correct steps, but would break the audit_at contract.
+- `subject_scoped_omission` has no effect.
+
+### Why steps are still missed (`evaluation/main.py gaps`, default config)
 
 | Cause | Missed steps |
 |---|---|
-| OWNERSHIP_UNGROUNDED — resource is in eligible evidence but nothing eligible ties it to the subject (22 primary accounts, 6 anonymized analytics) | 28 |
-| CITATION_ONLY — right step, but the row is a fallback so it cannot cite | 14 |
-| INTENT_UNSUPPORTED — Spanish, French, Japanese requests | 9 |
-| NOT_IN_STRUCTURED_DATA — only in a PDF/screenshot, or nowhere | 6 |
-| POST_CUTOFF_ONLY — linked only by files available after audit_at | 5 |
-| STATE_OR_POLICY — linked resource with a wrong state or treatment | **0** |
+| OWNERSHIP_UNGROUNDED | 31 |
+| RETENTION_CONDITION_UNPROVEN | 11 |
+| POST_CUTOFF_ONLY | 5 |
+| NOT_IN_STRUCTURED_DATA | 3 |
+| CITATION_ONLY | 1 |
+| INTENT_UNSUPPORTED | 0 (was 9) |
+| STATE_OR_POLICY | **0** |
 
-The 14 extra predicted steps are exactly the 14 CITATION_ONLY steps (same step
-without an evidence ID). Every other emitted step matches a labeled step.
+## Ownership-link investigation
 
-## Custom evaluation cases (SYNTHETIC)
+Source: `benchmarks/ownership_analysis.json`. 36 missed sample resources are
+attributed to ownership or the cutoff.
 
-All run through `run_audit` from fixture inputs; result = exact-row match.
+| Verdict | Resources |
+|---|---|
+| Eligible grounded link that the engine missed | **0** |
+| Linked only in sources available after `audit_at` | 7 |
+| No grounded link in any source | 29 |
 
-| Fixture | Scenario | Expected | Actual |
-|---|---|---|---|
-| fixture_a | profile still returned by readback | INCOMPLETE, 3 steps citing fx_file_A | match |
-| fixture_b | absent account + retained security record next to a remaining search entry; DELETE success claim present | INCOMPLETE, 5 steps; compliant records still verified | match |
-| fixture_c | "Stop promotional emails only. Keep my account…", data present, workflow says COMPLETE | NOT_APPLICABLE, [] | match |
-| fixture_d | profile absent from exhaustive primary AND failover listings | COMPLETE citing the snapshot | match |
-| fixture_e | tombstone still holding name/phone/hash | REPORT_EXPOSED_PII → REDACT (never DELETE) | match |
-| fixture_e_clean | tombstone keeps only its stable reference | COMPLETE | match |
-| fixture_f | request at new email; data only under old email and its SHA-256 | export + search found and deleted | match |
-| fixture_decoy | same name, similar emails, second user | decoys excluded; COMPLETE | match |
-| fixture_future | remaining record visible only in a file exported 1 s after audit_at | ignored; COMPLETE | match |
-| fixture_replica | primary clean, failover replica holds the profile | REPORT_REMAINING_RECORD citing the snapshot | match |
-| fixture_no_absence | DELETE success claim + listing that does not cover the subject | record still PRESENT | match |
+The 29 are records whose sources are either operation claims that name no
+person, or records with no identifier at all: 404 lookups and fully anonymized
+rows. Apart from the 12 catalog-link rows, no activity row names a subject
+identifier. The 32 repopulation edges are now traversed (D033: multi-hop,
+visited set, cross-person guard) and add no sample steps. No unsupported
+association was introduced to close the gap: there is no request-window timing
+attribution and no suffix matching.
+
+## Multilingual intent (staged decision layer)
+
+Benchmark (`benchmarks/intent_benchmark_v2.json`). "Correct" includes leaving
+the 12 ambiguous or contradictory cases unresolved. "Unsafe" means authorizing
+deletion when it should not.
+
+| Method | Synthetic 72 | by language (en/es/pt/fr/ja/ko, each /12) | Unsafe | Samples 32 |
+|---|---|---|---|---|
+| Deterministic (English classifier) | 16/72 | 6/2/2/2/2/2 | **1** (en hypothetical) | 29/32 |
+| Jev only | 72/72 | 12 each | 0 | 32/32 |
+| Generative only | 72/72 | 12 each | 0 | 32/32 |
+| Staged (default) | 72/72 (60 by Jev, 12 correctly unresolved) | 12 each | 0 | 32/32 |
+
+- **Label accuracy:** Jev's raw label matched 68/72.
+- **Choice/flag disagreements:** there were 3. In each case the request was contradictory, Jev's choice was DELETE_ACCOUNT, and the `conflicting_instructions` / `preserve_account` flags kept it unresolved (D037).
+- **Calibration:** every probability band was 100% correct, so there is no error signal and the probabilities are **not** treated as calibrated.
+- **Cost:** Jev costs 1 paisa per request (header). Generative cost 561 paise for 25 calls (~22 paise per call, reasoning-heavy).
+- **Mean latency:** Jev 4.09 s on synthetic and 1.37 s on samples; 1.54 s in the full run.
+- **Benchmark v1 failures, fixed in v2:**
+  - A generative batch returned empty content because reasoning consumed `max_tokens`, which invalidated 10 decisions. Fixed with a batch size of 5, 8,000 max tokens, per-item validation and one retry.
+  - Jev split probability between the VERIFY and SCOPED sub-labels. Fixed with family probability (D038).
+
+Full 518 run, Jev-decided intent by language:
+
+| Language | DELETE | NON_DELETION |
+|---|---|---|
+| English | 446 | 10 |
+| Spanish / Portuguese / French | 38 | — |
+| Japanese | 12 | — |
+| Korean | 12 | — |
+
+0 requests reached the generative stage. `reported_status` is never used as a signal.
+
+## PDF and screenshot coverage
+
+All **15/15** media files were processed (`media_extractions.json`, `coverage.json`
+status INTERPRETED).
+
+- **PDFs (4):**
+  - Native text was extracted from every page.
+  - Jev classified the document kind correctly for all 4 (p = 1.0).
+  - The legal retention register is order-keyed and matches no structured record, so nothing is attached (reported).
+- **Screenshots (11):**
+  - A blind reader saw only the image and a fixed prompt.
+  - Against the manual reading, resource IDs scored 23/23 for both precision and recall, and identifiers 18/18 (`benchmarks/vision_scores.json`).
+  - One malformed ID guard is tested.
+  - `marketing_001`'s identifiers conflict with its catalog link, so the identity-conflict guard leaves it unattached.
+- **Effect on samples:** +3 correct steps (case 07), 0 regressions.
+- **No media output assigns status or steps.** Media only adds observations that pass validation (D041, D042).
+- **Small set:** the vision set is 11 images, too few to estimate a field error rate.
+
+## Custom evaluation cases (SYNTHETIC audit fixtures)
+
+All 13 run end to end through `run_audit`. Every one is an exact-row match.
+
+| Fixture | Scenario | Expected |
+|---|---|---|
+| fixture_a | profile still returned by readback | INCOMPLETE, 3 steps |
+| fixture_b | absent account + retained security record + remaining search entry; DELETE success claim | INCOMPLETE, 5 steps |
+| fixture_c | "Stop promotional emails only. Keep my account…" | NOT_APPLICABLE |
+| fixture_d | profile absent from full-table primary and failover snapshots | COMPLETE |
+| fixture_e | tombstone with name/phone/hash, absence proven by an exact NOT_FOUND lookup | REDACT, never DELETE |
+| fixture_e_clean | tombstone keeps only its stable reference | COMPLETE |
+| fixture_f | request at new email; data under old email and its SHA-256 | found and deleted |
+| fixture_decoy | same name, similar emails; decoy security record read back | decoys excluded; COMPLETE |
+| fixture_future | remaining record only in a file exported 1 s after audit_at | ignored; COMPLETE |
+| fixture_replica | primary clean, failover replica holds the profile | REPORT_REMAINING_RECORD |
+| fixture_no_absence | DELETE claim + listing that does not cover the subject | still PRESENT |
+| fixture_no_retention (new) | retained security record with no supplied retention period | disclosed fallback, never COMPLETE |
+| fixture_mixed_search (new) | query by subject returns own + another person's document | only own document reported |
+
+The six Phase 3 regressions are in `tests/test_phase3_regressions.py`. All six
+fail on commit f14f284 (checked in a separate worktree) and pass now.
 
 ## Full prediction set (518 requests, unlabeled)
 
-`python3 code/main.py audit --requests dataset/deletion_requests.csv ...` — 0.45 s, 0 model calls.
+The default strict configuration ran staged intent with media.
 
-- Rows: 518, valid; statuses COMPLETE 66, INCOMPLETE 442, NOT_APPLICABLE 10.
-- Disclosed fallbacks: 143 (62 intent unresolved for language, 81 with
-  unresolved obligations). 299 INCOMPLETE rows carry at least one confirmed
-  violation.
-- Primary-profile resource ID grounded: 79 of 446 deletion requests; another
-  162 have subject-level profile absence proven but no resource ID to cite.
-- Sources: 79/79 structured files parsed; 15 media files reported unsupported.
+| Measure | Result |
+|---|---|
+| Rows | 518, VALID |
+| COMPLETE | 95 |
+| INCOMPLETE | 413 |
+| NOT_APPLICABLE | 10 |
+| Disclosed fallbacks | 61, all UNRESOLVED_OBLIGATIONS |
+| Intent fallbacks | 0 (Phase 2 had 62) |
+
+The 61 fallbacks break down as follows:
+
+| Unresolved obligation | Cases |
+|---|---|
+| Retention condition unproven | 52 |
+| Retention + absence | 2 |
+| Absence unproven | 3 |
+| Flow | 2 |
+| Treatment | 1 |
+| Category | 1 |
+
+Against Phase 2, 301 rows changed:
+
+| Change | Rows | Cause |
+|---|---|---|
+| COMPLETE→INCOMPLETE | 38 | all strict retention |
+| INCOMPLETE→COMPLETE | 67 | 58 from full-table subject-level profile absence, 9 from non-English intent now resolved |
+
+The 58 rows have no citable account resource ID, so they carry no account verification step (see Limitations).
+
+Sources: 79 PARSED, 15 INTERPRETED. Outputs are byte-identical across hash seeds.
 
 ## Failures found and fixed in this phase
 
 | Failure | Detected by | Fix |
 |---|---|---|
-| 8 retained security records reported missing | sample diff | listings prove absence only for subjects the capture covers (D017) |
-| a not-found lookup made another account look like the subject's | sample diff | query keys link only returned records (D018) |
-| pipe-wrapped logs mapped no events | parser coverage report | wrapper regex fixed; all 26 logs parse |
-| handover rows with spaces in the subject were dropped | parser coverage report | row pattern fixed |
-| short English requests classed as "unsupported language" | intent unit test | function-word comparison against other Latin-script languages |
-| `user_<n>`-only reference matching | synthetic fixtures (other ID formats) | references recognized by field (D019) |
-| hang for some hash seeds | fixture run | frozen iteration in `discover` (D025) |
+| alias known before its evidence existed | review + regression | availability vs validity (D026) |
+| one clean copy hid an exposing replica | review + regression | per-copy exposure (D027) |
+| search query identity attached to every hit | review + mixed fixture | ownership from document fields (D028) |
+| SQL scopes for collections the table never held | review + regression | table-held collections only (D029) |
+| file-wide coverage heuristic | review + regression | FULL_TABLE / SUBJECT_SCOPED (D029) |
+| retention presumed | review + fixture | UNPROVEN_CONDITION (D030) |
+| generative batch truncated (empty content) | benchmark v1 | batch 5, per-item validation, retry |
+| Jev sub-label probability split | benchmark v1 | family probability (D038) |
+| deterministic classifier authorized a hypothetical | benchmark | Jev cross-check; deterministic is no longer authoritative |
+| 8 Jev calls lost to HTTP 429 | full run 1 usage log | Retry-After honoured, 5 bounded retries; rerun identical |
+| ASCII85 streams without `<~` framing | PDF extraction test | framing fix |
+| flows/backup resolved to `search_service` from claims | media diff | systems from STATE/LINK only (D034) |
+| user key read as a resource ID | media diff | catalog-label resolution (D042) |
 
 ## Limitations
 
-- Sample score is a development measurement on inspected cases.
-- No screenshot/PDF interpretation; no multilingual intent.
-- Primary-profile ownership is ungrounded for most subjects under the strict
-  rules; this caps exact-row accuracy until a grounded source is found.
-- Structural validation does not prove that a citation semantically supports
-  its step.
+- **Open decision: strict vs presumed retention.** Strict retention is correct by the policy text but costs 4 exact rows and 1 status on the samples, and causes 52 full-set fallbacks.
+- **Sample scores are development measurements** on inspected cases.
+- **Ownership:** 29 sample resources are ungrounded in every source. Recall is capped until an investigator finds grounded links.
+- **Subject-level absence:** 58 full-set COMPLETE rows rely on it and lack the account resource step.
+- **Small vision set:** 11 images. Synthetic image fixtures would need an imaging dependency, so offline tests use recorded responses.
+- **Uncalibrated probabilities:** the 0.60 and 0.70/0.30 thresholds are policy choices, not calibrated cut-offs.
+- **Structural validation only:** it does not prove that a citation semantically supports its step.

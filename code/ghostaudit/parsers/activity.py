@@ -12,6 +12,7 @@ from ..observations import CLAIM, LINK, PRESENT, STATE, Observation, reference_t
 
 _FLOW_ENABLED = re.compile(r'confirmed that data flow (\S+) remains enabled')
 _RESTORE_OPEN = re.compile(r'confirmed that archive (\S+) can still be restored')
+_REPOPULATED = re.compile(r'repopulated downstream resource (\S+?)\.?$')
 _CATALOG_LINK = re.compile(r'(?:linked|confirmed) (\S+) \([^)]*\) (?:to|belongs only to) (\S+) and (\S+?)[.;]')
 
 
@@ -36,4 +37,11 @@ def activity_observations(activity) -> Observation:
             # "... linked <resource> (<label>) to <identifier> and <user reference>."
             return Observation(kind=LINK, proof='CATALOG_LINK',
                                tokens=tokens_from(m.group(2)) | reference_tokens(m.group(3)), **base)
+    m = _REPOPULATED.search(a.details)
+    if a.event_type in ('SYNC_RECORD', 'RESTORE_BACKUP') and m:
+        # The row names a source process/archive and the downstream record it wrote: an explicit
+        # source -> destination relationship. The source lives in source_system. The success flag
+        # is still only a claim and sets no state.
+        return Observation(kind=CLAIM, proof='CLAIM', refs=(m.group(1),),
+                           **{**base, 'system_id': a.source_system if a.event_type == 'SYNC_RECORD' else 'backup_service'})
     return Observation(kind=CLAIM, proof='CLAIM', **base)

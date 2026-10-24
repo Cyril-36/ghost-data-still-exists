@@ -3,6 +3,7 @@
   fixtures  write synthetic fixture inputs and their expected answers
   score     compare a predictions CSV with a labels CSV for the same requests
   gaps      attribute every missed labeled step to a cause (needs the audit run directory)
+  intent-benchmark  LIVE: deterministic vs Jev vs generative vs staged intent (bounded paid calls)
 """
 from __future__ import annotations
 
@@ -43,9 +44,22 @@ def main(argv=None) -> int:
     gp.add_argument('--expected', type=Path, required=True)
     gp.add_argument('--run-dir', type=Path, required=True)
     gp.add_argument('--out-dir', type=Path, required=True, help='writes gaps.json and gaps.md')
+    ib = sub.add_parser('intent-benchmark')
+    ib.add_argument('--dataset', type=Path, required=True)
+    ib.add_argument('--out-dir', type=Path, required=True)
+    ib.add_argument('--env-file', type=Path, help='explicitly load credentials from a local .env')
+    ib.add_argument('--budget-paise', type=float, default=1500.0)
     args = parser.parse_args(argv)
 
     try:
+        if args.command == 'intent-benchmark':
+            from ghostaudit.providers import load_env_file
+            from evaluation.intent_benchmark import run as run_intent_benchmark
+            if args.env_file:
+                load_env_file(args.env_file)
+            report = run_intent_benchmark(args.dataset, args.out_dir, args.budget_paise)
+            print(json.dumps({k: v for k, v in report.items() if k != 'details'}, indent=2, ensure_ascii=False))
+            return 0
         if args.command == 'fixtures':
             for name in args.only or sorted(FIXTURES):
                 base = write_fixture(FIXTURES[name], args.out)

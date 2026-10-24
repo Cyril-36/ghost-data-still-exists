@@ -47,6 +47,7 @@ class Intent:
     reason: str
     spans: tuple[str, ...] = ()
     method: str = 'deterministic-english-v1'
+    signals: tuple = ()          # raw typed answers behind a model-backed decision
 
 
 def classify(text: str) -> Intent:

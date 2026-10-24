@@ -65,6 +65,7 @@ class Fixture:
     tables: dict[str, list[dict[str, str]]]  # missing tables are written header-only
     evidence: dict[str, bytes]  # dataset-relative path -> content
     expected: list[OutputRow] = field(default_factory=list)
+    fallback_ids: frozenset = frozenset()   # expected rows that are disclosed best-effort fallbacks
 
 
 # --- builders ------------------------------------------------------------------------------
@@ -130,9 +131,12 @@ def _sql(captured_at, tables):
     return ('\n'.join(lines) + '\n').encode('utf-8')
 
 
-def _audit_event(rid, subject):
-    return {'resource_id': rid, 'subject_reference': subject, 'event_name': 'account_deletion_reviewed',
-            'actor_type': 'automated_privacy_workflow', 'integrity_seal': 'sha256:fixture'}
+def _audit_event(rid, subject, retention_until='2031-01-01T00:00:00Z'):
+    event = {'resource_id': rid, 'subject_reference': subject, 'event_name': 'account_deletion_reviewed',
+             'actor_type': 'automated_privacy_workflow', 'integrity_seal': 'sha256:fixture'}
+    if retention_until:
+        event['retention_until'] = retention_until
+    return event
 
 
 def _row(case_id, status, *steps):
@@ -299,15 +303,15 @@ def _tombstone_fixture(name, clean: bool) -> Fixture:
             'name': None if clean else 'Fixture Person E', 'email': None,
             'phone': None if clean else '+12025550105', 'email_hash': None if clean else _sha256(email)}
     bundle = _bundle('2026-01-04T10:00:00Z',
-                     ('2026-01-04T10:00:00Z', 'account_service', 'customer_profiles', []),
                      ('2026-01-04T10:00:00Z', 'identity_service', 'deleted_customer_references', [tomb]),
                      ('2026-01-04T10:00:00Z', 'security_service', 'security_audit_events',
                       [_audit_event('fx_audit_E', 'fx_user_E')]))
     common = [(V, 'account_service', 'fx_account_E', 'VERIFY_RECORD_ABSENT', 'ABSENT'),
               (V, 'security_service', 'fx_audit_E', 'VERIFY_RECORD_PRESENT', 'PRESENT'),
               (V, 'identity_service', 'fx_tombstone_E', 'VERIFY_RECORD_REDACTED', 'REDACTED')]
+    cites = ['fx_file_E3', 'fx_file_E2', 'fx_file_E2']
     if clean:
-        expected = _row(case_id, 'COMPLETE', *[(*s, 'fx_file_E2') for s in common])
+        expected = _row(case_id, 'COMPLETE', *[(*s, c) for s, c in zip(common, cites)])
     else:
         expected = _row(case_id, 'INCOMPLETE',
                         (F, 'identity_service', 'fx_tombstone_E', 'REPORT_EXPOSED_PII', 'PRESENT', 'fx_file_E2'),
@@ -323,13 +327,17 @@ def _tombstone_fixture(name, clean: bool) -> Fixture:
             'deletion_rules.csv': _rules(),
             'evidence_files.csv': [
                 _manifest('fx_file_E1', 'evidence/records/history.json', '2025-12-20T10:00:00Z'),
-                _manifest('fx_file_E2', 'evidence/records/bundle.json', '2026-01-04T10:00:00Z')],
+                _manifest('fx_file_E2', 'evidence/records/bundle.json', '2026-01-04T10:00:00Z'),
+                _manifest('fx_file_E3', 'evidence/records/lookup.json', '2026-01-04T10:00:00Z')],
         },
         evidence={
             'evidence/records/history.json': _lookups(
                 '2025-12-20T10:00:00Z', ('2025-12-20T10:00:00Z', 'account_service', 'fx_account_E', 'USER_PROFILE',
                                          'FOUND', email)),
-            'evidence/records/bundle.json': bundle},
+            'evidence/records/bundle.json': bundle,
+            'evidence/records/lookup.json': _lookups(
+                '2026-01-04T10:00:00Z', ('2026-01-04T09:30:00Z', 'account_service', 'fx_account_E', 'USER_PROFILE',
+                                         'NOT_FOUND', email))},
         expected=[expected],
     )
 
@@ -390,8 +398,6 @@ def fixture_decoy() -> Fixture:
     email = 'person.g@example.test'
     lookups = _lookups('2026-01-04T10:00:00Z',
                        ('2026-01-04T09:00:00Z', 'account_service', 'fx_account_G', 'USER_PROFILE', 'NOT_FOUND', email),
-                       ('2026-01-04T09:00:00Z', 'security_service', 'fx_audit_G', 'SECURITY_AUDIT_LOG', 'FOUND',
-                        'fx_user_G'),
                        ('2026-01-04T09:00:00Z', 'search_service', 'fx_search_decoy', 'SEARCH_INDEX_ENTRY', 'FOUND',
                         'person.g2@example.test'),
                        ('2026-01-04T09:00:00Z', 'account_service', 'fx_account_decoy', 'USER_PROFILE', 'FOUND',
@@ -405,12 +411,17 @@ def fixture_decoy() -> Fixture:
                                     _identity('fx_user_G2', 'Fixture Person G', 'person.g2@example.test',
                                               '+12025550170')],
             'deletion_rules.csv': _rules(),
-            'evidence_files.csv': [_manifest('fx_file_G', 'evidence/records/lookups.json', '2026-01-04T10:00:00Z')],
+            'evidence_files.csv': [_manifest('fx_file_G', 'evidence/records/lookups.json', '2026-01-04T10:00:00Z'),
+                                   _manifest('fx_file_G2', 'evidence/records/security.json', '2026-01-04T10:00:00Z')],
         },
-        evidence={'evidence/records/lookups.json': lookups},
+        evidence={'evidence/records/lookups.json': lookups,
+                  'evidence/records/security.json': _readback('2026-01-04T10:00:00Z', {'security_service': {
+                      'audit_records': [{'observed_at': '2026-01-04T09:00:00Z', 'resource_id': 'fx_audit_G',
+                                         'subject_reference': 'fx_user_G', 'event_code': 'ACCOUNT_DELETION_RECORDED',
+                                         'retention_until': '2031-01-01T00:00:00Z'}]}})},
         expected=[_row('fx_case_G', 'COMPLETE',
                        (V, 'account_service', 'fx_account_G', 'VERIFY_RECORD_ABSENT', 'ABSENT', 'fx_file_G'),
-                       (V, 'security_service', 'fx_audit_G', 'VERIFY_RECORD_PRESENT', 'PRESENT', 'fx_file_G'))],
+                       (V, 'security_service', 'fx_audit_G', 'VERIFY_RECORD_PRESENT', 'PRESENT', 'fx_file_G2'))],
     )
 
 
@@ -503,9 +514,76 @@ def fixture_no_absence() -> Fixture:
     )
 
 
+def fixture_no_retention() -> Fixture:
+    """A security record with no supplied retention period: the RETAIN condition is unproven.
+
+    Everything else is compliant, so the case cannot be COMPLETE and must be a disclosed
+    fallback that verifies only what is settled (the absent account), without citations.
+    """
+    email = 'person.k@example.test'
+    bundle = _bundle('2026-01-04T10:00:00Z',
+                     ('2026-01-04T10:00:00Z', 'security_service', 'security_audit_events',
+                      [_audit_event('fx_audit_K', 'fx_user_K', retention_until=None)]))
+    return Fixture(
+        name='fixture_no_retention',
+        description='SYNTHETIC: retained-record condition unproven (no retention period supplied)',
+        tables={
+            'deletion_requests.csv': [_request('fx_case_K', email, '2026-01-05T12:00:00Z')],
+            'user_identities.csv': [_identity('fx_user_K', 'Fixture Person K', email, '+12025550111')],
+            'deletion_rules.csv': _rules(),
+            'evidence_files.csv': [
+                _manifest('fx_file_K1', 'evidence/records/history.json', '2025-12-20T10:00:00Z'),
+                _manifest('fx_file_K2', 'evidence/records/bundle.json', '2026-01-04T10:00:00Z')],
+        },
+        evidence={
+            'evidence/records/history.json': _lookups(
+                '2025-12-20T10:00:00Z', ('2025-12-20T10:00:00Z', 'account_service', 'fx_account_K', 'USER_PROFILE',
+                                         'NOT_FOUND', email)),
+            'evidence/records/bundle.json': bundle},
+        expected=[_row('fx_case_K', 'INCOMPLETE',
+                       (V, 'account_service', 'fx_account_K', 'VERIFY_RECORD_ABSENT', 'ABSENT', ''))],
+        fallback_ids=frozenset({'fx_case_K'}),
+    )
+
+
+def fixture_mixed_search() -> Fixture:
+    """A search for the subject's email also returns another person's document."""
+    email = 'person.m@example.test'
+    readback = _readback('2026-01-04T10:00:00Z', {
+        'account_service': {'profile_lookups': [
+            {'observed_at': '2026-01-04T09:00:00Z', 'resource_id': 'fx_account_M', 'status_code': 200,
+             'profile': {'customer_reference': 'fx_user_M', 'email': None, 'full_name': None, 'phone': None}}]},
+        'search_service': {'index_queries': [
+            {'observed_at': '2026-01-04T09:05:00Z', 'query': email, 'resource_id': 'fx_search_M',
+             'hits': {'total': 2, 'documents': [
+                 {'resource_id': 'fx_search_M', 'display_name': 'Fixture Person M', 'email': email,
+                  'customer_reference': None},
+                 {'resource_id': 'fx_search_other', 'display_name': 'Fixture Person Mo',
+                  'email': 'person.mo@example.test', 'customer_reference': 'fx_user_other'}]}}]},
+    })
+    return Fixture(
+        name='fixture_mixed_search',
+        description='SYNTHETIC ADVERSARIAL: unrelated search hit returned for the subject query stays out',
+        tables={
+            'deletion_requests.csv': [_request('fx_case_M', email, '2026-01-05T12:00:00Z')],
+            'user_identities.csv': [_identity('fx_user_M', 'Fixture Person M', email, '+12025550112')],
+            'deletion_rules.csv': _rules(),
+            'evidence_files.csv': [_manifest('fx_file_M', 'evidence/records/readback.json', '2026-01-04T10:00:00Z')],
+        },
+        evidence={'evidence/records/readback.json': readback},
+        expected=[_row('fx_case_M', 'INCOMPLETE',
+                       (F, 'account_service', 'fx_account_M', 'REPORT_REMAINING_RECORD', 'PRESENT', 'fx_file_M'),
+                       (F, 'search_service', 'fx_search_M', 'REPORT_REMAINING_RECORD', 'PRESENT', 'fx_file_M'),
+                       (R, 'account_service', 'fx_account_M', 'DELETE_RECORD', 'ABSENT', ''),
+                       (R, 'search_service', 'fx_search_M', 'DELETE_RECORD', 'ABSENT', ''),
+                       (V, 'account_service', 'fx_account_M', 'VERIFY_RECORD_ABSENT', 'ABSENT', ''),
+                       (V, 'search_service', 'fx_search_M', 'VERIFY_RECORD_ABSENT', 'ABSENT', ''))],
+    )
+
+
 FIXTURES = {f.name: f for f in (fixture_a(), fixture_b(), fixture_c(), fixture_d(), fixture_e(), fixture_e_clean(),
                                 fixture_f(), fixture_decoy(), fixture_future(), fixture_replica(),
-                                fixture_no_absence())}
+                                fixture_no_absence(), fixture_no_retention(), fixture_mixed_search())}
 
 
 def write_fixture(fixture: Fixture, out: Path) -> Path:
@@ -525,5 +603,5 @@ def write_fixture(fixture: Fixture, out: Path) -> Path:
         target.write_bytes(content)
     requests = load_requests(input_dir / 'deletion_requests.csv')
     write_output(base / 'expected_output.csv', fixture.expected, requests,
-                 load_context(input_dir).evidence)
+                 load_context(input_dir).evidence, fixture.fallback_ids)
     return base

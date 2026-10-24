@@ -29,6 +29,7 @@ class ResourceState:
     present_locations: list = field(default_factory=list)
     exposed: tuple | None = None
     exposure_proof: Observation | None = None
+    exposure_by_location: dict = field(default_factory=dict)
     enabled: bool | None = None
     enabled_proof: Observation | None = None
     restore_allowed: bool | None = None
@@ -104,11 +105,20 @@ def reconstruct(corpus: Corpus, system_id: str, resource_id: str, cutoff,
         state.presence = ABSENT
         state.presence_proof = max(latest_presence.values(), key=_order)
 
-    # Exposure is read at the copies that are still present (or anywhere if unknown).
-    pool = [o for o in observations if o.location in state.present_locations] or observations
-    state.exposure_proof = _latest(pool, 'exposed', state.issues, resource_id)
-    if state.exposure_proof is not None:
-        state.exposed = state.exposure_proof.exposed
+    # Exposure is assessed for every surviving copy on its own: one exposing copy keeps the
+    # record non-compliant however clean the other copies are, and a copy whose exposure
+    # was never assessed leaves the outcome unknown (never borrowed from another copy).
+    per_copy = {}
+    for location in state.present_locations:
+        per_copy[location] = _latest(by_location[location], 'exposed', state.issues, f'{resource_id}@{location}')
+    state.exposure_by_location = {loc: (o.exposed if o else None) for loc, o in per_copy.items()}
+    exposing = [o for o in per_copy.values() if o is not None and o.exposed]
+    if exposing:
+        state.exposure_proof = max(exposing, key=_order)
+        state.exposed = tuple(sorted({f for o in exposing for f in o.exposed}))
+    elif per_copy and all(o is not None for o in per_copy.values()):
+        state.exposure_proof = max(per_copy.values(), key=_order)
+        state.exposed = ()
     state.enabled_proof = _latest(observations, 'enabled', state.issues, resource_id)
     if state.enabled_proof is not None:
         state.enabled = state.enabled_proof.enabled

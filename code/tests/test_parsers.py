@@ -93,7 +93,9 @@ COMMIT;
         self.assertEqual(issues, [])
         self.assertEqual([(o.resource_id, o.location) for o in obs], [('fx_a', 'read_replica')])
         self.assertEqual(obs[0].observed_at, datetime(2026, 3, 1, 8, tzinfo=timezone.utc))  # snapshot time, not updated_at
-        self.assertEqual({(s.location, len(s.members)) for s in scopes}, {('primary', 0), ('read_replica', 1)})
+        # Only the table that holds the collection is a listing for it (no empty primary scope).
+        self.assertEqual({(s.location, len(s.members), s.coverage) for s in scopes},
+                         {('read_replica', 1, 'FULL_TABLE')})
 
     def test_restricted_connection(self):
         for hostile in ["ATTACH DATABASE '/tmp/x.db' AS x;", 'CREATE TABLE t(a); DROP TABLE t;',
