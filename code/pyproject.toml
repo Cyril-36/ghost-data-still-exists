@@ -1,0 +1,10 @@
+[project]
+name = "ghostaudit"
+version = "0.1.0"
+description = "Ghost Data Still Exists: evidence-grounded deletion audit (HackerRank Orchestrate, Oct 2026)"
+requires-python = ">=3.11"
+# Phase 1 is standard-library only. Add runtime dependencies here and re-run `uv lock`.
+dependencies = []
+
+[tool.uv]
+package = false
