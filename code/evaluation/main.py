@@ -2,6 +2,7 @@
 
   fixtures  write synthetic fixture inputs and their expected answers
   score     compare a predictions CSV with a labels CSV for the same requests
+  gaps      attribute every missed labeled step to a cause (needs the audit run directory)
 """
 from __future__ import annotations
 
@@ -12,11 +13,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # code/ for ghostaudit
 
+from ghostaudit.audit import load_disclosures  # noqa: E402
 from ghostaudit.contracts import ContractError  # noqa: E402
 from ghostaudit.inputs import load_context, load_requests  # noqa: E402
 from ghostaudit.output import read_output, validate_output  # noqa: E402
 
 from evaluation.fixtures import FIXTURES, write_fixture  # noqa: E402
+from evaluation.gap_analysis import analyze, render  # noqa: E402
 from evaluation.scoring import render_markdown, score  # noqa: E402
 
 
@@ -31,7 +34,15 @@ def main(argv=None) -> int:
     sc.add_argument('--predictions', type=Path, required=True)
     sc.add_argument('--expected', type=Path, required=True)
     sc.add_argument('--dataset', type=Path, help='also check citations against this dataset')
+    sc.add_argument('--run-dir', type=Path, help='run that produced the predictions (accepts its disclosed fallbacks)')
     sc.add_argument('--out-dir', type=Path, required=True, help='writes metrics.json and metrics.md')
+    gp = sub.add_parser('gaps')
+    gp.add_argument('--dataset', type=Path, required=True)
+    gp.add_argument('--requests', type=Path, required=True)
+    gp.add_argument('--predictions', type=Path, required=True)
+    gp.add_argument('--expected', type=Path, required=True)
+    gp.add_argument('--run-dir', type=Path, required=True)
+    gp.add_argument('--out-dir', type=Path, required=True, help='writes gaps.json and gaps.md')
     args = parser.parse_args(argv)
 
     try:
@@ -40,10 +51,18 @@ def main(argv=None) -> int:
                 base = write_fixture(FIXTURES[name], args.out)
                 print(f'{name}: inputs {base / "input"}  expected {base / "expected_output.csv"}')
             return 0
+        if args.command == 'gaps':
+            result = analyze(args.dataset, args.requests, args.predictions, args.expected, args.run_dir)
+            args.out_dir.mkdir(parents=True, exist_ok=True)
+            (args.out_dir / 'gaps.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
+            (args.out_dir / 'gaps.md').write_text(render(result), encoding='utf-8')
+            print(json.dumps({k: v for k, v in result.items() if k != 'details'}, indent=2))
+            return 0
         requests = load_requests(args.requests)
         evidence = load_context(args.dataset).evidence if args.dataset else None
         predictions, expected = read_output(args.predictions), read_output(args.expected)
-        validate_output(predictions, requests, evidence)
+        fallback_ids = load_disclosures(args.run_dir, args.predictions) if args.run_dir else frozenset()
+        validate_output(predictions, requests, evidence, fallback_ids)
         validate_output(expected, requests, evidence)
         result = score(predictions, expected)
     except (ContractError, ValueError, FileNotFoundError) as exc:

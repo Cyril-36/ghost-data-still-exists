@@ -78,6 +78,18 @@ REMEDIATION_VERIFICATION = {
     'BLOCK_RESTORE': 'VERIFY_RESTORE_BLOCKED',
 }
 
+# Each operation acts on one facet of a resource. Two different steps for the same
+# (phase, system, resource, facet) contradict each other (e.g. DELETE and REDACT);
+# steps on different facets can coexist (a retained backup whose restore is blocked).
+FACET_OPERATIONS = {
+    'record': ('REPORT_REMAINING_RECORD', 'REPORT_EXPOSED_PII', 'DELETE_RECORD', 'REDACT_RECORD',
+               'ANONYMIZE_RECORD', 'VERIFY_RECORD_ABSENT', 'VERIFY_RECORD_PRESENT', 'VERIFY_RECORD_REDACTED',
+               'VERIFY_RECORD_ANONYMIZED'),
+    'flow': ('REPORT_ACTIVE_DATA_FLOW', 'DISABLE_DATA_FLOW', 'VERIFY_DATA_FLOW_DISABLED'),
+    'restore': ('REPORT_RESTORE_RISK', 'BLOCK_RESTORE', 'VERIFY_RESTORE_BLOCKED'),
+}
+OPERATION_FACET = {op: facet for facet, ops in FACET_OPERATIONS.items() for op in ops}
+
 # --- Timestamps ----------------------------------------------------------------------
 
 _TIMESTAMP = re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})')
@@ -186,6 +198,10 @@ class Step:
                 raise ContractError(f'step {name} has surrounding whitespace: {value!r}')
         if OPERATION_PHASE.get(self.operation) != self.phase or OPERATION_STATE[self.operation] != self.state:
             raise ContractError(f'illegal step tuple ({self.phase}, {self.operation}, {self.state})')
+
+    @property
+    def facet(self) -> str:
+        return OPERATION_FACET[self.operation]
 
     @property
     def sort_key(self):

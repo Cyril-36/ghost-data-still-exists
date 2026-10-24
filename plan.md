@@ -5,7 +5,7 @@
 **Implementation owner:** Codex, unless Cyril explicitly reassigns ownership.  
 **Reviewer:** The separate Claude Code session; review findings should identify files/functions and reproducible examples. Do not edit implementation files concurrently.  
 **Final integrator and submission owner:** Cyril.  
-**Status:** Phase 1 / M0 complete in this workspace (24 Oct 2026, rebuilt from empty starter stubs; an earlier copy elsewhere was not used): typed contracts, strict input loading, canonical CSV serializer with read-back validation, synthetic fixtures A and C, label-isolated scorer, 55 passing tests. Audit inference and final predictions remain unbuilt; see code/README.md and code/decisions.md. This document contains the full backlog, with the shortened critical path in section 22 taking priority.
+**Status:** Phase 2 complete in this workspace (24 Oct 2026): deterministic offline audit engine — structured parsers (JSON families A-D, restricted SQLite, six log wrappers, handover text, activity rows), time-aware identity resolution, per-location state reconstruction, policy obligations, disclosed best-effort fallbacks, 11 synthetic fixtures and an interim evaluation report. No model calls; screenshots/PDFs and non-English intent are explicit gaps; final predictions not produced. See code/README.md, code/decisions.md and code/evaluation/evaluation_report.md. This document contains the full backlog, with the shortened critical path in section 22 taking priority.
 
 ## 0. Read this first
 

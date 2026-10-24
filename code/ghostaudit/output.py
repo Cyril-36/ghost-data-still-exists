@@ -31,10 +31,14 @@ def case_sort_key(case_id: str):
 
 
 def canonical_steps(steps: Iterable[Step]) -> tuple[Step, ...]:
-    """Merge identical steps, reject conflicting ones, and sort canonically."""
-    by_slot: dict[tuple[str, str, str], Step] = {}
+    """Merge identical steps, reject contradictory ones, and sort canonically.
+
+    A slot is (phase, system, resource, facet): one resource may carry a record
+    step and a restore step, but never two different record steps in one phase.
+    """
+    by_slot: dict[tuple[str, str, str, str], Step] = {}
     for step in steps:
-        slot = (step.phase, step.system_id, step.resource_id)
+        slot = (step.phase, step.system_id, step.resource_id, step.facet)
         previous = by_slot.setdefault(slot, step)
         if previous != step:
             raise ContractError(f'conflicting steps for {slot}: {previous} vs {step}')
@@ -81,15 +85,16 @@ def parse_steps_json(text: str) -> tuple[Step, ...]:
     return tuple(steps)
 
 
-def check_row(row: OutputRow, request: Request, evidence: Mapping[str, EvidenceRef] | None = None):
+def check_row(row: OutputRow, request: Request, evidence: Mapping[str, EvidenceRef] | None = None,
+              disclosed_fallback: bool = False):
     """Validate one row against its request; raise ContractError with the case ID."""
     try:
-        _check_row(row, request, evidence)
+        _check_row(row, request, evidence, disclosed_fallback)
     except ContractError as exc:
         raise ContractError(f'{row.case_id}: {exc}') from exc
 
 
-def _check_row(row, request, evidence):
+def _check_row(row, request, evidence, disclosed_fallback=False):
     status, steps = row.deletion_status, row.steps
     if status not in STATUSES:
         raise ContractError(f'unknown deletion_status {status!r}')
@@ -103,7 +108,12 @@ def _check_row(row, request, evidence):
         raise ContractError('COMPLETE needs one or more VERIFICATION steps and nothing else')
     if status == 'INCOMPLETE':
         if 'FINDING' not in phases:
-            raise ContractError('INCOMPLETE needs at least one FINDING')
+            # Only a run-disclosed best-effort fallback (plan section 17) may lack findings,
+            # and then it can only list final-state checks, never remediation.
+            if not disclosed_fallback:
+                raise ContractError('INCOMPLETE needs at least one FINDING (or a disclosed fallback)')
+            if phases - {'VERIFICATION'}:
+                raise ContractError('a fallback row without findings may contain only VERIFICATION steps')
         _check_plan_chain(steps)
 
     for step in steps:
@@ -123,11 +133,11 @@ def _check_row(row, request, evidence):
 
 def _check_plan_chain(steps):
     """Each finding gets its remediation; each remediation its matching final check."""
-    by_resource: dict[tuple[str, str], dict[str, str]] = {}
+    by_resource: dict[tuple[str, str, str], dict[str, str]] = {}
     for s in steps:
-        by_resource.setdefault((s.system_id, s.resource_id), {})[s.phase] = s.operation
-    for (system_id, resource_id), ops in by_resource.items():
-        name = f'{system_id}/{resource_id}'
+        by_resource.setdefault((s.system_id, s.resource_id, s.facet), {})[s.phase] = s.operation
+    for (system_id, resource_id, facet), ops in by_resource.items():
+        name = f'{system_id}/{resource_id} ({facet})'
         finding, remedy, check = ops.get('FINDING'), ops.get('REMEDIATION'), ops.get('VERIFICATION')
         if finding and remedy not in FINDING_REMEDIATIONS[finding]:
             raise ContractError(f'{name}: {finding} needs one of {FINDING_REMEDIATIONS[finding]}, got {remedy}')
@@ -138,8 +148,13 @@ def _check_plan_chain(steps):
 
 
 def validate_output(rows: Sequence[OutputRow], requests: Sequence[Request],
-                    evidence: Mapping[str, EvidenceRef] | None = None):
-    """Exact case set, no duplicates, canonical row order, and every row valid."""
+                    evidence: Mapping[str, EvidenceRef] | None = None,
+                    fallback_ids: frozenset[str] = frozenset()):
+    """Exact case set, no duplicates, canonical row order, and every row valid.
+
+    `fallback_ids` are cases disclosed as unresolved by the run that produced the
+    rows; nothing else may relax the INCOMPLETE-needs-a-finding rule.
+    """
     by_case = {r.case_id: r for r in requests}
     seen = set()
     for row in rows:
@@ -148,7 +163,7 @@ def validate_output(rows: Sequence[OutputRow], requests: Sequence[Request],
         if row.case_id not in by_case:
             raise ContractError(f'output row for unknown case {row.case_id}')
         seen.add(row.case_id)
-        check_row(row, by_case[row.case_id], evidence)
+        check_row(row, by_case[row.case_id], evidence, row.case_id in fallback_ids)
     missing = [c for c in by_case if c not in seen]
     if missing:
         raise ContractError(f'{len(missing)} case(s) missing from output, e.g. {missing[:5]}')
@@ -170,7 +185,8 @@ def read_output(path: Path) -> list[OutputRow]:
 
 
 def write_output(path: Path, rows: Iterable[OutputRow], requests: Sequence[Request],
-                 evidence: Mapping[str, EvidenceRef] | None = None) -> list[OutputRow]:
+                 evidence: Mapping[str, EvidenceRef] | None = None,
+                 fallback_ids: frozenset[str] = frozenset()) -> list[OutputRow]:
     """Canonicalize, validate, write atomically, then read back and re-validate.
 
     The destination is replaced only if every check passes, so a failed run never
@@ -178,7 +194,7 @@ def write_output(path: Path, rows: Iterable[OutputRow], requests: Sequence[Reque
     """
     rows = sorted((OutputRow(r.case_id, r.deletion_status, canonical_steps(r.steps)) for r in rows),
                   key=lambda r: case_sort_key(r.case_id))
-    validate_output(rows, requests, evidence)
+    validate_output(rows, requests, evidence, fallback_ids)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp_name = tempfile.mkstemp(prefix=f'.{path.name}.', suffix='.tmp', dir=path.parent)
@@ -191,7 +207,9 @@ def write_output(path: Path, rows: Iterable[OutputRow], requests: Sequence[Reque
                 writer.writerow((row.case_id, row.deletion_status, steps_to_json(row.steps)))
             handle.flush()
             os.fsync(handle.fileno())
-        if read_output(temp) != rows:
+        written = read_output(temp)
+        validate_output(written, requests, evidence, fallback_ids)
+        if written != rows:
             raise ContractError('read-back of written CSV differs from the validated rows')
         os.replace(temp, path)
     finally:
