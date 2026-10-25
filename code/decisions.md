@@ -1050,3 +1050,11 @@ rows from 1/32 to 5/32, correct steps from 141 to 153 of 193 (precision 153/153)
 of 518 root rows. D081 changes 201 rows on that run: 50 become `COMPLETE`, 151 gain a retention
 check, and disclosed fallbacks fall from 62 to 12. Root `output.csv` is not regenerated (owner
 instruction).
+
+## D082 — Remove experiment-only scripts
+
+Three one-off scripts that no code, test or CLI imports are removed: `evaluation/agent_comparison.py`
+(frozen-output comparison superseded by `evaluation/main.py score`), `evaluation/scripted_transcript_demo.py`
+(hand-written Phase 4 demonstration, never a submission) and `evaluation/vision_benchmark.py` (a one-time
+Roar vision model comparison). The intent benchmark and its cases stay because the CLI, tests and the
+required evaluation report use them. Historical reports that mention the removed files are left as records.

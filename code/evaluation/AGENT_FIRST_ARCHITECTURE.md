@@ -153,8 +153,8 @@ This measures cache absence and fallback safety, **not agent-first model capabil
 replayed current Roar baseline has 28/32 statuses, 1/32 exact rows, 141/142 precision, 141/193 recall
 and 56/75 matching cited steps. No real-model accuracy improvement is claimed.
 
-`evaluation/agent_comparison.py` measures exact/status/step/field/sequence and cited-step correctness
-from frozen outputs and rejection/grounding metrics from proposal traces. Agent output hashes are
+`evaluation/agent_comparison.py` (removed in D082; `evaluation/main.py score` now covers the output metrics) measured
+exact/status/step/field/sequence and cited-step correctness from frozen outputs and rejection/grounding metrics from proposal traces. Agent output hashes are
 checked before attribution. `hallucination_rate_proxy` means the fraction of submitted proposals
 with detected invented/unsupported/cross-person/unshown evidence; it is not an exhaustive semantic
 hallucination detector. No proposals yields null, never a misleading zero rate.
