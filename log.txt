@@ -1990,3 +1990,22 @@ branch=claude/gracious-archimedes-1rba87
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T05:13:03Z] Roar AI smoke test (Phase A): catalog and auth OK; stopped before paid calls (no provider cap)
+
+User Prompt (verbatim, secrets redacted):
+Continue Ghost Data Still Exists from the latest commit on `claude/gracious-archimedes-1rba87`. I want TWO API provider options: TokenBazaar and Roar AI. IMPORTANT: TEST ROAR FIRST. [... Phase A: one authenticated GET /v1/models without a manual Authorization header; check status, auth, model IDs, roar_modalities, roar_tool_calling, roar_image_input, roar_pricing; verify jev; then ONE small /v1/evaluate with jev on a synthetic request and ONE small native tool-calling /v1/chat/completions; strict small budget; set or verify a provider-side hard spending cap before paid tests; never display credentials; stop and report on any failure. Phase B (both providers, TokenBazaar default, --provider / --intent-provider / --investigator-provider) and Phase C (offline adapter tests, suite, ruff, fixtures) only if the tests pass. Do not start the 32- or 518-case paid evaluation.]
+
+Agent Response Summary:
+GET /v1/models returned HTTP 200 with 47 models, including jev (modality evaluation, $0.042 per 1M input tokens) and many chat models marked roar_tool_calling=yes, with per-model pricing. No account, usage, billing, limits or spending route exists under /v1 (all 404), so a provider-side hard spending cap could not be set or verified through the API. An unbilled empty POST /v1/evaluate returned HTTP 400 validation (not 401), which suggests the proxy-injected key is accepted, and revealed the schema (model, state, questions). Per the instruction, stopped before the paid jev and tool-calling tests; no migration started; nothing billed.
+
+Actions:
+* GET /v1/models; GET /v1/{,account,usage,billing,limits,spending} (404); POST /v1/evaluate with an empty body (400)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=claude/gracious-archimedes-1rba87
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none
