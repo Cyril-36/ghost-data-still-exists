@@ -28,6 +28,12 @@ class Treatment:
     note: str = ''
 
 
+# Owner decision D081: no supplied rule authorizes removing a security audit log, so its only
+# policy-consistent end state is present. A supplied period that has ended is still a conflict, and a
+# legal hold still needs a supplied hold.
+UNDATED_RETAINED = frozenset({'SECURITY_AUDIT_LOG'})
+
+
 class PolicyError(Exception):
     """The supplied policy cannot decide this resource's treatment."""
 
@@ -63,6 +69,9 @@ class Policy:
         if expected != rule.required_action:
             raise PolicyError(f'POLICY_CONFLICT: {rule.rule_id} {category} action {rule.required_action} not implemented')
         if category in ('SECURITY_AUDIT_LOG', 'LEGAL_HOLD_RECORD'):
+            if retention_until is None and category in UNDATED_RETAINED:
+                return Treatment(rule.rule_id, 'RETAIN', 'D081: no supplied rule authorizes removing this record; '
+                                 'it is retained although no retention period was supplied')
             if retention_until is None and self.presume_retention:   # experiment only (EngineConfig)
                 return Treatment(rule.rule_id, 'RETAIN', 'EXPERIMENT presume_retention: no retention period supplied')
             if retention_until is None:

@@ -515,10 +515,10 @@ def fixture_no_absence() -> Fixture:
 
 
 def fixture_no_retention() -> Fixture:
-    """A security record with no supplied retention period: the RETAIN condition is unproven.
+    """A security record with no supplied retention period (owner decision D081).
 
-    Everything else is compliant, so the case cannot be COMPLETE and must be a disclosed
-    fallback that verifies only what is settled (the absent account), without citations.
+    No supplied rule authorizes removing a security audit log, so it is retained and verified
+    present; with the account absent the case is COMPLETE and every check cites its proof.
     """
     email = 'person.k@example.test'
     bundle = _bundle('2026-01-04T10:00:00Z',
@@ -526,7 +526,7 @@ def fixture_no_retention() -> Fixture:
                       [_audit_event('fx_audit_K', 'fx_user_K', retention_until=None)]))
     return Fixture(
         name='fixture_no_retention',
-        description='SYNTHETIC: retained-record condition unproven (no retention period supplied)',
+        description='SYNTHETIC: undated security audit log is retained (D081)',
         tables={
             'deletion_requests.csv': [_request('fx_case_K', email, '2026-01-05T12:00:00Z')],
             'user_identities.csv': [_identity('fx_user_K', 'Fixture Person K', email, '+12025550111')],
@@ -540,9 +540,9 @@ def fixture_no_retention() -> Fixture:
                 '2025-12-20T10:00:00Z', ('2025-12-20T10:00:00Z', 'account_service', 'fx_account_K', 'USER_PROFILE',
                                          'NOT_FOUND', email)),
             'evidence/records/bundle.json': bundle},
-        expected=[_row('fx_case_K', 'INCOMPLETE',
-                       (V, 'account_service', 'fx_account_K', 'VERIFY_RECORD_ABSENT', 'ABSENT', ''))],
-        fallback_ids=frozenset({'fx_case_K'}),
+        expected=[_row('fx_case_K', 'COMPLETE',
+                       (V, 'account_service', 'fx_account_K', 'VERIFY_RECORD_ABSENT', 'ABSENT', 'fx_file_K1'),
+                       (V, 'security_service', 'fx_audit_K', 'VERIFY_RECORD_PRESENT', 'PRESENT', 'fx_file_K2'))],
     )
 
 

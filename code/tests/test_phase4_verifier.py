@@ -25,7 +25,7 @@ from test_phase4_investigator import INSPECT_PDF, PDF_FACTS, SUBMIT, investigate
 
 ROWS = [('2026-03-01T09:00:00Z', 'search_service', 'fx_search_P', 'SEARCH_INDEX_ENTRY', 'FOUND', EMAIL),
         ('2026-03-01T09:00:00Z', 'search_service', 'fx_search_Q', 'SEARCH_INDEX_ENTRY', 'FOUND', OTHER),
-        ('2026-03-01T09:00:00Z', 'security_service', 'fx_audit_P', 'SECURITY_AUDIT_LOG', 'FOUND', EMAIL),
+        ('2026-03-01T09:00:00Z', 'legal_service', 'fx_audit_P', 'LEGAL_HOLD_RECORD', 'FOUND', EMAIL),
         ('2026-03-01T09:00:00Z', 'export_service', 'fx_export_P', 'USER_EXPORT', 'NOT_FOUND', EMAIL)]
 
 
@@ -101,8 +101,22 @@ class MutationsAreCaught(unittest.TestCase):
             [Step('VERIFICATION', 'export_service', 'fx_export_P', 'VERIFY_RECORD_ABSENT', 'ABSENT', '')]))
 
     def test_retention_without_a_supplied_period(self):
-        keep = Step('VERIFICATION', 'security_service', 'fx_audit_P', 'VERIFY_RECORD_PRESENT', 'PRESENT', '')
+        keep = Step('VERIFICATION', 'legal_service', 'fx_audit_P', 'VERIFY_RECORD_PRESENT', 'PRESENT', '')
         self.assertIn('UNPROVEN_CONDITION', self.mutate(lambda s: s + [keep]))
+
+    def test_undated_security_audit_log_may_be_verified_present(self):
+        root = world(Path(self._tmp.name) / 'd081', lookup_rows=[
+            ('2026-03-01T09:00:00Z', 'security_service', 'fx_sec_P', 'SECURITY_AUDIT_LOG', 'FOUND', EMAIL)])
+        plans, verifier = plans_for(root)
+        keep = [s for s in plans[0].steps if s.resource_id == 'fx_sec_P']
+        self.assertEqual([(s.operation, s.state) for s in keep], [('VERIFY_RECORD_PRESENT', 'PRESENT')])
+        self.assertFalse({'UNPROVEN_CONDITION', 'POLICY_MISMATCH'} & codes(verifier.verify(plans[0])))
+        deleted = copy.copy(plans[0])   # removing it is still a policy mismatch
+        deleted.steps = canonical_steps([s for s in plans[0].steps if s.resource_id != 'fx_sec_P'] + [
+            Step('FINDING', 'security_service', 'fx_sec_P', 'REPORT_REMAINING_RECORD', 'PRESENT', 'fx_file_L'),
+            Step('REMEDIATION', 'security_service', 'fx_sec_P', 'DELETE_RECORD', 'ABSENT', ''),
+            Step('VERIFICATION', 'security_service', 'fx_sec_P', 'VERIFY_RECORD_ABSENT', 'ABSENT', '')])
+        self.assertIn('POLICY_MISMATCH', codes(verifier.verify(deleted)))
 
     def test_item_scope_cannot_grow(self):
         p = copy.copy(self.plan)

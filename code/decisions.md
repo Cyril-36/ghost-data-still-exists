@@ -1034,3 +1034,19 @@ retention is never presumed. Contract feedback lists every row problem at once; 
 no longer crashes the verifier; an `AUTHORIZATION_UNRESOLVED` rejection echoes the agent's own
 recorded interpretation without applying it. Offline only: the baseline outputs are byte-identical,
 and live accuracy is unmeasured. See `evaluation/CLOUD_HANDOFF.md` (Cloud follow-up).
+
+## D081 — Owner decision: undated security audit logs are retained (reverses D052)
+
+No participant source supplies a retention period for any `SECURITY_AUDIT_LOG`, and no supplied
+rule authorizes removing one, so the owner chose `present` as its only policy-consistent end state.
+An owned security audit log with no supplied period is now `RETAIN` (`VERIFY_RECORD_PRESENT`) in
+both the policy and the independent verifier. A supplied period that has ended is still a policy
+conflict, deleting the log is still `POLICY_MISMATCH`, and `LEGAL_HOLD_RECORD` still needs a supplied
+hold. Ownership, cutoff and citation rules are unchanged.
+
+Measured offline with no model calls. On the samples, the cached Roar intent replay moves exact
+rows from 1/32 to 5/32, correct steps from 141 to 153 of 193 (precision 153/153) and status to
+29/32. Replaying the submission run's recorded intents through the current planner reproduces 510
+of 518 root rows. D081 changes 201 rows on that run: 50 become `COMPLETE`, 151 gain a retention
+check, and disclosed fallbacks fall from 62 to 12. Root `output.csv` is not regenerated (owner
+instruction).

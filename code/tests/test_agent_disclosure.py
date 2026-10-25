@@ -10,14 +10,14 @@ from ghostaudit.audit import run_audit
 from ghostaudit.output import read_output
 from phase4_world import EMAIL, OTHER, T_CAPTURE, world
 
-AUDIT = (T_CAPTURE, 'security_service', 'fx_audit_P', 'SECURITY_AUDIT_LOG', 'FOUND', EMAIL)
+AUDIT = (T_CAPTURE, 'legal_service', 'fx_audit_P', 'LEGAL_HOLD_RECORD', 'FOUND', EMAIL)
 ATTACH = (T_CAPTURE, 'support_platform', 'fx_attach_L', 'SUPPORT_ATTACHMENT', 'FOUND', EMAIL)
-FOREIGN = (T_CAPTURE, 'security_service', 'fx_audit_Q', 'SECURITY_AUDIT_LOG', 'FOUND', OTHER)
-GONE = (T_CAPTURE, 'security_service', 'fx_audit_N', 'SECURITY_AUDIT_LOG', 'NOT_FOUND', EMAIL)
+FOREIGN = (T_CAPTURE, 'legal_service', 'fx_audit_Q', 'LEGAL_HOLD_RECORD', 'FOUND', OTHER)
+GONE = (T_CAPTURE, 'legal_service', 'fx_audit_N', 'LEGAL_HOLD_RECORD', 'NOT_FOUND', EMAIL)
 UNTYPED = (T_CAPTURE, 'ledger_service', 'fx_misc_P', '', 'FOUND', EMAIL)
 
 
-def undecided(*keys, reason='No retention or hold period is supplied for this audit log.'):
+def undecided(*keys, reason='No legal hold period is supplied for this record.'):
     return [{'system_id': system, 'resource_id': rid, 'reason': reason} for system, rid in keys]
 
 
@@ -37,7 +37,7 @@ class DisclosedUnresolvedRecords(unittest.TestCase):
 
     def test_undecidable_owned_record_can_be_disclosed_instead_of_deadlocking(self):
         p = scripted.proposal(self.root, 'fx_account_P', 'fx_file_L')
-        p['policy_undecided'] = undecided(('security_service', 'fx_audit_P'))
+        p['policy_undecided'] = undecided(('legal_service', 'fx_audit_P'))
         summary, row, codes = self.submit(p)
         self.assertEqual((summary['fallback_count'], codes), (0, set()))
         self.assertEqual((row.deletion_status, {s.resource_id for s in row.steps}), ('INCOMPLETE', {'fx_account_P'}))
@@ -57,9 +57,9 @@ class DisclosedUnresolvedRecords(unittest.TestCase):
         p = scripted.proposal(self.root, 'fx_account_P', 'fx_file_L')
         p['deletion_status'] = 'COMPLETE'
         p['steps'] = [{**p['steps'][0], 'phase': 'VERIFICATION', 'operation': 'VERIFY_RECORD_ABSENT', 'state': 'ABSENT'}]
-        p['policy_undecided'] = undecided(('security_service', 'fx_audit_P'))
+        p['policy_undecided'] = undecided(('legal_service', 'fx_audit_P'))
         item = scripted.proposal(self.root, 'fx_account_P', 'fx_file_L', scope='ITEM', target='USER_PROFILE')
-        item['policy_undecided'] = undecided(('security_service', 'fx_audit_P'))
+        item['policy_undecided'] = undecided(('legal_service', 'fx_audit_P'))
         for name, proposal in (('complete', p), ('item', item)):
             with self.subTest(name):
                 summary, row, codes = self.submit(proposal, name=name)
@@ -68,13 +68,13 @@ class DisclosedUnresolvedRecords(unittest.TestCase):
 
     def test_disclosure_cannot_skip_a_decidable_foreign_stepped_or_unseen_record(self):
         root = world(self.actor.base / 'mixed', lookup_rows=[AUDIT, ATTACH, FOREIGN, GONE, UNTYPED])
-        audit = ('security_service', 'fx_audit_P')
+        audit = ('legal_service', 'fx_audit_P')
         cases = {'decidable': ([audit, ('support_platform', 'fx_attach_L')], 'DISCLOSURE_UNSUPPORTED'),
-                 'foreign': ([audit, ('security_service', 'fx_audit_Q')], 'DISCLOSURE_UNSUPPORTED'),
+                 'foreign': ([audit, ('legal_service', 'fx_audit_Q')], 'DISCLOSURE_UNSUPPORTED'),
                  'stepped': ([audit], 'DISCLOSURE_UNSUPPORTED'),
-                 'unseen': ([audit, ('security_service', 'fx_audit_Z')], 'INVENTED_RESOURCE'),
+                 'unseen': ([audit, ('legal_service', 'fx_audit_Z')], 'INVENTED_RESOURCE'),
                  'repeated': ([audit, audit], 'DISCLOSURE_UNSUPPORTED'),
-                 'lookup_only': ([audit, ('security_service', 'fx_audit_N')], 'DISCLOSURE_UNSUPPORTED'),
+                 'lookup_only': ([audit, ('legal_service', 'fx_audit_N')], 'DISCLOSURE_UNSUPPORTED'),
                  'untyped': ([audit, ('ledger_service', 'fx_misc_P')], 'DISCLOSURE_UNSUPPORTED')}
         for name, (keys, code) in cases.items():
             with self.subTest(name):
@@ -85,7 +85,7 @@ class DisclosedUnresolvedRecords(unittest.TestCase):
                 if name == 'decidable':  # the attachment is disclosed instead of planned
                     p['steps'], p['witnesses'] = p['steps'][:3], p['witnesses'][:1]
                 if name == 'stepped':  # the undecidable record is both planned and disclosed
-                    p['steps'].append({**p['steps'][-1], 'step_no': 7, 'system_id': 'security_service',
+                    p['steps'].append({**p['steps'][-1], 'step_no': 7, 'system_id': 'legal_service',
                                        'resource_id': 'fx_audit_P', 'operation': 'VERIFY_RECORD_PRESENT',
                                        'state': 'PRESENT'})
                 p['policy_undecided'] = undecided(*keys)

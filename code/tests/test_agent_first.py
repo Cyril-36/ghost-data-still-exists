@@ -177,9 +177,9 @@ class AgentFirstTests(unittest.TestCase):
         self.assertEqual(summary['fallback_count'], 0)
         self.assertEqual({s.resource_id for s in row.steps}, {'fx_search_P'})
 
-    def test_agent_cannot_omit_or_presume_undated_retention(self):
+    def test_agent_cannot_omit_or_presume_an_undated_legal_hold(self):
         root = world(self.base / 'retention', lookup_rows=[
-            (T_CAPTURE, 'security_service', 'fx_audit_P', 'SECURITY_AUDIT_LOG', 'FOUND', EMAIL)])
+            (T_CAPTURE, 'legal_service', 'fx_audit_P', 'LEGAL_HOLD_RECORD', 'FOUND', EMAIL)])
         p = proposal(root, 'fx_account_P', 'fx_file_L')
         summary, row, received = self.run_agent([self.inspect('fx_file_L'), [call('submit_audit', p)]], root=root)
         self.assertEqual(row.steps, ())

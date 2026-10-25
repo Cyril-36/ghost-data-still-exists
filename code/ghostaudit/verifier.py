@@ -30,6 +30,7 @@ from .contracts import ContractError
 from .corpus import eligible
 from .observations import ABSENT, LINK, PRESENT, STATE, text_tokens
 from .output import check_row
+from .policy import UNDATED_RETAINED
 
 FAMILY = {
     'DELETE': {'REPORT_REMAINING_RECORD', 'DELETE_RECORD', 'VERIFY_RECORD_ABSENT'},
@@ -157,6 +158,8 @@ class Verifier:
             if category == 'BACKUP_ARCHIVE':
                 return FAMILY['RESTORE'], ''
             dated = [o.retention_until for o in observations if o.retention_until is not None]
+            if not dated and category in UNDATED_RETAINED:
+                return FAMILY['RETAIN'], ''
             if not dated:
                 return FAMILY['RETAIN'], f'{rule.rule_id} "{rule.condition}" needs a supplied period; none is eligible'
             if max(dated) < cutoff:

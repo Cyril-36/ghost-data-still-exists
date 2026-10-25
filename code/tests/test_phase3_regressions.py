@@ -97,9 +97,16 @@ class ScopeCoverageRegression(unittest.TestCase):
 
 
 class RetentionRegression(unittest.TestCase):
-    def test_missing_retention_period_is_not_treated_as_active_retention(self):
+    def test_missing_hold_period_is_not_treated_as_an_active_hold(self):
         with self.assertRaises(PolicyError):
-            Policy(RULES).treatment('SECURITY_AUDIT_LOG', retention_until=None, audit_at=AUDIT)
+            Policy(RULES).treatment('LEGAL_HOLD_RECORD', retention_until=None, audit_at=AUDIT)
+
+    def test_undated_security_audit_log_is_retained_but_an_ended_period_is_not(self):
+        # Owner decision D081: no supplied rule authorizes removing a security audit log.
+        treatment = Policy(RULES).treatment('SECURITY_AUDIT_LOG', retention_until=None, audit_at=AUDIT)
+        self.assertEqual(treatment.action, 'RETAIN')
+        with self.assertRaises(PolicyError):
+            Policy(RULES).treatment('SECURITY_AUDIT_LOG', retention_until=AUDIT - timedelta(days=1), audit_at=AUDIT)
 
 
 if __name__ == '__main__':
