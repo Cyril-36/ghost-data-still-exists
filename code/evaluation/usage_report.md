@@ -1,5 +1,11 @@
 # Usage report — PROVISIONAL run (Phase 3)
 
+**Phase 4 (D065–D068):** no model call was made. The investigator ran only in replay mode, where cached
+responses are the only source and a zero ceiling refuses everything else, and in a scripted-transcript
+demonstration. Both spent **0 paise** and used 0 tokens. The full-dataset run behind `output.csv` is still
+the Phase 3 run below. The investigator's live cost (role `investigator`) will be reported per model once a
+probe passes and a bounded live run is made.
+
 **Hardening pass:** the hardened code regenerated the same `output.csv`, byte-identical, into
 `runs/phase3-hardened/`. It made 0 network calls and 533 validated cache hits, and every cache entry
 was re-validated on read. Its acquisition cost is the one below. The pass spent **0 paise**: every live

@@ -1638,3 +1638,300 @@ branch=claude/gracious-archimedes-1rba87
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T04:48:17Z] Phase 4 built: case file, tools, investigator, verifier, CLI, evaluation
+
+User Prompt (verbatim, secrets redacted):
+Build Phase 4 — Full AI Investigator and Independent Verifier
+We are continuing HackerRank Orchestrate: Ghost Data Still Exists.
+Repository: `Cyril-36/ghost-data-still-exists`
+Current development branch: `claude/gracious-archimedes-1rba87`
+Latest Phase 4 planning commit: `86de30659c2025f0e855f9d5709e3b8a8e65eb99`
+I have made my decision: Build Phase 4 completely. Do not stop at planning, create another submission snapshot, or prioritize packaging the old Phase 3 version.
+The existing implementation is the foundation, not the final product.
+1. Read the existing implementation
+Before coding, read:
+
+* `AGENTS.md`
+* `problem_statement.md`
+* `plan.md`, especially sections 13, 14, 16, 18 and 21
+* `code/phase4_plan.md`
+* `code/evaluation/sample_error_analysis.md`
+* `code/decisions.md`
+* `code/ghostaudit/tools.py`
+* `code/ghostaudit/planner.py`
+* `code/ghostaudit/providers.py`
+* `code/ghostaudit/observations.py`
+* `code/ghostaudit/corpus.py`
+* `code/ghostaudit/identity.py`
+* `code/ghostaudit/state.py`
+
+Inspect other relevant modules as needed.
+Do not invent a replacement architecture or duplicate functionality that already exists.
+Use the existing provider gateway, evidence parsers, identity resolver, policy engine, and output validator.
+2. Architecture
+Implement this real execution flow:
+Request
+→ Intent and authorization scope
+→ Identity resolution
+→ Deterministic evidence discovery
+→ Investigator chooses evidence-inspection tools
+→ Evidence-backed fact proposals
+→ Validation and case-file updates
+→ Independent verifier
+→ Investigator revises rejected or incomplete case files
+→ Deterministic obligation evaluation
+→ Final status and ordered steps
+→ Validated output.csv
+The AI model must actively choose investigation actions.
+It must NOT simply receive the deterministic final answer and rephrase it.
+The deterministic engine remains responsible for final status, policy enforcement, resource authorization and CSV serialization.
+3. Build the validated case-file model
+Implement `ghostaudit/casefile.py` using compact typed structures.
+Each investigated case should track:
+
+* Request and audit cutoff.
+* Authorized deletion scope.
+* Resolved subject identity and historical identifiers.
+* Candidate resources with system, category and location.
+* Observed state and available provenance.
+* Accepted evidence-backed facts.
+* Conflicting evidence.
+* Unresolved investigation questions.
+* Tool calls and returned evidence handles.
+* Verifier findings.
+* Final investigation stop reason.
+
+Every proposed fact must include an eligible source handle, locator and literal evidence span.
+Validate facts before accepting them.
+Do not accept invented resource IDs, invented citations, new unsupported identities, post-cutoff observations or model assertions without evidence.
+Accepted facts must flow back into the existing evidence and obligation model.
+4. Implement real read-only investigation tools
+Extend the existing `ghostaudit/tools.py`.
+Implement or reuse five tools:
+A. search_identifiers
+Search eligible observations for a supported identity or identifier.
+Return source handles, resource associations, matching locations and truncation information.
+B. inspect_source
+Read a bounded excerpt from a specific evidence source, using a validated source handle and locator.
+The model cannot choose arbitrary filesystem paths.
+C. inspect_media
+Inspect already extracted PDF or screenshot evidence, preserving locations, recognized identifiers, and uncertainty.
+Use cached media interpretations where available.
+D. activity_timeline
+Return eligible activity and state observations for a resource in timestamp order.
+Distinguish actual state evidence from workflow claims.
+E. query_sql_snapshot
+Permit bounded, read-only queries using validated table, column and lookup options.
+Never execute arbitrary model-generated SQL. Use parameterized, allowlisted queries.
+All tools must:
+
+* Enforce `audit_at`.
+* Respect authorization scope.
+* Return only validated resource/source handles.
+* Report incomplete or truncated results.
+* Have bounded output sizes.
+* Never modify data.
+* Reject unsupported arguments.
+* Record observable tool activity.
+
+Reuse the existing provider's tool-call validation. Do not create a general-purpose agent framework.
+5. Implement the bounded investigator
+Create `ghostaudit/investigator.py`.
+Use the existing `Gateway.chat()` interface with native `tools` and `tool_choice`.
+The investigator should receive the request, supported identity seeds, source inventory, unresolved questions, and allowed tool schemas.
+It should choose which evidence to inspect and what to investigate next.
+Use an explicit tool-call/response loop.
+Maximum four investigation routing rounds per case, with a bounded schema-repair allowance and strict per-case token, cost and tool-call limits.
+Reject repeated identical tool calls unless new evidence justifies another inspection.
+The investigator may:
+
+* Choose relevant sources to inspect.
+* Follow supported identity leads.
+* Explore resource relationships.
+* Investigate replica and recreation risks.
+* Request more details about conflicting evidence.
+* Propose evidence-supported ownership, category, state and retention facts.
+* Submit a case file for verification.
+
+The investigator may NOT:
+
+* Invent resource IDs or evidence IDs.
+* Authorize additional deletion scope.
+* Bypass the audit cutoff.
+* Override policy.
+* Execute shell commands or arbitrary SQL.
+* Set `deletion_status` directly.
+* Write output steps directly.
+* Treat an operation success claim as proof of deletion.
+
+Route cases with unresolved obligations, insufficient evidence coverage, ambiguous targets, or potential media-only evidence.
+Also allow independent coverage checks to flag cases requiring investigation even if the initial planner considered them settled.
+Avoid unnecessary model calls for cases already supported by complete, independently verified evidence.
+6. Implement the independent verifier
+Create `ghostaudit/verifier.py`.
+This must be a real independent validation layer.
+Do NOT simply call `plan_case()` again and compare its output against itself.
+The verifier should inspect:
+Coverage
+
+* Were eligible resources omitted?
+* Were known replicas, search entries, exports, backups or recreation paths ignored?
+* Are there resources referenced by evidence that the case file never inspected?
+
+Ownership
+
+* Does the evidence actually connect the record to this subject?
+* Did any link cross into another person's records?
+* Was ownership inferred from an identifier suffix or workflow timing without supporting evidence?
+
+Temporal validity
+
+* Was every supporting source available by `audit_at`?
+* Were later observations incorrectly used to reconstruct earlier state?
+
+Policy correctness
+
+* Is the required deletion, redaction, anonymization, retention or restore-blocking action supported by the supplied policy?
+* Is a conditional retention rule being applied without its required facts?
+
+Evidence support
+
+* Do cited sources support the actual resource, state and claim?
+* Are evidence IDs registered and allowed?
+* Are future verification steps correctly uncited?
+* Is a missing resource being called absent without an eligible exhaustive listing or exact readback?
+
+Output integrity
+
+* Are obligations complete?
+* Are actions in the correct phase order?
+* Are all identifiers and operations valid?
+
+The verifier must produce structured feedback identifying missing facts, unsupported associations, incorrect citations and unresolved issues.
+Allow at most two investigator-verifier feedback rounds.
+The verifier cannot accept fabricated support merely because a model expresses confidence.
+7. Create adversarial offline tests
+Use `ReplayGateway` to run complete multi-step investigation transcripts without network access.
+Implement all eight scenarios in `code/phase4_plan.md`:
+
+1. Recover a grounded support attachment from a PDF.
+2. Reject invented and prefix-similar resource IDs.
+3. Reject prompt injection embedded in evidence.
+4. Handle budget exhaustion safely.
+5. Reject repeated calls and enforce the routing cap.
+6. Detect an omitted resource and recover through verifier feedback.
+7. Reject a citation captured after `audit_at`.
+8. Show that a straightforward verified case does not change unnecessarily when investigator mode is enabled.
+
+Also test:
+
+* Multi-person identity conflicts.
+* Replica disagreements.
+* A deleted record recreated by an active flow.
+* Invalid or contradictory tool arguments.
+* Incorrect model output format.
+* Tool failure in the middle of an investigation.
+* A verifier rejecting unsupported semantic evidence.
+
+Tests should exercise the full pipeline, not only isolated helper functions.
+8. Integrate Phase 4 into the actual audit command
+Extend the existing CLI to support investigator-enabled runs.
+The complete system should be callable through the existing `code/main.py` architecture.
+Do not create a separate prototype that cannot generate the real submission format.
+Phase 4 must be able to process the 32 labeled development samples and all 518 evaluation requests.
+Make model usage, routing limits, costs and offline/replay mode explicit in configuration.
+Retain deterministic output validation.
+9. Evaluation and measurable improvement
+The last reproducible offline sample scores are:
+
+* Status accuracy: 26/32.
+* Step recall: 126/193.
+* Step precision: 126/127.
+* Exact rows: 1/32.
+
+The last completed staged baseline was:
+
+* Status accuracy: 28/32.
+* Step recall: 142/193.
+* Step precision: 142/143.
+* Exact rows: 2/32.
+
+These are different evaluation modes. Never compare them as if they were equivalent.
+Use `code/evaluation/main.py errors` to compare individual cases and group missing steps by cause.
+Report the before/after differences under the same evaluation mode.
+Metrics must include:
+
+* Exact-row accuracy.
+* Status accuracy.
+* Step precision, recall and F1.
+* Missing or additional resource obligations.
+* Citation accuracy.
+* Verifier rejection and correction rates.
+* Investigation rounds and tool calls.
+* Model calls, tokens and actual rupee cost.
+* Cases where Phase 4 improves or regresses against Phase 3.
+
+Do not use the sample labels inside the inference path.
+10. Policy decisions already made
+These are final:
+Strict retention remains the default.
+Do not presume retention for security records without the required supplied period.
+Account ownership must be evidence-grounded.
+Do not associate account records through numeric suffixes, timing proximity or expected sample labels.
+An investigator may discover a genuine supported relationship, but it cannot invent one to improve scores.
+Do not reopen these decisions.
+11. TokenBazaar outage
+The TokenBazaar decisions and generation endpoints previously returned HTTP 503.
+Implement and exercise the investigation pipeline using offline replay responses first.
+When live access becomes available, perform one bounded, low-cost native tool-calling capability probe before configuring the live investigator model.
+Do not silently assume that a catalog entry supports tools.
+Do not substitute another model without testing compatibility.
+If the gateway remains unavailable, fully finish offline implementation and distinguish pending live validation from completed tests.
+Do not start persistent retry loops.
+12. Git workflow and progress preservation
+Work on the existing Claude development branch, not directly on `main`.
+Make actual implementation commits at meaningful milestones:
+
+1. Case-file model and tools.
+2. Investigator loop and replay tests.
+3. Independent verifier and feedback tests.
+4. CLI integration and evaluation.
+
+Push each completed milestone so a cloud usage limit cannot destroy all progress.
+Follow `AGENTS.md` logging and security requirements.
+Keep changes focused. Do not add a new orchestration framework, dashboard, database, generic agent SDK or unnecessary dependencies.
+Avoid bloated code and duplicated logic.
+Continue implementing Phase 4 through completion. Do not stop after a planning document or ask for a review at every stage.
+13. Final deliverables
+Produce:
+
+* Working Phase 4 investigator.
+* Working independent verifier.
+* Full read-only investigation tool integration.
+* End-to-end replay tests.
+* CLI integration.
+* Updated case diagnostics and traces.
+* Updated evaluation reports.
+* A newly generated and validated 518-row `output.csv` when the required inference can be run.
+* Actual commit SHAs and test results.
+
+If live models remain unavailable, don't relabel an offline fallback as the final live output. Report precisely which validation remains blocked.
+Commit and push the implemented work.
+The success criterion is a complete, genuine AI investigation system with validated evidence and measurable performance—not another plan or a higher unit-test count alone.
+
+Agent Response Summary:
+Built Phase 4 in four pushed milestones (2a092d8, f7f1a2f, 5a87a8b, and the final commit): validated case file and five read-only cutoff-enforced tools; a bounded native-tool-call investigator loop; an independent verifier with feedback rounds and withholding of rejected plans; and CLI integration (`--investigator off|replay|live`, `probe-tools`, `--media-cache`). 30 offline replay and mutation tests; 205 tests pass on Python 3.11-3.14; ruff clean; 13/13 fixtures match. No TokenBazaar key exists here and no model passed a tool-call probe, so live investigation is blocked. Sample (offline intent) and full-518 outputs are byte-identical to Phase 3 (26/32, 126/193, 1/32; 13 and 184 routed cases); a labelled scripted-transcript demonstration recovers case_07's PDF-only record (129/193). Root output.csv was not regenerated.
+
+Actions:
+* Added code/ghostaudit/casefile.py, investigator.py, verifier.py, prompts/investigator_v1.md, evaluation/scripted_transcript_demo.py, tests/phase4_world.py, tests/test_phase4_*.py
+* Edited code/ghostaudit/tools.py, corpus.py, planner.py, audit.py, code/main.py, evaluation/error_analysis.py and main.py, decisions.md (D065-D068), README.md, evaluation and usage reports, phase4_plan.md
+* Ran unittest (3.11-3.14), ruff, fixtures, offline and replay sample and full-518 audits, errors, score, validate; 0 network calls, 0 paise
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=claude/gracious-archimedes-1rba87
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none

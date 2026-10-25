@@ -1,6 +1,7 @@
 # Ghost Data Still Exists — deletion audit
 
-Status: **Phase 3 — evidence engine + measured model decision layer. PROVISIONAL output.**
+Status: **Phase 4: investigator and independent verifier built and tested offline. Live investigation is
+pending a working gateway; the root `output.csv` remains the Phase 3 provisional output.**
 The engine parses all structured evidence, resolves current and historical
 identities, reconstructs state at each case's `audit_at`, applies the supplied
 policy, and derives status and steps from validated obligations. Models are used
@@ -47,8 +48,27 @@ python3 code/evaluation/main.py errors ...          # case-by-case differences g
 python3 code/evaluation/main.py fixtures --out .runs/fixtures
 python3 code/evaluation/main.py intent-benchmark --env-file .env --out .runs/intent   # live, bounded
 
-python3 -m unittest discover -s code/tests      # 175 tests, offline (replay doubles, loopback servers)
+python3 -m unittest discover -s code/tests      # 205 tests, offline (replay doubles, loopback servers)
 ```
+
+Phase 4 (decisions D065-D068):
+
+```sh
+# Every audit runs the independent verifier; routed cases go to the investigator when one is configured.
+python3 code/main.py probe-tools --model <chat-model> --env-file .env          # one bounded live probe
+python3 code/main.py audit --requests dataset/sample_deletion_requests.csv \
+    --output .runs/p4/predictions.csv --run-dir .runs/p4 --intent staged --env-file .env \
+    --investigator live --investigator-model <chat-model> --budget-paise 1500 \
+    --media-cache runs/phase3-hardened/media_extractions.json
+# replay: cached validated responses only, never a network call
+python3 code/main.py audit ... --investigator replay --investigator-model <chat-model>
+python3 code/evaluation/main.py errors ...   # adds citation and resource-obligation accuracy
+```
+
+The run directory also has `case_files.jsonl`, which records every investigated case: tool calls with
+arguments and returned handles, accepted and rejected facts with reasons, verifier findings per pass,
+rounds, and the stop reason. `case_plans.jsonl` gains `routing`, `verifier` and `investigation`, and
+`run_manifest.json` gains a `phase4` summary.
 
 `--intent offline|jev|staged` selects the intent mode. `--budget-paise` is a hard
 spend ceiling: every call reserves a worst-case cost before it is sent (25 paise per

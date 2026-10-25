@@ -56,11 +56,23 @@ def analyze_errors(predictions, expected, gaps: dict, plans: dict[str, dict]) ->
         cause_of[(m['case_id'], _core(m['step']) + (m.get('expected_evidence') or '',))].append(m['cause'])
     pred = {r.case_id: r for r in predictions}
     cases, by_kind, by_cause, cause_cases = [], Counter(), Counter(), defaultdict(set)
+    citations, resources = Counter(), Counter()
     for gold in sorted(expected, key=lambda r: r.case_id):
         row = pred[gold.case_id]
         steps = lambda r: [{f: getattr(s, f) for f in ('phase', 'system_id', 'resource_id', 'operation',  # noqa: E731
                                                        'state', 'evidence_id')} for s in r.steps]
         d = diff_case(steps(row), steps(gold))
+        cited = [s for s in steps(gold) if s['evidence_id']]
+        wrong = len(d.get('WRONG_CITATION', []))
+        missing_cited = sum(1 for g in d.get('MISSING_STEP', []) if g[5])
+        citations['expected_cited'] += len(cited)
+        citations['correct'] += len(cited) - wrong - missing_cited
+        citations['wrong'] += wrong
+        exp_res = {(s.system_id, s.resource_id) for s in gold.steps}
+        got_res = {(s.system_id, s.resource_id) for s in row.steps}
+        resources['expected'] += len(exp_res)
+        resources['missing'] += len(exp_res - got_res)
+        resources['additional'] += len(got_res - exp_res)
         if row.deletion_status != gold.deletion_status:
             d['STATUS_MISMATCH'] = {'expected': gold.deletion_status, 'predicted': row.deletion_status}
         causes = []
@@ -80,7 +92,8 @@ def analyze_errors(predictions, expected, gaps: dict, plans: dict[str, dict]) ->
                       'missing_causes': dict(Counter(causes)), 'differences': d})
     return {'cases': cases, 'by_kind': dict(by_kind), 'by_cause': dict(by_cause),
             'cause_cases': {k: sorted(v) for k, v in cause_cases.items()},
-            'exact_rows': sum(c['exact'] for c in cases), 'total': len(cases)}
+            'exact_rows': sum(c['exact'] for c in cases), 'total': len(cases),
+            'citations': dict(citations), 'resource_obligations': dict(resources)}
 
 
 def load_plans(run_dir: Path) -> dict[str, dict]:
@@ -92,6 +105,10 @@ def render_errors(result: dict, title: str) -> str:
     lines = [f'# {title}', '', f'Exact rows: {result["exact_rows"]}/{result["total"]}.', '',
              '| Difference | Count |', '|---|---|']
     lines += [f'| {k} | {v} |' for k, v in sorted(result['by_kind'].items())]
+    c, r = result['citations'], result['resource_obligations']
+    lines += ['', f'Citations: {c.get("correct", 0)}/{c.get("expected_cited", 0)} expected cited steps matched with the '
+              f'same evidence_id ({c.get("wrong", 0)} wrong evidence_id). Resource obligations: {r.get("missing", 0)} of '
+              f'{r.get("expected", 0)} expected (system, resource) pairs missing, {r.get("additional", 0)} additional.']
     lines += ['', '## Missing steps by root cause', '', '| Root cause | Steps | Cases |', '|---|---|---|']
     for cause, n in sorted(result['by_cause'].items(), key=lambda kv: -kv[1]):
         lines.append(f'| {cause}: {ROOT_CAUSES.get(cause, "")} | {n} | {", ".join(result["cause_cases"][cause])} |')

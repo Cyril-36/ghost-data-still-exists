@@ -376,6 +376,14 @@ def _derive(plan: CasePlan) -> CasePlan:
     return plan
 
 
+def withhold(plan: CasePlan, reason: str, excluded=frozenset()) -> CasePlan:
+    """A plan the independent verifier rejected becomes a disclosed fallback; it keeps only the final
+    checks of satisfied obligations the verifier did not object to."""
+    satisfied = [o for o in plan.obligations if o.result == SATISFIED and o.representable
+                 and o.resource_id not in excluded]
+    return _fallback(plan, reason, satisfied)
+
+
 def _fallback(plan: CasePlan, reason: str, satisfied=()) -> CasePlan:
     """Best-effort INCOMPLETE: a disclosed prediction, not evidence that data remains."""
     plan.status, plan.fallback, plan.fallback_reason = 'INCOMPLETE', True, reason

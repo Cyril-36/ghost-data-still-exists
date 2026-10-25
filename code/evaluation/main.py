@@ -80,7 +80,8 @@ def main(argv=None) -> int:
                 (args.out_dir / 'errors.json').write_text(json.dumps(errors, indent=2) + '\n', encoding='utf-8')
                 (args.out_dir / 'errors.md').write_text(
                     render_errors(errors, f'Errors: {args.predictions.name} vs {args.expected.name}'), encoding='utf-8')
-                result = {k: errors[k] for k in ('exact_rows', 'total', 'by_kind', 'by_cause')}
+                result = {k: errors[k] for k in ('exact_rows', 'total', 'by_kind', 'by_cause', 'citations',
+                                                 'resource_obligations')}
             print(json.dumps({k: v for k, v in result.items() if k != 'details'}, indent=2))
             return 0
         requests = load_requests(args.requests)

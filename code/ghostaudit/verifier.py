@@ -287,7 +287,8 @@ class Verifier:
     def _check_coverage(self, plan, owned, steps_by_resource, extra, cutoff, case, add):
         accounted = {(o.system_id, o.resource_id) for o in plan.obligations if o.resource_id} | set(steps_by_resource)
         target = plan.intent.target if plan.intent.scope == 'ITEM' else None
-        for (system, rid), how in sorted(owned.items()):
+        single_item = target is not None and not plan.intent.whole_category
+        for (system, rid), how in sorted(owned.items()) if not single_item else ():   # one item authorizes one record
             if (system, rid) in accounted or how == 'lookup':
                 continue
             obs = self._observations(rid, cutoff, extra)

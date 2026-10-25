@@ -1,4 +1,37 @@
-# Evaluation report — INTERIM (Phase 3: correctness fixes, Jev decision layer, media)
+# Evaluation report — INTERIM (Phase 4 built offline; Phase 3 output still current)
+
+## Phase 4: investigator and independent verifier (D065–D068)
+
+Every comparison below uses the same evaluation mode on both sides. Offline and staged scores are never compared.
+
+| Measurement (32 samples, offline intent) | Phase 3 (b69f2b0) | Phase 4, investigator replay | Scripted transcript (not model performance) |
+|---|---|---|---|
+| Exact rows | 1/32 | 1/32 | 1/32 |
+| Status accuracy | 26/32 | 26/32 | 26/32 |
+| Step precision / recall / F1 | 126/127, 126/193, 252/320 | identical | 129/130, 129/193, 258/323 |
+| Citations (expected cited steps with the same evidence_id) | 48/75 | 48/75 | 49/75 |
+| Resource obligations missing / additional (of 111 expected) | 60 / 0 | 60 / 0 | 59 / 0 |
+| Routed / investigated / accepted | – | 13 / 13 / 0 (all stop at the zero replay ceiling) | 13 / 13 / 1 (case 07) |
+| Investigation rounds / tool calls / feedback rounds | – | 0 / 0 / 0 | 25 / 29 / 10 |
+| Facts accepted / rejected | – | 0 / 0 | 3 / 1 |
+| Verifier: cases with a blocking finding during investigation / withheld | – / 0 | 0 / 0 | 0 / 0 |
+| Model calls / tokens / cost | 0 | 0 / 0 / ₹0 | 0 / 0 / ₹0 (scripted) |
+| Cases improved / regressed vs Phase 3 | – | 0 / 0 | 1 (case 07: +3 matched steps) / 0 |
+
+Full 518, offline intent: the Phase 4 output is byte-identical to Phase 3 offline and VALID. 184 cases are
+routed. The verifier has 0 blocking findings on Phase 3 plans, so nothing is withheld. Its findings are 128
+PARTIAL_PLAN (advisory) and 2 UNINSPECTED_MENTION.
+
+**Blocked:** no model has passed the native tool-call probe (there is no key in this environment, and the
+gateway last returned HTTP 503). So there is no live investigator result, no staged Phase 4 sample score to
+compare with the staged 28/32, 142/193, 2/32 baseline, and no new 518-row submission. The root `output.csv`
+is unchanged. Test coverage is 30 Phase 4 tests: eight plan scenarios, twelve verifier mutations, and the
+additional adversarial cases listed in `decisions.md`.
+
+The expected ceiling is the one `sample_error_analysis.md` gives. The largest loss, the account-record link, is
+not recoverable from participant evidence under the final policy. The investigator's reach is media-only and
+unparsed evidence, which the case 07 demonstration exercises.
+
 
 This is an interim report, not the final submission report. The root `output.csv`
 is **PROVISIONAL**. Every number below was measured on the commit that contains

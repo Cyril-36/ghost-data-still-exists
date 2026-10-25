@@ -1,4 +1,8 @@
-# Phase 4 plan: bounded investigator and independent verifier (for review, not yet built)
+# Phase 4 plan: bounded investigator and independent verifier
+
+**Status: built (D065–D068).** The code is in `casefile.py`, `tools.py` (investigation tools), `investigator.py` and
+`verifier.py`, and it is integrated into `main.py audit`. It is tested offline with replay transcripts. Live
+model validation is pending.
 
 Inputs: `evaluation/sample_error_analysis.md` (offline b69f2b0 run; staged predictions are not in
 this checkout), `plan.md` sections 14, 18 and 21, and decisions D032, D052, D060 and D062–D064.

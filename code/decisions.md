@@ -679,3 +679,109 @@ fail (2 of 2) and the provider tests fail (4 of 4, in 18 subtests).
 
 Measured, offline with 0 network calls: the 13 fixtures, the full offline run and the zero-budget
 staged run are byte-identical to 7de8e4d, and the same cache keys are requested.
+
+# Phase 4: investigator and independent verifier
+
+Tests: `tests/test_phase4_casefile.py` (6), `test_phase4_investigator.py` (9), `test_phase4_verifier.py` (11)
+and `test_phase4_pipeline.py` (4). All run offline: scripted replay models and a synthetic world.
+
+## D065 — Case file: only validated, evidence-backed facts
+
+`casefile.FactValidator` admits OWNERSHIP, STATE, CATEGORY and RETENTION facts. Every fact needs:
+- a registered source that was available by audit_at and that a tool has shown in this investigation;
+- a locator of at most 12 lines on one page, with a literal copied verbatim from it;
+- an exact resource token that a tool returned or a candidate already holds;
+- a system grounded by evidence, the manifest origin, or the activity stream.
+
+Each kind then needs its own support:
+
+| Kind | What else must hold |
+|---|---|
+| OWNERSHIP | The literal names a subject identifier, and the whole page (documents, screenshots) or the cited lines name no other known person (D061). |
+| STATE ABSENT | A readback cue, no operation claim, and a machine-readback source (SQL, JSON or log). |
+| STATE PRESENT | A presence cue, or a captured document page that names the record (D041). |
+| CATEGORY | A supplied category, a cue word, and consistency with the system and with existing evidence. |
+| RETENTION | The ISO date appears in the literal next to a retention or hold cue. |
+
+Rules for every kind:
+- Activity rows never prove state.
+- Cited lines that read like instructions are refused (prompt injection).
+- Accepted facts become ordinary observations (`fact_observations`, `Corpus.extended`), and
+  `plan_case` re-plans from them. The case file never holds a status or steps.
+
+Rejected: a model-written status or step list, and facts without literals.
+
+## D066 — Investigator: the model picks evidence; code bounds and validates
+
+The loop runs on `Gateway.chat` with native tools, `tool_choice=required` and the strict tool schemas
+(D063 and D064). There are five read-only evidence tools plus `propose_fact` and `submit_case_file`. They
+are cutoff-filtered and subject-scoped: only this subject's identifiers or handles the tools already
+returned may be searched or queried. They are bounded, with truncation flags, and SQL lookups use
+allowlisted tables and columns.
+
+Limits:
+- 4 routing rounds and 1 schema repair;
+- 16 tool calls and per-case caps of 60,000 tokens and 400 paise, under the run ceiling;
+- an identical call is refused until new evidence arrives, and a failing tool ends only that call;
+- 2 verifier-feedback rounds carry new blocking and routing findings.
+
+Routing is deterministic: fallbacks, unresolved records and verifier routing findings. Verified cases
+are never routed, so they cost no call.
+
+Outcome: if the investigator submits and the verifier finds nothing blocking, the case is ACCEPTED.
+Otherwise the Phase 3 plan is kept.
+
+Modes:
+- **live** refuses to start without a passed `probe-tools` record for the model. That record comes
+  from one bounded native tool-call probe (`probe_tool_calling`).
+- **replay** serves cached validated responses only, under a zero ceiling, so it never makes a
+  network call.
+
+Rejected: a general agent framework, parallel investigations, and choosing a model before the probe.
+
+## D067 — Independent verifier on every plan
+
+`verifier.Verifier` re-derives what it checks from eligible observations, the supplied rules and the
+output contract. It does not use the planner's discovery, state or obligation code. It checks:
+- **Integrity:** the row passes `check_row`.
+- **Citations:**
+  - the source is registered and available by audit_at;
+  - the cited source holds a non-claim observation of the stated state;
+  - no newer copy contradicts it;
+  - a COMPLETE absence agrees for every copy, including omissions from exhaustive listings.
+- **Ownership:**
+  - the record carries a subject identifier or is reached through explicit references;
+  - not-found lookups support absence checks only;
+  - no record names another person.
+- **Policy:**
+  - the operations match the supplied rule for the record's category;
+  - a conditional retention needs a supplied date;
+  - an ITEM request stays in its category.
+- **Facts:** each accepted fact is re-checked against its text. A presence fact whose page says the
+  record was removed is refused.
+- **Coverage** (account and whole-category scope only): omitted linked records, active flows or open
+  restores that touch them, and unparsed sources that mention the subject.
+
+Findings are BLOCKING or ADVISORY. Routing findings drive investigation and feedback. A final plan
+with a blocking finding is **withheld**: it becomes a disclosed VERIFIER_REJECTED fallback.
+
+Mutation tests cover twelve corruptions. Measured on Phase 3 offline plans: 0 blocking findings on the
+32 samples and on all 518 requests.
+
+## D068 — Measured Phase 4 effect (offline; live investigation blocked)
+
+No TokenBazaar key exists in this environment, and the gateway last answered HTTP 503, so no
+investigator model has passed a tool-call probe. Results, comparing each mode with itself:
+- **Samples, offline intent:** the Phase 4 engine with the verifier, with or without the investigator
+  in replay, is byte-identical to Phase 3 offline (b69f2b0). Scores: status 26/32, steps 126/127
+  precision and 126/193 recall, exact rows 1/32. 13 of 32 cases are routed; replay stops each one at
+  the zero ceiling, with 0 network calls.
+- **Full 518, offline intent:** also byte-identical and VALID. 184 cases are routed.
+- **Scripted-transcript demonstration** (`evaluation/scripted_transcript_demo.py`; NOT model
+  performance): on real evidence, case 07's `support_001` record, found only in the `evidence_58` PDF,
+  is recovered. Its finding, remediation and verification match the labels, so recall goes from 126
+  to 129 of 193 with precision 129/130. A first ownership proposal without an identifier was refused.
+  Exact rows stay 1/32: case 07 also needs the account record, which no evidence links to its owner (D032).
+
+Pending live: the tool-call probe, the investigator on the 13 routed samples and the 184 routed full
+cases, and the staged comparison against the 28/32, 142/193, 2/32 baseline.

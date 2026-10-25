@@ -5,7 +5,8 @@ eligible, already-inspected source with a locator and a verbatim literal, names 
 the tools returned, and carries the literal support its kind needs:
 
   OWNERSHIP  the literal names the resource and an identifier of this subject, and no other person
-  STATE      PRESENT or ABSENT with a readback cue in the literal; activity claims never qualify
+  STATE      ABSENT: a readback cue in a machine readback line; PRESENT: a presence cue, or a captured
+             document page naming the record (D041); activity claims never qualify
   CATEGORY   a category the supplied policy knows, with a cue word, consistent with the system
   RETENTION  an ISO date that appears in the literal next to a retention or hold cue
 
@@ -230,8 +231,13 @@ class FactValidator:
             return 'UNSUPPORTED_STATE: absence needs a machine readback (SQL, JSON or log), not a document or screenshot'
         if value == ABSENT and (not ABSENT_CUE.search(literal) or CLAIM_CUE.search(literal)):
             return 'UNSUPPORTED_STATE: ABSENT needs a readback cue (404, not found, ...) and no operation claim'
-        if value == PRESENT and (not PRESENT_CUE.search(literal) or ABSENT_CUE.search(literal)):
-            return 'UNSUPPORTED_STATE: PRESENT needs a presence cue and no absence cue'
+        document = self.texts.kind(fact['source_id']) in ('pdf', 'image')
+        if value == PRESENT and ABSENT_CUE.search(literal):
+            return 'UNSUPPORTED_STATE: PRESENT contradicts an absence cue in the literal'
+        if value == PRESENT and not document and not PRESENT_CUE.search(literal):
+            # A captured document page that names the record shows it existed at capture (D041);
+            # machine output must say so explicitly.
+            return 'UNSUPPORTED_STATE: PRESENT needs a presence cue (found, active, stored, ...)'
         return {}
 
     def _check_category(self, fact, case, span):
