@@ -2940,3 +2940,423 @@ branch=main
 repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
 worktree=main
 parent_agent=none
+
+## [2026-10-25T09:19:41+00:00] Implement offline agent-first semantic authority
+
+User Prompt (verbatim, secrets redacted):
+I want to revisit the core architecture of Ghost Data Still Exists based on the previous HackerRank Orchestrate feedback.
+
+Across earlier editions, HackerRank criticized deterministic pipelines where the LLM had little genuine decision authority. Stronger submissions often used single agents with tools/RAG, while retaining structured outputs, deterministic validation, and safety constraints.
+
+Our current architecture generates the deterministic plan first. The investigator can find facts, but the engine still controls the final status, operations and output steps.
+
+I want to test a genuinely AGENT-FIRST architecture.
+
+Requirements:
+
+1. The primary agent should interpret the deletion request, dynamically choose evidence tools, reason about resource ownership and policy, and produce the proposed final status and complete structured step list.
+2. The agent must choose the resource IDs, operations, states and evidence citations based on retrieved evidence—not merely submit facts for the deterministic planner to interpret.
+3. Keep deterministic code for enforcing constraints, validating sources, verifying ownership, checking audit cutoffs, applying retention restrictions, validating the output schema, and serializing CSV.
+4. The independent verifier must be able to reject an unsupported agent proposal and return actionable feedback for another reasoning round.
+5. Do not let the deterministic planner silently overwrite the agent's semantic decision. If the proposal cannot be verified, use an explicitly disclosed safe fallback.
+6. Preserve the existing deterministic implementation as the baseline for comparison. Do not destroy its working behavior.
+7. Add a selectable agent-first mode using the current provider infrastructure, with support for capable general-purpose models such as Gemini, Claude or other available tool-calling models. Jev should be optional rather than mandatory in this mode.
+8. Build replay and mock-agent tests demonstrating that different legitimate agent decisions actually change the final output after successful verification.
+9. Measure exact-row accuracy, step recall, precision, citation correctness, hallucination rate and verifier rejection rate against the current implementation.
+10. Do not hardcode public sample labels, invent ownership links, ignore later-source cutoffs or assume retention periods.
+
+Our prior paid campaign is closed. Do not make new paid API calls. First implement and validate the architecture offline, with cached responses and scripted tool-calling tests.
+
+Work on the existing main branch only. Preserve all current work, logs, datasets, caches and output.csv. Do not push.
+
+I want you to challenge the existing design and implement a real agent-led decision pipeline, not simply increase reasoning rounds or rewrite prompts around the same deterministic planner.
+
+Document the architectural changes, tests, and what remains unverified without a live experiment.
+
+Agent Response Summary:
+Implemented selectable agent-first mode where the primary native-tool agent authors authorization, final status and the complete structured steps, while deterministic code verifies witnesses, ownership, policy, cutoffs, scope and schema without running a planner or re-planner. Unsupported proposals receive actionable feedback and another bounded turn; failure publishes an explicitly disclosed empty INCOMPLETE fallback, never a substituted baseline answer. Added 21 tests including an unparsed attachment that changes three baseline steps into six, preserved alternative agent citations, authored COMPLETE/NOT_APPLICABLE, rejected-fabrication correction, native schema repair, batch finality and offline/cache safety. All 328 tests pass on Python 3.11 and 3.14, both provider suites pass 31/31 on each, all 13 baseline fixtures pass and baseline/full staged outputs remain byte-identical to the preserved submission across versions/hash seeds. Committed locally on existing main as 8779251f00b979bcc2b8f89f8e70d323cecfcfbd with no paid calls or push; the prior paid ledger remains closed and unchanged at 177 events.
+
+Actions:
+* Added ghostaudit/agent_first.py, a full-proposal tool schema and agent_first_v1.md; integrated --decision-mode agent-first and model/round/cache/output-token options, preserving baseline defaults.
+* Enforced offline replay or mock gateways before evidence loading; CLI copies caches, does not load .env or fetch pricing, and refuses paid cache misses. Jev request classification is bypassed; cached typed media remains optional.
+* Added evaluation/agent_comparison.py and documented authority, replay behavior, constraints, measured metrics and unverified semantic/model capabilities in evaluation/AGENT_FIRST_ARCHITECTURE.md.
+* Measured four synthetic controls: exact rows 3/4 baseline versus 4/4 scripted agent, recall 8/11 versus 11/11, precision 8/8 versus 11/11 and citations 4/5 versus 5/5. The adversarial feedback trace rejects one fabricated proposal and accepts one correction (rejection/grounding proxy 1/2).
+* Public historical caches have no compatible submit_audit responses: all 32 public cases fall back (22/32 statuses, 0/32 exact, no proposals, undefined proposal-level rates). This is cache availability, not real-model quality; cached Roar baseline remains 28/32 statuses, 1/32 exact and 141/193 steps.
+* Validated a 518-case no-response agent output with all fallbacks, retained traces under ignored .runs/agent-first-offline-6i48y0w_/, confirmed all 1,371 protected hashes and three recovery stashes, and preserved all original log bytes.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T09:22:31+00:00] Push agent-first implementation
+
+User Prompt (verbatim, secrets redacted):
+push this
+
+Agent Response Summary:
+Verified existing main at 8779251f00b979bcc2b8f89f8e70d323cecfcfbd, the configured GitHub remote, clean staged changes and only the existing local log modification. Pushed all pending main commits normally from remote be3e323 to 8779251 without force. Confirmed GitHub main matches local main exactly; the local log remains uncommitted. No paid API calls or code changes occurred.
+
+Actions:
+* Checked branch, status, remote, recent commits, diff checks and remote main SHA.
+* Verified ancestry and ran git push origin main successfully.
+* Verified remote SHA 8779251f00b979bcc2b8f89f8e70d323cecfcfbd and synchronized main tracking status.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T09:56:33+00:00] Agent-first review fixes and bounded live integration
+
+User Prompt (verbatim, secrets redacted):
+Continue on the existing main branch at 8779251.
+
+ChatGPT independently reviewed the agent-first implementation. Keep the agent-first architecture; do not return semantic decision authority to the deterministic planner.
+
+Address these findings:
+
+1. Agent-first currently supports offline replay only. Design a separately selectable live mode using the existing provider infrastructure, with explicit opt-in, cost controls, caching, and fail-safe behavior. Implement and test the integration with mock providers, but DO NOT make paid API calls yet.
+2. Review item-scoped authorization and verifier checks. A request to delete a search result may legitimately include a non-destructive VERIFY_RECORD_ABSENT check for the already-deleted parent account when ownership and absence are independently established. The current single-resource and category checks can reject this. Reproduce and fix without authorizing unrelated deletion.
+3. Review overly broad hypothetical-question regexes and the deterministic English classifier's role in validating agent decisions. Ensure legitimate deletion requests are not rejected simply because they contain an incidental question or conditional phrase. Allow independently validated multilingual non-deletion decisions without blindly trusting the agent's interpretation. Preserve explicit authorization and safety restrictions.
+
+For each confirmed issue, add failing-before and passing-after regression tests.
+
+Run the complete test suite on Python 3.11 and 3.14, provider suites, fixtures, Ruff and offline replay.
+
+Preserve all historical results, caches, dataset files and root output.csv.
+
+No paid calls. No new branches. Commit verified fixes locally but do not push.
+
+Report confirmed defects, fixes, tests and live-mode readiness. Stop for review.
+
+Agent Response Summary:
+Confirmed over-restrictive parent-profile verification and hypothetical/English-only authorization gates; added separately selectable live integration while preserving agent semantic authority. Added 30 regression and mock-provider tests, and verified 358 tests on each Python version, 40 dedicated provider tests on each, all 13 fixtures, Ruff and zero-call replay. Full/sample baseline predictions and cached staged root output remain unchanged; no paid calls, new branches, agents or push. Committed verified code and documentation locally as b6a919863946b02447052654f92bc2a2b56a5bfa; log.txt remains uncommitted for review.
+
+Actions:
+* Reproduced six initial focused authorization failures and the missing live API contract; retained before/after evidence under .runs/review-agent-live-vh2hzbrv/.
+* Implemented bounded explicit live opt-in, prior-probe gating, shared primary/media/reviewer admission budgets, isolated input caches and persisted used responses; mocked both providers and blocked external sockets throughout verification.
+* Restricted the parent exception to independently owned and proven absent profile checks; retained category, copy, source, cutoff, retention and destructive-scope restrictions.
+* Scoped question guards and added a distinct request-only multilingual non-deletion reviewer with fail-closed confirmation; caught and repaired an intermediate prior-removal inspection regression during replay.
+* Confirmed all 1,371 protected hashes, retained three recovery stashes and all original log bytes. Documented remaining unverified live quality/billing in code/evaluation/AGENT_FIRST_REVIEW_FIXES.md.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T09:57:11+00:00] Push reviewed agent-first fixes
+
+User Prompt (verbatim, secrets redacted):
+push
+
+Agent Response Summary:
+Verified main was one commit ahead at b6a9198 with only the existing uncommitted log change and no staged changes. Pushed main normally to origin/main, advancing GitHub from 8779251 to b6a9198 without force. No code changes or paid API calls occurred; log.txt remains local and uncommitted.
+
+Actions:
+* Checked Git status, configured remote, pending commit and diff checks.
+* Ran git push origin main successfully and checked the remote main reference.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T10:03:01+00:00] Check TokenBazaar availability without inference
+
+User Prompt (verbatim, secrets redacted):
+check if token bazar is back
+
+Agent Response Summary:
+Checked TokenBazaar using read-only endpoints without paid inference. At 2026-10-25 10:02:52 UTC, the authenticated models endpoint returned HTTP 200 with 163 models; the website returned HTTP 403. The API catalog is reachable, but inference recovery remains unverified because no completion or decision request was sent.
+
+Actions:
+* Inspected the existing provider catalog transport and performed only website/catalog GET requests; printed no credentials and changed no code.
+* Preserved existing caches, datasets and output; appended this local log entry.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T10:18:33+00:00] Bounded real-provider agent-first pilot
+
+User Prompt (verbatim, secrets redacted):
+use token bazar api and do these We are ready to test the agent-first architecture against a real API.
+
+Continue on the existing main branch at b6a9198. Do not create another branch.
+
+GOAL: Determine whether a real general-purpose AI agent can independently investigate evidence, make the final audit decision, submit valid steps, respond to verifier feedback and improve accuracy over the deterministic baseline.
+
+Use Roar AI with a previously tested native tool-calling model. Prefer gemini-3.8-flash if its existing probe and availability are valid. Otherwise choose the strongest suitable already-tested model based on evidence and cost.
+
+NEW EXPERIMENT BUDGET: Maximum ₹10 (1,000 paise) additional conservative exposure. Keep this separate from the previous closed campaign. Do not reset or conceal previous spending. Stop before the ceiling, and disclose that estimated cost is not guaranteed actual billing.
+
+1. Verify the live API configuration, local .env access, model/tool probe, pricing assumptions and cumulative spending controls. Never print credentials.
+2. First test case_05 from the public sample. This is an end-to-end correctness test. Check that the agent actually retrieves evidence and submits an independently verifiable final answer.
+3. If successful and budget remains, test case_07. This evaluates harder document evidence and missing resource discovery.
+4. Use --decision-mode agent-first --agent-mode live --allow-agent-live, with explicit model, budget, call reserve and call limits. Keep Jev optional and do not run the deterministic planner in agent-first mode.
+5. Monitor the full tool-calling trace. If the agent repeatedly searches without submitting, inspect the failure and make a generalizable improvement if justified. Do not blindly increase limits or rerun an ineffective configuration.
+6. Compare output against the public expected rows only AFTER inference. Report exact-row matches, correct steps, citations, verifier rejections, feedback repairs, tool calls, tokens, latency and costs.
+7. Save all new outputs and model responses in fresh run paths. Preserve root output.csv, sample labels, historical caches and original runs.
+8. If model calls fail or no valid proposal is submitted, diagnose the root cause and stop rather than repeatedly spending money.
+9. Run regression tests after code changes. Commit verified improvements locally on main, but do not push.
+
+Finally, report whether the live agent generated valid audit decisions, whether accuracy improved on either tested case, actual versus estimated spending where available, and whether expanding testing to more cases is justified.
+
+Do not automatically test all 32 or 518 cases. Stop after this pilot.
+
+Agent Response Summary:
+Created a separate 1,000-paise pilot ledger, preserved the earlier closed campaign and checked free catalogs and credential availability without printing secrets. TokenBazaar Gemini native probe returned HTTP 503; retained a 25-paise unknown-charge reserve and stopped that provider. Subsequent explicit user steering resumed the pilot on Roar/Haiku, then authorized one retry; no case_07 or broader run occurred.
+
+Actions:
+* Saved free catalogs, fresh single-case request files, runtime wrappers and cumulative ledger under .runs/agent-live-pilot-jb8dtr63/.
+* Kept retries off and admission below 950 paise; reserved every POST before sending, retained unknown failure exposure, and closed the new ledger at 360.384 paise conservatively. Actual billing remains unknown; Roar catalog estimate is 165.344 paise at assumed Rs100/USD.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T10:18:33+00:00] Switch pilot to Roar Haiku
+
+User Prompt (verbatim, secrets redacted):
+use roar ai api and haiku 5.5 model
+
+Agent Response Summary:
+Used the existing successful native tool-call probe and current Roar catalog for claude-haiku-5-5. Ran only case_05 through the explicit live CLI path with planner calls forbidden, independent validation and unchanged scope/policy constraints. Five successful calls and 15 tools found the surviving failover record but no proposal was submitted before CASE_BUDGET; preserved the disclosed fallback and stopped pending user steering.
+
+Actions:
+* Recorded all raw requests/responses, validated model caches, tool traces, manifests and costs in fresh paths.
+* Compared with public labels only after inference: deterministic baseline has all 3/3 steps and exact row 1/1; the agent fallback has 0/3 steps and exact row 0/1.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T10:18:33+00:00] User-authorized autonomous-tools retry
+
+User Prompt (verbatim, secrets redacted):
+give it freehabd with the toolds and check its loutput
+
+Agent Response Summary:
+Added offline-tested execution-budget feedback and general relevant-source/submission guidance, retaining the same paid-run limits. The authorized retry made six calls and eight tools, submitting two proposals: feedback repaired the missing step group to 3/3 expected steps with the correct citation, but invalid NON_DELETION then UNRESOLVED authorization caused both rejections and an empty fallback. No valid final agent decision or accuracy improvement; stopped all paid work and skipped case_07.
+
+Actions:
+* Retained four regression tests for budget-aware submission, pressure safety, admission refusal and misleading UNRESOLVED feedback; clarified generic scope language without hardcoding public labels.
+* Verified 362 tests on Python 3.11 and 3.14, both provider checks within the full suites, Ruff, all 13 fixtures and zero-network frozen-response replay. Final scope/feedback prompt changes remain unverified live.
+* Confirmed all 1,371 protected hashes and the prior 177-event campaign ledger unchanged; preserved root output, datasets, historical caches/runs and original log bytes.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T10:18:33+00:00] Push verified pilot fixes
+
+User Prompt (verbatim, secrets redacted):
+PUSH
+
+Agent Response Summary:
+Committed the verified feedback fixes, four tests and detailed pilot report as c8e12c9149d416a71e9b5c2f1e41622793778528 on existing main. Pushed normally to origin/main without force following the explicit user instruction, and verified the GitHub main SHA matches. Only the append-only log remains uncommitted; no further paid calls were made.
+
+Actions:
+* Ran git diff checks, committed source/tests/report with attribution, and pushed main from b6a9198 to c8e12c9.
+* Confirmed remote main using git ls-remote and retained log.txt locally.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T10:42:46+00:00] Improve actual agent completion after failed pilot
+
+User Prompt (verbatim, secrets redacted):
+CANT U  improve this idk why this isnt improving
+
+Agent Response Summary:
+Diagnosed the actual failures rather than increasing paid limits: the primary confused request permission with incomplete investigation, ignored budget notices, and misread target-field encoding feedback. Built optional request-first interpretation and a submission window while keeping status, scope, resources and steps authored by the same primary model. All independent ownership, cutoff, evidence and policy gates remain enforced; no deterministic planner supplies an answer.
+
+Actions:
+* Implemented optional --agent-request-first and --agent-finalize-on-pressure, native scope-field descriptions and actionable encoding feedback.
+* Added eight synthetic adversarial/regression tests proving independent agent authority, safe rejection and repair; kept existing modes selectable.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T10:42:46+00:00] Authorize live tests on the two pilot cases
+
+User Prompt (verbatim, secrets redacted):
+its ok u can test on api key but i need results u have 2 test cases to test on
+
+Agent Response Summary:
+Reopened the existing pilot ledger under explicit user authorization without resetting its prior exposure. Tested only case_05 and case_07 through Roar claude-haiku-5-5; all raw requests, responses, traces, rejected proposals and costs remain in fresh paths. The user subsequently authorized another Rs10 before the original total would be exceeded.
+
+Actions:
+* Kept retries off, a persistent cumulative pre-POST ledger, unchanged per-case limits and no paid Jev/vision reader.
+* Scored public answers only after each inference; never supplied expected rows or baseline plans to the primary model.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T10:42:46+00:00] Expanded pilot obtains two verified agent outputs
+
+User Prompt (verbatim, secrets redacted):
+dont report i neeed results its ok if u use another 1o
+
+Agent Response Summary:
+Expanded the cumulative pilot authorization from 1,000 to 2,000 paise without resetting any earlier event or the closed older campaign. The selected final Haiku configuration produces two independently verified non-fallback outputs: case_05 exact with 3/3 steps, case_07 with 3/4 steps and one successful feedback repair; combined 6/6 step precision, 6/7 recall, 2/2 statuses and citations, 1/2 exact rows, matching the fresh deterministic baseline. Reverted an unsuccessful broader activity-search experiment instead of keeping a regression or weakening evidence. Closed all paid work at 1,438.012 paise conservative exposure (671.725 paise catalog estimate at assumed Rs100/USD; actual billing unavailable), verified 370 tests on both Python versions and committed locally as 3a8583bb9bf7fbf67bacfedf3c69430b1dd16971 without pushing.
+
+Actions:
+* Preserved every failed and successful pilot attempt: 46 successful Roar calls and one failed TokenBazaar probe in the cumulative ledger. Prior 8,947.98576-paise, 177-event campaign remains closed and unchanged.
+* Saved selected-predictions.csv containing the two unedited verified agent rows with source hashes; root output, datasets, credentials, historical caches and all 1,371 protected hashes remain unchanged.
+* Verified all 13 fixtures, Ruff, diff checks and real-cache replay on Python 3.11/3.14: 0 network calls, 5/6 cache hits, byte-identical accepted outputs.
+* Documented the remaining ungrounded account_007 association and no held-out or baseline accuracy gain; report is code/evaluation/AGENT_FIRST_LIVE_CONTINUATION.md. Log remains local and append-only.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T11:03:40+00:00] Recommend broader validation before 518 cases
+
+User Prompt (verbatim, secrets redacted):
+what do u suggest next running full run?
+
+Agent Response Summary:
+Recommended further public-sample validation before a full 518-case paid run because the successful agent configuration had only two tested cases and matched baseline accuracy. Proposed broader evidence types, explicit spending limits and baseline comparison before scaling.
+
+Actions:
+* No paid API calls or code changes for this recommendation.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T11:03:40+00:00] Run all 32 public samples
+
+User Prompt (verbatim, secrets redacted):
+run all 32
+
+Agent Response Summary:
+Prepared a fresh benchmark directory and froze the previously successful Roar Haiku request-first/finalization configuration at main 3a8583b. Reused 11 validated responses from the two successful pilot cases and generated an independent fresh offline baseline without reading expected labels during inference. Asked for explicit cumulative budget expansion because the existing Rs20 authorization had only Rs5.62 conservative headroom.
+
+Actions:
+* Saved fresh paths, immutable argv/runtime/progress traces, catalog and preflight hashes under .runs/agent-sample32-cckl3ldg/.
+* Preserved root output, historical caches, datasets, credentials and all older campaign records.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T11:03:40+00:00] Continue until every sample is processed
+
+User Prompt (verbatim, secrets redacted):
+take it untill u run all 32
+
+Agent Response Summary:
+Continued the frozen benchmark until all 32 case IDs were processed rather than stopping at a partial result. Four final proposals verified and 28 became explicit fallbacks; no unsafe proposal was substituted or planner output silently published. Compared expected rows only after completion, and retained all failure traces and per-case metrics.
+
+Actions:
+* Guarded planner/replanner calls, kept policy/ownership/cutoff/source checks and disabled transport retries.
+* Processed 30 new live cases plus two cache-reused pilot cases; 165 live attempts included four invalid responses and two timeouts.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T11:03:40+00:00] Authorize Rs100 cumulative cap and finish benchmark
+
+User Prompt (verbatim, secrets redacted):
+₹100 total — finish all 32 with margin
+
+Agent Response Summary:
+Raised the cumulative pilot ceiling from 2,000 to 10,000 paise under explicit human approval, retained all prior exposure, and used a 9,500-paise admission stop. All 32 outputs completed in 542.36 seconds: exact 1/32, statuses 22/32, precision 12/12 and recall 12/193 versus fresh baseline 1/32, 27/32, 136/137 and 136/193. Closed paid work at 7,086.048 paise cumulative conservative exposure; this batch added 5,648.036 paise exposure with 2,468.792 paise catalog estimate at assumed Rs100/USD, while actual billing is unavailable. Recorded evaluation evidence locally as eeedfb2b48b69d1e88ca70c70885ee1a7decc839 without changing the frozen engine or pushing; a 518-case paid run is not justified.
+
+Actions:
+* Validated all 32 rows and hash-bound fallback disclosures; offline cache replay on Python 3.11 and 3.14 uses 168 hits, makes zero network calls and reproduces byte-identical outputs with four accepted cases.
+* Confirmed all 1,371 protected hashes and the original 177-event closed campaign remain unchanged; earlier separate conservative exposure of 8,947.98576 paise was not reset or concealed.
+* Saved code/evaluation/AGENT_FIRST_SAMPLE32.md, durable metrics with per-case counts and artifact hashes, and updated historical report cross-links and decisions. Ruff and diff checks pass.
+* Preserved all existing log bytes and left log.txt uncommitted; local main is ahead of origin with no push.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T11:12:37+00:00] Publish all tracked implementation and benchmark work
+
+User Prompt (verbatim, secrets redacted):
+push everything we worked on to msin
+
+Agent Response Summary:
+Interpreted msin as the existing main branch and verified the configured Cyril-36/ghost-data-still-exists remote. Fetched GitHub main, checked the two pending implementation/evaluation commits and reviewed the accumulated log as append-only with no credential-pattern matches. Prepared all tracked work, including this log, for a normal push while keeping credentials, datasets, caches and ignored run artifacts local; this entry is written before publication and the final push outcome is reported in chat.
+
+Actions:
+* Checked branch, status, remote, recent commits, remote ancestry and diff checks.
+* Scanned pending log additions for credential patterns without printing possible secret values.
+* Prepare the accumulated log commit and publish main with git push origin main; verify remote SHA afterward, without force.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
