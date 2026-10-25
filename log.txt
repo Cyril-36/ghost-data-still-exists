@@ -1935,3 +1935,38 @@ branch=claude/gracious-archimedes-1rba87
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T04:55:32Z] Investigator flow fixes (D069); live validation blocked in this environment
+
+User Prompt (verbatim, secrets redacted):
+Phase 4 is now implemented at commit e98dceaf361c6234fdbb1284f36923802071c5de. Move toward LIVE validation. Do not restart Phase 4, create another plan, or conduct another general code audit.
+I independently reviewed `investigator.py` and found three execution-flow issues.
+
+1. `_execute()` rejects calls after `max_tool_calls`, but `run()` still treats an attempted `submit_case_file` as a submission, regardless of whether `_execute()` accepted it. Only process successful submit calls.
+2. At the end of `run()`, partial accepted facts can be published after ROUND_LIMIT, CASE_BUDGET, RUN_BUDGET or MODEL_ERROR, even without a successfully submitted and verifier-approved case file. Make the outcome explicit and consistent with the safe fallback contract. Add regression tests with valid facts proposed before budget exhaustion.
+3. Feedback rounds are intended to be separately limited to two, but currently consume the same four model-turn budget as evidence routing. Enforce the documented limits without permitting unlimited model calls or spending.
+
+Apply minimal fixes and regression tests. Run the full suite and Ruff. Commit and push.
+Then proceed to real-model validation, not more infrastructure development.
+First check whether `TOKENBAZAAR_API_KEY` is configured securely in the Claude cloud environment. Never print or commit it.
+If configured, perform one bounded `probe-tools` call using a known, catalog-listed chat model. Do not guess model IDs.
+If the probe succeeds, run the 32 labeled sample cases with staged intent and the live investigator. Use a separate output path, set a bounded cost ceiling, and compare against the previous staged baseline using the existing evaluation tools.
+Report exact-row accuracy, status accuracy, step precision/recall, recovered evidence, regressions, tool-call behavior and actual billing.
+Only after the live sample is working should you run the 518 cases and generate a new validated Phase 4 `output.csv`.
+If TokenBazaar still returns HTTP 503, stop paid probing, give me the precise blocker, and retain the completed offline implementation. Do not claim live accuracy.
+Commit and push results after each successful stage. Keep the changes small.
+
+Agent Response Summary:
+Fixed the three investigator flow issues in 7a70373: a submit refused by the tool limit is no longer a submission; only a submitted, verifier-accepted case file is published, while every other stop keeps the Phase 3 plan; and feedback rounds get their own 2-turn allowance, capping a case at 4 + 2x2 model turns. 4 regression tests (7 subtests fail on e98dcea); 211 tests pass on Python 3.11-3.14; ruff clean. Live validation could not start: TOKENBAZAAR_API_KEY is not set here (checked without printing), and the network policy denies tokenbazaar.in:443 (proxy 403 on CONNECT). No probe was sent, nothing was billed, and no live accuracy is claimed; root output.csv is unchanged.
+
+Actions:
+* Edited code/ghostaudit/investigator.py, casefile.py; added code/tests/test_review_e98dcea.py; edited tests/test_phase4_verifier.py, decisions.md (D069), README.md, evaluation_report.md
+* Ran unittest (3.11-3.14), ruff; checked key presence (name only); one unauthenticated reachability check (denied by proxy)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=claude/gracious-archimedes-1rba87
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none

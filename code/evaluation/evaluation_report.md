@@ -22,6 +22,8 @@ Full 518, offline intent: the Phase 4 output is byte-identical to Phase 3 offlin
 routed. The verifier has 0 blocking findings on Phase 3 plans, so nothing is withheld. Its findings are 128
 PARTIAL_PLAN (advisory) and 2 UNINSPECTED_MENTION.
 
+**Live-validation check (after D069):** in this cloud environment `TOKENBAZAAR_API_KEY` is not set, and the network policy refuses `tokenbazaar.in:443`: the egress proxy answered HTTP 403 to CONNECT, before any request reached the gateway. No probe was sent and nothing was billed.
+
 **Blocked:** no model has passed the native tool-call probe (there is no key in this environment, and the
 gateway last returned HTTP 503). So there is no live investigator result, no staged Phase 4 sample score to
 compare with the staged 28/32, 142/193, 2/32 baseline, and no new 518-row submission. The root `output.csv`
