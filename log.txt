@@ -3536,3 +3536,24 @@ branch=main
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T13:00:53Z] Improve exact rows: lookup-key profile absence checks (D085)
+
+User Prompt (verbatim, secrets redacted):
+can u improve exact rows
+
+Agent Response Summary:
+Went through the sample misses case by case. Found that the parser dropped trace-logged lookup keys of 404 profile lookups (D018), although the evidence names the subject's email explicitly. D085 keeps them, marked, for an absence check of the subject's sole profile candidate only (guarding against the case_17 decoy). Samples went from 5/32 to 8/32 exact rows with 157/157 precision. On the 518, 72 rows gain one check, 2 become COMPLETE and fallbacks go from 10 to 8, with no downgrade and 0 blocking verifier findings. Backed up the previous output, installed and validated the new output.csv (71d7398e...), and reproduced it from a clean package; 412 tests pass. No API calls.
+
+Actions:
+* Edited code/ghostaudit/parsers/logsrc.py, code/ghostaudit/planner.py, code/tests/test_parsers.py; added code/tests/test_lookup_key_profiles.py
+* Backed up output to runs/submission-backup-d081/; final run in runs/final-d085/; replaced output.csv
+* Updated README.md, code/README.md, evaluation_report.md, usage_report.md, decisions.md (D085)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none

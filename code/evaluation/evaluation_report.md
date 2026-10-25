@@ -1,16 +1,16 @@
-# Evaluation report — final submission (D084)
+# Evaluation report — final submission (D084, D085)
 
 ## Final configuration and output
 
 | Item | Value |
 |---|---|
-| Pipeline | deterministic baseline: identity resolution, state at `audit_at`, supplied policy with owner decision D081, obligations, planner, independent verifier |
+| Pipeline | deterministic baseline: identity resolution, state at `audit_at`, supplied policy with owner decision D081, D085 lookup-key profile absence checks, obligations, planner, independent verifier |
 | Model decisions | recorded Jev intent answers for all 518 requests; recorded Jev document kinds (4 PDFs) and vision readings (11 screenshots), from the original full run `runs/phase3-provisional/`, replayed from `code/recorded_decisions.json` |
 | Reproduction | `python3 code/main.py audit --requests dataset/deletion_requests.csv --output output.csv --run-dir .runs/reproduce --intent recorded` (no API key, no cache, 0 model calls) |
-| `output.csv` | 518 rows, SHA-256 `626e88d160b674e0614adf009d404b55298af83e620b9d41d64f4a116e41a9d0`; `VALID` |
-| Statuses | 146 `COMPLETE`, 362 `INCOMPLETE`, 10 `NOT_APPLICABLE`; 10 disclosed fallbacks |
+| `output.csv` | 518 rows, SHA-256 `71d7398eb3972e8ee739e48d8d74ad1ada363f8aa237f6a40d5a6523579712c1`; `VALID` |
+| Statuses | 148 `COMPLETE`, 360 `INCOMPLETE`, 10 `NOT_APPLICABLE`; 8 disclosed fallbacks |
 | Independent verifier | 0 blocking findings on all 518 plans (2 advisory), nothing withheld |
-| Previous output | `runs/submission-backup-phase3/output.csv`, SHA-256 `968454758d71…89982f` |
+| Previous outputs | D081 only: `runs/submission-backup-d081/` (`626e88d1…41a9d0`); Phase 3: `runs/submission-backup-phase3/` (`968454758d71…89982f`) |
 
 **Replay faithfulness.** The recorded intents re-reconcile with today's rules and deterministic agreement
 check to the same 508 account deletions and 10 non-deletions. Replayed through the code just before D081,
@@ -39,10 +39,10 @@ only the 518 graded requests, so the samples use the cached Roar Jev intents and
 | Metric | Result |
 |---|---|
 | Case status accuracy | 29/32 (0.906) |
-| Step precision / recall / F1 | 153/153, 153/193, 0.884 |
-| Field accuracy (positional) | 736/1158 (0.636) |
-| Sequence accuracy | 5/32 |
-| Exact rows | 5/32 (05, 11, 13, 14, 16) |
+| Step precision / recall / F1 | 157/157, 157/193, 0.897 |
+| Field accuracy (positional) | 788/1158 (0.680) |
+| Sequence accuracy | 8/32 |
+| Exact rows | 8/32 (05, 11, 12, 13, 14, 15, 16, 19); D081 alone gave 5/32 |
 
 All 40 missed steps need evidence that the files do not contain:
 - 26 account profiles linked only by a numeric suffix or timing (forbidden, D032);
@@ -50,7 +50,19 @@ All 40 missed steps need evidence that the files do not contain:
 - 5 security logs known only from sources captured after `audit_at`;
 - 2 security logs present in no participant file.
 
+**D085: profile absence from lookup keys (72 rows on the 518; +3 exact rows on the samples).** A 404 profile
+lookup whose own trace logs the subject's email as `lookup_key` (for example `evidence_01`, `evidence_06` and
+`evidence_94`) now verifies that profile absent. It does so only when that profile is the subject's sole
+candidate and no evidence ties it to anyone else. It supports an absence check only, never a finding or
+remediation (D060). On the samples this adds 4 correct steps and no wrong one. Case_17, where a March lookup of
+another account was also keyed by the same email, is held back by the uniqueness guard. On the 518, each of 72
+rows gains one profile check: 2 rows become `COMPLETE`, fallbacks fall from 10 to 8, and nothing is removed or
+downgraded. Remaining sample misses: 22 profiles with no evidence link at all (only a numeric suffix or a
+deletion claim), 7 analytics records, 5 post-cutoff security logs and 2 logs present in no file.
+
 **Remaining limitations.**
+- D085 risk: a lone 404 lookup of someone else's account keyed by the subject's email would add one wrong
+  absence check. The guard removes it only when a second candidate is visible.
 - The replay fixes the model decisions at those of the original run; a fresh live run may answer
   differently.
 - The generative intent fallback is not replayed (it was not used: all 518 resolved at the Jev stage).

@@ -1,6 +1,6 @@
 # Usage report — final submission (D084)
 
-**Final run (`runs/final-d081/`, produced `output.csv` SHA-256 `626e88d1…41a9d0`): 0 model calls, 0 tokens,
+**Final run (`runs/final-d085/`, produced `output.csv` SHA-256 `71d7398e…7912c1`): 0 model calls, 0 tokens,
 ₹0.** It replays `code/recorded_decisions.json`: 518 Jev intent answers, 4 Jev PDF document kinds and 11
 vision screenshot readings, all recorded by the original full run documented below. That run's
 acquisition cost is the cost behind every model decision in the final output; the replay adds nothing.

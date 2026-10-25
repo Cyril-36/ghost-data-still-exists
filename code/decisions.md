@@ -1090,3 +1090,16 @@ previous `output.csv` byte for byte (`968454758d71…`). With the current code (
 security-log retention checks: 51 disclosed fallbacks become `COMPLETE`, and fallbacks fall from 61 to 10.
 Nothing was removed or downgraded. The previous output is kept in `runs/submission-backup-phase3/`, and the
 final run diagnostics in `runs/final-d081/`.
+
+## D085 — A not-found lookup keyed by the subject verifies their sole profile's absence (revises D018)
+
+Profile lookup traces log the subject's identifier as `lookup_key` on the `*_started` line and the result
+(`resource_id`, 404) on the completion line of the same trace. D018 dropped those keys. The log parser now
+keeps them, marked `identity_from=lookup_key`. The planner links such a resource only when it is the
+subject's sole USER_PROFILE candidate and no evidence names another person, and then only for an absence
+check (D060: no finding, remediation or traversal). Otherwise it stays unlinked, as before, so no row can
+be downgraded. This is an explicit identifier in the evidence, not a suffix, timing or label link. Measured:
+samples exact 5/32 to 8/32, steps 153 to 157 of 193 at 157/157 precision; the D018 decoy (case_17's March
+lookup of another account) is held back by the guard. On the 518, 72 rows each gain one profile check,
+2 become `COMPLETE` and fallbacks fall from 10 to 8. Output `71d7398e…7912c1`, valid, 0 blocking
+verifier findings.

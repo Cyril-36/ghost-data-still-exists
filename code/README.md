@@ -1,7 +1,7 @@
 # Ghost Data Still Exists — deletion audit
 
-Status: **final submission output (D084).** Root `output.csv` (SHA-256 `626e88d1…41a9d0`) is produced by
-the deterministic pipeline with the owner's D081 retention decision, replaying the recorded model
+Status: **final submission output (D084, D085).** Root `output.csv` (SHA-256 `71d7398e…7912c1`) is produced by
+the deterministic pipeline with the owner's D081 retention decision and D085 lookup-key profile checks, replaying the recorded model
 decisions in `code/recorded_decisions.json`. Reproduce it with no API key or model cache:
 
 ```sh
@@ -20,8 +20,9 @@ instead lets the primary agent author authorization, status and all steps; code 
 the proposal without replacing it with a planner answer. See
 [`AGENT_FIRST_ARCHITECTURE.md`](evaluation/AGENT_FIRST_ARCHITECTURE.md).
 
-The root `output.csv` (518 rows) has its run diagnostics in `runs/final-d081/`, and
-`validate --run-dir runs/final-d081` re-checks the hash binding. The previous Phase 3 output is kept as
+The root `output.csv` (518 rows) has its run diagnostics in `runs/final-d085/`, and
+`validate --run-dir runs/final-d085` re-checks the hash binding. The D081-only output is kept in
+`runs/submission-backup-d081/` with its run in `runs/final-d081/`. The previous Phase 3 output is kept as
 `runs/submission-backup-phase3/output.csv` (SHA-256 `96845475…89982f`), alongside its original run in
 `runs/phase3-provisional/`.
 
@@ -86,7 +87,7 @@ python3 code/main.py audit --requests dataset/deletion_requests.csv --output .ru
 
 # Validate structure, case set, order, citation existence and eligibility, and disclosed fallbacks
 python3 code/main.py validate --requests dataset/deletion_requests.csv \
-    --predictions output.csv --run-dir runs/final-d081
+    --predictions output.csv --run-dir runs/final-d085
 
 # Evaluation (labels are read here only)
 python3 code/evaluation/main.py score --requests dataset/sample_deletion_requests.csv --dataset dataset \

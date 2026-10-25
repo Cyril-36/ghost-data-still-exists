@@ -37,7 +37,7 @@ model decisions in `code/recorded_decisions.json`. Python 3.11+, standard librar
 ```bash
 python3 code/main.py audit --requests dataset/deletion_requests.csv \
     --output output.csv --run-dir .runs/reproduce --intent recorded
-sha256sum output.csv   # 626e88d160b674e0614adf009d404b55298af83e620b9d41d64f4a116e41a9d0
+sha256sum output.csv   # 71d7398eb3972e8ee739e48d8d74ad1ada363f8aa237f6a40d5a6523579712c1
 python3 code/main.py validate --requests dataset/deletion_requests.csv --predictions output.csv \
     --run-dir .runs/reproduce
 ```
