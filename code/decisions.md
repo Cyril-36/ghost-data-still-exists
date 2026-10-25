@@ -959,3 +959,23 @@ Thirty new regression/mock integration tests; full discovery 358 and dedicated p
 pass on Python 3.11 and 3.14, all 13 fixtures pass, Ruff passes, and zero-call replays preserve the
 starting baseline and root output. No paid calls or push. Live provider/model quality and billing
 remain unverified. See `evaluation/AGENT_FIRST_REVIEW_FIXES.md` for evidence and readiness limits.
+
+## D077 — Real Haiku pilot fails final authorization; retain offline feedback fixes
+
+Continue main at b6a9198 with a separate 1,000-paise exposure cap. TokenBazaar's free catalog is
+reachable but its minimal Gemini tool probe returns HTTP 503; preserve 25 paise unknown exposure.
+User then selects Roar/Haiku 5.5 and authorizes one further autonomous-tools attempt. Two case_05
+runs make 11 successful Roar calls: the first never submits; the second submits two proposals but
+neither has valid authorization. It repairs missing remediation/verification, with all three raw
+steps matching public truth, but the verifier correctly rejects UNRESOLVED. Both final CSVs are
+empty disclosed fallbacks versus an exact deterministic baseline. Do not run case_07 or expand.
+
+Retain offline-tested execution-budget notices, general scope/submission guidance and accurate
+UNRESOLVED feedback without widening limits or weakening the verifier. Four regressions added;
+362 tests pass on Python 3.11/3.14, Ruff and 13 fixtures pass, captured-response replay makes no
+network calls. Final prompt/feedback changes remain unverified live. New exposure is closed at
+360.384 paise conservatively, with 165.344 paise catalog-estimated Roar spending at assumed
+Rs100/USD and actual billing unavailable. Prior 8,947.98576-paise campaign remains closed and
+unchanged. Preserve all original artifacts; commit locally, no push. Full results:
+`evaluation/AGENT_FIRST_LIVE_PILOT.md`. The subsequent explicit user instruction PUSH authorizes
+publishing the verified commit on main.

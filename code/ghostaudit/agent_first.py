@@ -105,7 +105,7 @@ class ProposalVerifier:
                 reject('SCOPE_EXCEEDED', 'ACCOUNT has no item target or whole-category flag.')
             if proposal['deletion_status'] == 'NOT_APPLICABLE':
                 reject('STATUS_MISMATCH', 'Authorized deletion cannot be NOT_APPLICABLE.')
-        else:
+        elif decision == NON_DELETION:
             if proposal['deletion_status'] != 'NOT_APPLICABLE' or scope != 'NONE' or a['target']:
                 reject('STATUS_MISMATCH', 'Non-deletion requires NONE scope, no target and NOT_APPLICABLE.')
             review = self.review_authorization(request.request_text) if det.decision == UNRESOLVED else None
@@ -252,12 +252,24 @@ class AgentFirst:
         messages = [{'role': 'system', 'content': self.prompt},
                     {'role': 'user', 'content': json.dumps(brief, default=str, ensure_ascii=False)}]
         start, seen, attempts = len(self.gateway.usage), {}, []
+        processed_tokens = 0  # Payload usage survives cache replay; billed gateway usage does not.
         if getattr(self.checker, 'authorization_review', None):
             self.checker.authorization_review.admit = lambda model, messages, limit: self._can_admit(
                 start, model, {'model': model, 'messages': messages, 'max_completion_tokens': limit}, limit)
         for turn in range(self.config.max_rounds):
             body = {'model': self.config.model, 'messages': messages, 'tools': AGENT_TOOLS,
                     'tool_choice': 'required', 'max_completion_tokens': self.config.max_completion_tokens}
+            request_bound = len(json.dumps(body, ensure_ascii=False).encode()) + self.config.max_completion_tokens
+            remaining_rounds = self.config.max_rounds - turn
+            remaining_tools = max(0, self.config.max_tool_calls - len(case.tool_calls))
+            messages.append({'role': 'user', 'content': json.dumps({'execution_budget': {
+                'remaining_rounds': remaining_rounds, 'remaining_tool_calls': remaining_tools,
+                'tokens_processed': processed_tokens,
+                'remaining_case_tokens': max(0, self.config.max_case_tokens - processed_tokens),
+                'case_cost_limit_paise': self.config.max_case_paise,
+                'next_request_token_bound_before_notice': request_bound,
+                'finalization_urgent': remaining_rounds <= 2 or remaining_tools <= 3
+                    or processed_tokens + request_bound >= 0.65 * self.config.max_case_tokens}})})
             if not self._can_admit(start, self.config.model, body, self.config.max_completion_tokens):
                 case.stop_reason = 'CASE_BUDGET'
                 break
@@ -275,6 +287,9 @@ class AgentFirst:
                     continue
                 case.stop_reason = f'MODEL_UNAVAILABLE: {type(exc).__name__}'
                 break
+            usage = payload.get('usage') or {}
+            processed_tokens += sum(v for v in (usage.get('prompt_tokens'), usage.get('completion_tokens'))
+                                    if type(v) is int and v >= 0)
             message = payload['choices'][0]['message']
             if attempts and not attempts[-1]['accepted']:
                 case.feedback_turns += 1

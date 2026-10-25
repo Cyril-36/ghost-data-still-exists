@@ -36,7 +36,8 @@ class MockLiveAgent(unittest.TestCase):
             self.bodies.append(copy.deepcopy(body))
             if body['model'] == 'independent-reviewer':
                 return {'choices': [{'message': {'content': json.dumps(review)}}]}, 5 if provider == 'tokenbazaar' else None
-            return {'choices': [{'message': {'content': None, 'tool_calls': next(sequence)}}]}, 5 if provider == 'tokenbazaar' else None
+            return {'choices': [{'message': {'content': None, 'tool_calls': next(sequence)}}],
+                    'usage': {'prompt_tokens': 321, 'completion_tokens': 17}}, 5 if provider == 'tokenbazaar' else None
         gateway._post = Mock(side_effect=post)
         return gateway
 
