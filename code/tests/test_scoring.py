@@ -71,3 +71,24 @@ class ScoringTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ErrorAnalysisTests(unittest.TestCase):
+    def test_differences_are_classified_once_each(self):
+        from evaluation.error_analysis import diff_case
+
+        def s(phase, rid, op, state, ev=''):
+            return {'phase': phase, 'system_id': 'svc', 'resource_id': rid, 'operation': op, 'state': state,
+                    'evidence_id': ev}
+        gold = [s('FINDING', 'r1', 'REPORT_REMAINING_RECORD', 'PRESENT', 'e1'),
+                s('REMEDIATION', 'r1', 'DELETE_RECORD', 'ABSENT'),
+                s('VERIFICATION', 'r2', 'VERIFY_RECORD_ABSENT', 'ABSENT', 'e2'),
+                s('VERIFICATION', 'r3', 'VERIFY_RECORD_PRESENT', 'PRESENT')]
+        pred = [s('FINDING', 'r1', 'REPORT_REMAINING_RECORD', 'PRESENT', 'e9'),     # citation
+                s('REMEDIATION', 'r1', 'REDACT_RECORD', 'REDACTED'),                 # operation
+                s('VERIFICATION', 'r4', 'VERIFY_RECORD_ABSENT', 'ABSENT')]           # unexpected; r2, r3 missing
+        d = diff_case(pred, gold)
+        self.assertEqual([len(d[k]) for k in ('WRONG_CITATION', 'WRONG_OPERATION', 'MISSING_STEP', 'UNEXPECTED_STEP')],
+                         [1, 1, 2, 1])
+        self.assertEqual(diff_case(list(reversed(gold)), gold), {'ORDER_ONLY': True})
+        self.assertEqual(diff_case(gold, gold), {})

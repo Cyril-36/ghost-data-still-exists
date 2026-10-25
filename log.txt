@@ -1593,3 +1593,48 @@ branch=claude/gracious-archimedes-1rba87
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T04:16:43Z] Review fixes (exact IDs, strict tool JSON), sample error analysis, Phase 4 plan
+
+User Prompt (verbatim, secrets redacted):
+I've reviewed your TokenBazaar compatibility commit `7de8e4dc2adfd1e2bb9b6bb0acee611604248127`.
+The implementation looks suitable to proceed, subject to two small corrections.
+First, finish these targeted fixes:
+
+1. In `planner.py`, replace substring resource-ID matching with exact identifier-token matching. Test `export_1` versus `export_10`, and ensure an explicitly named but ungrounded target never causes another resource to be selected.
+2. In `providers.py`, ensure tool arguments are strict JSON: reject NaN, Infinity, duplicate keys, and other unsupported values. Validate developer-supplied tool schemas before making a network call, and ensure validation exceptions cannot strand an in-flight budget reservation.
+
+Keep these changes minimal. Add regression tests, run the suite and Ruff, and commit on the existing development branch.
+Then prepare the next phase, but do not implement a large framework immediately.
+Our next objective is improving actual deletion-audit accuracy.
+Create a case-by-case comparison of all 32 labeled sample cases using the last completed staged predictions. Identify missing steps, incorrect citations, unexpected steps, wrong operations, and status mismatches.
+Group failures by general root cause, not case ID.
+Use that analysis to plan a minimal Phase 4 implementation containing:
+
+* A bounded investigator using read-only evidence tools.
+* A validated case-file representation.
+* An independent verifier that checks coverage, source eligibility and semantic support.
+* At most four investigator routing rounds and two verifier-feedback rounds, as specified in `plan.md`.
+* Explicit budgets, tool traces, safe fallbacks and tests.
+
+The deterministic obligation model must remain responsible for final status and output construction.
+Because TokenBazaar is returning HTTP 503, prepare and test the investigation flow using offline replay fixtures. Do not fabricate live evaluation results or continually retry the provider.
+Before changing inference, preserve a validated submission snapshot of the existing 518-row output and its associated run artifacts.
+Deliverable: the two targeted corrections, an offline 32-case error analysis, and a concise Phase 4 implementation plan prioritizing improvements to exact-row accuracy.
+Stop for review before building the full investigator. Do not push directly to main.
+
+Agent Response Summary:
+Fixed both review items in b69f2b0: exact identifier-token target matching, where an explicitly named but unlinked ID leaves the case unresolved, and strict tool-call JSON, upfront schema validation, and validator exceptions that now settle their reservation. That commit adds 6 regression tests, all failing without the fixes, and outputs are unchanged. The staged sample predictions exist only on the Mac (gitignored cache), so the 32-case analysis uses the reproducible offline run, labelled as such, through a new `evaluation/main.py errors` command that can be rerun on staged predictions. Results: 0 unexpected steps and 0 wrong operations; the 66 missing steps mostly need an account-record ownership link that no participant source grounds (window and suffix shortcuts measured at 1/32 and 8/32) or a retention-policy change (presume_retention measured at exact rows 1 -> 4, strict default kept). Preserved a validated, checksummed snapshot of the 518-row output and run, and wrote a concise Phase 4 plan that starts with owner decisions; the investigator was not built.
+
+Actions:
+* Edited code/ghostaudit/planner.py, code/ghostaudit/providers.py; added code/tests/test_review_7de8e4d.py; D064 in code/decisions.md (commit b69f2b0, pushed)
+* Added code/evaluation/error_analysis.py and the `errors` subcommand, a classifier test in code/tests/test_scoring.py, code/evaluation/sample_error_analysis.md, code/phase4_plan.md, runs/submission-snapshot-phase3/
+* Ran unittest on Python 3.11-3.14 (175 OK), ruff 0.14.0, 13 fixtures, offline/zero-budget full runs, offline sample audit, score, gaps, errors, engine-flag experiments, validate; 0 network calls
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=claude/gracious-archimedes-1rba87
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none

@@ -43,10 +43,11 @@ python3 code/evaluation/main.py score --requests dataset/sample_deletion_request
     --predictions .runs/sample/predictions.csv --run-dir .runs/sample \
     --expected dataset/sample_output.csv --out-dir .runs/sample/score
 python3 code/evaluation/main.py gaps ...            # missed-step attribution
+python3 code/evaluation/main.py errors ...          # case-by-case differences grouped by root cause
 python3 code/evaluation/main.py fixtures --out .runs/fixtures
 python3 code/evaluation/main.py intent-benchmark --env-file .env --out .runs/intent   # live, bounded
 
-python3 -m unittest discover -s code/tests      # 174 tests, offline (replay doubles, loopback servers)
+python3 -m unittest discover -s code/tests      # 175 tests, offline (replay doubles, loopback servers)
 ```
 
 `--intent offline|jev|staged` selects the intent mode. `--budget-paise` is a hard

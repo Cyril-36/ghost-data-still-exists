@@ -3,6 +3,7 @@
   fixtures  write synthetic fixture inputs and their expected answers
   score     compare a predictions CSV with a labels CSV for the same requests
   gaps      attribute every missed labeled step to a cause (needs the audit run directory)
+  errors    case-by-case differences (missing, unexpected, wrong operation/citation, status), grouped by cause
   intent-benchmark  LIVE: deterministic vs Jev vs generative vs staged intent (bounded paid calls)
 """
 from __future__ import annotations
@@ -19,6 +20,7 @@ from ghostaudit.contracts import ContractError  # noqa: E402
 from ghostaudit.inputs import load_context, load_requests  # noqa: E402
 from ghostaudit.output import read_output, validate_output  # noqa: E402
 
+from evaluation.error_analysis import analyze_errors, load_plans, render_errors  # noqa: E402
 from evaluation.fixtures import FIXTURES, write_fixture  # noqa: E402
 from evaluation.gap_analysis import analyze, ownership_details, render  # noqa: E402
 from evaluation.scoring import render_markdown, score  # noqa: E402
@@ -37,13 +39,14 @@ def main(argv=None) -> int:
     sc.add_argument('--dataset', type=Path, help='also check citations against this dataset')
     sc.add_argument('--run-dir', type=Path, help='run that produced the predictions (accepts its disclosed fallbacks)')
     sc.add_argument('--out-dir', type=Path, required=True, help='writes metrics.json and metrics.md')
-    gp = sub.add_parser('gaps')
-    gp.add_argument('--dataset', type=Path, required=True)
-    gp.add_argument('--requests', type=Path, required=True)
-    gp.add_argument('--predictions', type=Path, required=True)
-    gp.add_argument('--expected', type=Path, required=True)
-    gp.add_argument('--run-dir', type=Path, required=True)
-    gp.add_argument('--out-dir', type=Path, required=True, help='writes gaps.json and gaps.md')
+    for name, writes in (('gaps', 'gaps.json and gaps.md'), ('errors', 'gaps.* and errors.json/errors.md')):
+        gp = sub.add_parser(name)
+        gp.add_argument('--dataset', type=Path, required=True)
+        gp.add_argument('--requests', type=Path, required=True)
+        gp.add_argument('--predictions', type=Path, required=True)
+        gp.add_argument('--expected', type=Path, required=True)
+        gp.add_argument('--run-dir', type=Path, required=True)
+        gp.add_argument('--out-dir', type=Path, required=True, help=f'writes {writes}')
     ib = sub.add_parser('intent-benchmark')
     ib.add_argument('--dataset', type=Path, required=True)
     ib.add_argument('--out-dir', type=Path, required=True)
@@ -65,12 +68,19 @@ def main(argv=None) -> int:
                 base = write_fixture(FIXTURES[name], args.out)
                 print(f'{name}: inputs {base / "input"}  expected {base / "expected_output.csv"}')
             return 0
-        if args.command == 'gaps':
+        if args.command in ('gaps', 'errors'):
             result = analyze(args.dataset, args.requests, args.predictions, args.expected, args.run_dir)
             result['ownership'] = ownership_details(args.dataset, args.requests, result, args.run_dir)
             args.out_dir.mkdir(parents=True, exist_ok=True)
             (args.out_dir / 'gaps.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
             (args.out_dir / 'gaps.md').write_text(render(result), encoding='utf-8')
+            if args.command == 'errors':
+                errors = analyze_errors(read_output(args.predictions), read_output(args.expected), result,
+                                        load_plans(args.run_dir))
+                (args.out_dir / 'errors.json').write_text(json.dumps(errors, indent=2) + '\n', encoding='utf-8')
+                (args.out_dir / 'errors.md').write_text(
+                    render_errors(errors, f'Errors: {args.predictions.name} vs {args.expected.name}'), encoding='utf-8')
+                result = {k: errors[k] for k in ('exact_rows', 'total', 'by_kind', 'by_cause')}
             print(json.dumps({k: v for k, v in result.items() if k != 'details'}, indent=2))
             return 0
         requests = load_requests(args.requests)
