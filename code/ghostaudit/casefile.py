@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 
 from .observations import ABSENT, LINK, PRESENT, STATE, Observation, classify_token, text_tokens
 from .planner import id_tokens
-from .tools import FACT_KINDS, SourceText, ToolError
+from .tools import FACT_KINDS, SourceText, ToolError, locator_lines
 
 ABSENT_CUE = re.compile(r'\b(404|not[ _]found|no such|absent|does not exist|no rows?|purged)\b', re.IGNORECASE)
 PRESENT_CUE = re.compile(r'\b(200|found|present|active|exists|stored|retained|available|captured|uploaded|'
@@ -83,7 +83,8 @@ class CaseFile:
     conflicts: list = field(default_factory=list)
     questions: list = field(default_factory=list)
     handles: set = field(default_factory=set)        # resource IDs the model may name
-    inspected: set = field(default_factory=set)      # source IDs shown to the model (citable)
+    inspected: set = field(default_factory=set)      # source IDs whose content was shown to the model
+    shown: dict = field(default_factory=dict)        # source ID -> line locators shown in full (citable)
     facts: list = field(default_factory=list)        # accepted Fact
     rejected: list = field(default_factory=list)     # [{proposal, reason}]
     tool_calls: list = field(default_factory=list)
@@ -123,6 +124,7 @@ class CaseFile:
         out = {k: v for k, v in asdict(self).items() if k not in ('facts', 'subject_token', 'subject_tokens')}
         out['audit_at'] = self.audit_at.isoformat()
         out['handles'], out['inspected'] = sorted(self.handles), sorted(self.inspected)
+        out['shown'] = {k: sorted(v) for k, v in sorted(self.shown.items())}
         out['facts'] = [{**{k: v for k, v in asdict(f).items() if k not in ('available_at', 'observed_at',
                                                                              'subject_token')},
                          'available_at': f.available_at.isoformat()} for f in self.facts]
@@ -174,14 +176,17 @@ class FactValidator:
         ref = self.texts.refs[source]
         if ref.available_at > case.audit_at:
             return None, f'POST_CUTOFF_SOURCE: {source} available {ref.available_at.isoformat()} after audit_at'
-        if source not in case.inspected:
-            return None, f'UNINSPECTED_SOURCE: {source} was never returned by a tool in this investigation'
+        if source not in case.shown:
+            return None, f'UNINSPECTED_SOURCE: {source} was never shown by a tool in this investigation'
         if rid not in case.handles:
             return None, f'INVENTED_RESOURCE: {rid!r} was never returned by a tool or listed as a candidate'
         try:
             span = self.texts.span(source, locator)
         except ToolError as exc:
             return None, f'BAD_LOCATOR: {exc}'
+        unseen = sorted(locator_lines(locator) - case.shown.get(source, set()))
+        if unseen:
+            return None, f'UNSHOWN_LINES: {source} {unseen[:5]} were never shown in full in this investigation'
         if len(literal) < 8 or _norm(literal) not in _norm(span):
             return None, f'LITERAL_NOT_IN_SOURCE: the literal does not occur verbatim at {source} {locator}'
         if INSTRUCTION_CUE.search(span):

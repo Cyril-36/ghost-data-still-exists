@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from pathlib import Path
 
 from .config import STRICT, EngineConfig
@@ -95,12 +95,9 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
     intents = decide_intents({r.case_id: r.request_text for r in requests}, gateway, use_generative)
     plans = [plan_case(r, corpus, policy, index, intents[r.case_id].intent) for r in requests]
 
-    if investigator_gateway is not None and gateway is not None and investigator_gateway is not gateway:
-        # One advertised ceiling for the run: a separate investigator gateway gets only what the intent
-        # and media calls (all finished by now) left of it.
-        left = max(0.0, gateway.config.max_cost_paise - gateway.spent_paise)
-        investigator_gateway.config = replace(investigator_gateway.config,
-                                              max_cost_paise=min(investigator_gateway.config.max_cost_paise, left))
+    if investigator_gateway is not None and gateway is not None and investigator_gateway is not gateway \
+            and investigator_gateway.mode == 'live':
+        investigator_gateway.share_budget(gateway)      # one ceiling for every paid call (replay keeps its zero)
     texts = SourceText(context, {**(media_cache or {}), **getattr(corpus, 'media_extractions', {})})
     verifier = Verifier(corpus, index, context, texts)
     agent = Investigator(investigator_gateway, investigator, corpus, index, policy, texts, verifier.verify) \
@@ -153,6 +150,13 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
     gateways = [g for g in (gateway, investigator_gateway) if g is not None]
     gateways = [g for n, g in enumerate(gateways) if g not in gateways[:n]]
     usage = [u for g in gateways for u in g.usage]
+    for g in gateways:          # the run's own validated responses: offline replay and analysis need no paid call
+        for u in g.usage:
+            source = g._cache_path(u.fingerprint) if u.status == 'ok' and u.fingerprint else None
+            if source is not None and source.exists():
+                target = run_dir / 'model_cache' / source.parent.name / source.name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(source.read_bytes())
     if gateways:
         with open(run_dir / 'usage.jsonl', 'w', encoding='utf-8') as f:
             for g in gateways:
@@ -197,7 +201,8 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
         'model_calls': sum(1 for u in usage if u.mode != 'cache'),
         'model_cache_hits': sum(1 for u in usage if u.mode == 'cache'),
         'model_usage': {k: v for g in gateways for k, v in g.usage_summary().items()},
-        'model_spent_paise_header': round(sum(g.spent_paise for g in gateways), 2),
+        'model_spent_paise_header': round(sum(u.cost_paise_header or 0 for u in usage), 6),   # provider-reported only
+        'budget_charged_paise': round(sum({id(g._ledger): g.spent_paise for g in gateways}.values()), 6),
         'model_cost_paise': {'actual_reported': round(sum(u.cost_paise_header or 0 for u in usage), 6),
                              'estimated': round(sum(u.cost_estimate_paise or 0 for u in usage), 6),
                              'unpriced_live_calls': sum(1 for u in usage if u.mode == 'live' and u.status != 'error'

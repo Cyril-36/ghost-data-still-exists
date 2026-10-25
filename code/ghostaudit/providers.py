@@ -122,7 +122,7 @@ class ProviderConfig:
         if self.provider not in PROFILES:
             raise ProviderError(f'unknown provider {self.provider!r}; choose from {sorted(PROFILES)}')
         prof = PROFILES[self.provider]
-        fill = {'base_url': prof.base_url, 'api_key_env': prof.key_env, 'proxy_auth': prof.proxy_auth,
+        fill = {'base_url': prof.base_url, 'api_key_env': prof.key_env,      # proxy_auth stays None unless explicit
                 'cost_reserve_paise': prof.decide_reserve_paise, 'chat_cost_reserve_paise': prof.chat_reserve_paise,
                 **{r: getattr(prof, r) for r in ROLE_MODELS}}
         return replace(self, **{k: v for k, v in fill.items() if getattr(self, k) is None})
@@ -424,30 +424,39 @@ class Gateway:
         self._spent = 0.0
         self._reserved = 0.0
         self._calls = 0
+        self._ledger = self                  # whose lock, counters and ceiling govern this gateway's spending
+        self.pricing_error = ''
+
+    def share_budget(self, other: 'Gateway'):
+        """Spend against `other`'s ledger: one ceiling and one call limit for both, enforced under one
+        lock, so concurrent reservations through either gateway can never exceed it together."""
+        self._ledger = other._ledger
 
     # --- accounting ---------------------------------------------------------------------
     @property
     def spent_paise(self) -> float:
-        return self._spent
+        return self._ledger._spent
 
     def _reserve(self, reserve):
-        with self._lock:
-            if self._calls + 1 > self.config.max_calls:
-                raise BudgetExceeded(f'call ceiling {self.config.max_calls} reached')
-            if self._spent + self._reserved + reserve > self.config.max_cost_paise:
-                raise BudgetExceeded(f'cost ceiling {self.config.max_cost_paise} paise would be exceeded '
-                                     f'(spent {self._spent:.1f}, in flight {self._reserved:.1f})')
-            self._calls += 1
-            self._reserved += reserve
+        led = self._ledger
+        with led._lock:
+            if led._calls + 1 > led.config.max_calls:
+                raise BudgetExceeded(f'call ceiling {led.config.max_calls} reached')
+            if led._spent + led._reserved + reserve > led.config.max_cost_paise:
+                raise BudgetExceeded(f'cost ceiling {led.config.max_cost_paise} paise would be exceeded '
+                                     f'(spent {led._spent:.1f}, in flight {led._reserved:.1f})')
+            led._calls += 1
+            led._reserved += reserve
 
     def _record(self, rec: UsageRecord, reserve=0.0):
         """Append `rec`; for a reserved call, release its reservation and charge its cost in the
         same critical section, so no call is admitted against a released but uncharged reserve."""
-        with self._lock:
+        led = self._ledger
+        with led._lock:
             self.usage.append(rec)
-            self._reserved -= reserve
+            led._reserved -= reserve
             if reserve and rec.mode == 'live' and rec.status != 'error':
-                self._spent += next(c for c in (rec.cost_paise_header, rec.cost_estimate_paise, reserve) if c is not None)
+                led._spent += next(c for c in (rec.cost_paise_header, rec.cost_estimate_paise, reserve) if c is not None)
 
     # --- cache --------------------------------------------------------------------------
     def _cache_path(self, fp):
@@ -458,7 +467,13 @@ class Gateway:
     def _cache_get(self, fp):
         path = self._cache_path(fp)
         if path and path.exists():
-            return json.loads(path.read_text(encoding='utf-8'))
+            try:
+                entry = json.loads(path.read_text(encoding='utf-8'))
+            except (ValueError, OSError):
+                entry = None
+            if isinstance(entry, dict):
+                return entry
+            path.unlink(missing_ok=True)       # malformed entry: a miss, never a response
         return None
 
     def _cache_put(self, fp, entry):
@@ -479,9 +494,14 @@ class Gateway:
 
     def _request(self, method, path, body=None):
         key = os.environ.get(self.config.api_key_env)
-        if not key and not self.config.proxy_auth:
+        if self.config.proxy_auth is True:        # explicit proxy auth: a local key is never transmitted
+            headers = {}
+        elif key:
+            headers = {'Authorization': f'Bearer {key}'}
+        elif self.config.proxy_auth is None and self.profile.proxy_auth:
+            headers = {}                          # profile default: the egress proxy injects the secret
+        else:
             raise ProviderError(f'{self.config.api_key_env} is not set')
-        headers = {'Authorization': f'Bearer {key}'} if key else {}   # else the egress proxy injects it
         if body is not None:
             headers['Content-Type'] = 'application/json'
         request = urllib.request.Request(
@@ -500,7 +520,11 @@ class Gateway:
 
     def load_pricing(self):
         """Catalog prices for cost estimates (one free GET); providers without them keep header costs only."""
-        payload = self._get('models')
+        try:
+            payload = self._get('models')
+        except (urllib.error.URLError, OSError, ValueError, ProviderError) as exc:
+            self.pricing_error = f'price catalog unavailable: {type(exc).__name__}'   # calls stay unpriced
+            return self.pricing
         for entry in payload.get('data', []) if isinstance(payload, dict) else []:
             if isinstance(entry, dict) and isinstance(entry.get('roar_pricing'), dict):
                 self.pricing[entry.get('id')] = entry['roar_pricing']

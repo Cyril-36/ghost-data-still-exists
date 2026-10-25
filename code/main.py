@@ -190,6 +190,8 @@ def main(argv=None) -> int:
                 investigator = InvestigatorConfig(model, max_rounds=args.investigator_max_rounds,
                                                   max_tool_calls=args.investigator_max_tool_calls,
                                                   max_case_paise=args.investigator_case_paise)
+                if gateway is not None and investigator_gateway is not gateway and args.investigator == 'live':
+                    investigator_gateway.share_budget(gateway)    # one --budget-paise ceiling for the whole run
                 if args.investigator == 'replay':
                     investigator_gateway.mode = 'replay'
                 elif investigator_gateway is not shared and investigator_gateway.profile.cost_header is None:

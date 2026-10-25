@@ -62,12 +62,13 @@ def analyze_errors(predictions, expected, gaps: dict, plans: dict[str, dict]) ->
         steps = lambda r: [{f: getattr(s, f) for f in ('phase', 'system_id', 'resource_id', 'operation',  # noqa: E731
                                                        'state', 'evidence_id')} for s in r.steps]
         d = diff_case(steps(row), steps(gold))
-        cited = [s for s in steps(gold) if s['evidence_id']]
-        wrong = len(d.get('WRONG_CITATION', []))
-        missing_cited = sum(1 for g in d.get('MISSING_STEP', []) if g[5])
-        citations['expected_cited'] += len(cited)
-        citations['correct'] += len(cited) - wrong - missing_cited
-        citations['wrong'] += wrong
+        full = lambda s: tuple(s[k] for k in ('phase', 'system_id', 'resource_id', 'operation', 'state',  # noqa: E731
+                                               'evidence_id'))
+        cited = Counter(full(s) for s in steps(gold) if s['evidence_id'])
+        citations['expected_cited'] += sum(cited.values())
+        # correct only on an exact match of all six fields; any other difference is not a correct citation
+        citations['correct'] += sum((cited & Counter(full(s) for s in steps(row))).values())
+        citations['wrong'] += len(d.get('WRONG_CITATION', []))
         exp_res = {(s.system_id, s.resource_id) for s in gold.steps}
         got_res = {(s.system_id, s.resource_id) for s in row.steps}
         resources['expected'] += len(exp_res)

@@ -36,8 +36,14 @@ def run_corpus(context, run_dir: Path):
     """The audited run's evidence universe: same config, media from cached responses only (no calls)."""
     manifest = json.loads((Path(run_dir) / 'run_manifest.json').read_text(encoding='utf-8'))
     used_gateway = manifest['inference_modes']['gateway_mode'] is not None
-    profile = manifest['inference_modes'].get('providers', {}).get('intent', {})   # absent: historical TokenBazaar
-    gateway = Gateway(ProviderConfig(max_calls=0, **profile)) if used_gateway else None
+    profile = manifest['inference_modes'].get('providers', {}).get('intent')
+    if used_gateway and profile is None:
+        if not str(manifest.get('engine_version', '')).startswith('phase3'):
+            raise ValueError('run manifest records no provider for its model calls; refusing to guess one')
+        profile = {}                                       # Phase 3 runs predate provider records: TokenBazaar
+    recorded_cache = Path(run_dir) / 'model_cache'
+    cache = {'cache_dir': str(recorded_cache)} if recorded_cache.is_dir() else {}
+    gateway = Gateway(ProviderConfig(max_calls=0, max_cost_paise=0.0, **{**profile, **cache})) if used_gateway else None
     corpus = build_corpus(context, EngineConfig(**manifest['engine_config']), gateway)
     extractions = json.loads(json.dumps(getattr(corpus, 'media_extractions', {}), default=str))
     recorded = json.loads((Path(run_dir) / 'media_extractions.json').read_text(encoding='utf-8'))

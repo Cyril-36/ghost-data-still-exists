@@ -2091,3 +2091,23 @@ branch=claude/gracious-archimedes-1rba87
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T05:59:45Z] Second review: ceiling, grounding, planner, verifier, evaluation, provider fixes (D072)
+
+User Prompt (verbatim, secrets redacted):
+Perform a targeted correctness audit and bug-fix pass on Ghost Data Still Exists, continuing from commit e858907 on the existing development branch. [... P0 combined spending ceiling; P1 investigator grounding (exact shown locators, hidden handles, clipped results), planner tuple-vs-string target bug, verifier traversal (foreign-person, ambiguous IDs), stale-citation selection, error_analysis citation accounting, gap_analysis Roar reconstruction from run artifacts; P2 pricing failures, malformed cache, explicit proxy auth, actual vs estimated costs; reproduce each with a regression test; run suite, Ruff, fixtures and both-provider compatibility checks; commit and push; stop before any paid 32- or 518-case run.]
+
+Agent Response Summary:
+Reproduced all 17 claimed defects with tests that failed on d8aee52, then fixed each (see D072). The ceiling finding was partly mitigated in 530be0b and is now enforced by one shared ledger, with replay excluded. Added a test that a replay investigator never shares the ledger. 245 tests pass on Python 3.11-3.14; ruff clean; 13/13 fixtures; TokenBazaar outputs byte-identical with all 390 historical cache keys; the Roar cached rerun (0 calls) gives identical predictions; gap analysis rebuilds a Roar run from its own model_cache with no global cache. No prediction changed; no paid call was made.
+
+Actions:
+* Added tests/test_review_audit2.py; edited ghostaudit/providers.py, tools.py, casefile.py, planner.py, verifier.py, audit.py, main.py, evaluation/error_analysis.py, gap_analysis.py; tests/test_providers_dual.py; D072
+* Ran unittest (3.11-3.14), ruff, fixtures, TokenBazaar compatibility checks, cached Roar rerun, artifact-only gap analysis
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=claude/gracious-archimedes-1rba87
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none

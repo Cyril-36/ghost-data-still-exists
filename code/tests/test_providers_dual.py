@@ -50,13 +50,15 @@ class ProfileTests(unittest.TestCase):
         c = Gateway(ProviderConfig(cache_dir=None)).config
         self.assertEqual((c.provider, c.base_url, c.api_key_env, c.proxy_auth, c.cost_reserve_paise,
                           c.chat_cost_reserve_paise),
-                         ('tokenbazaar', 'https://tokenbazaar.in/api/public/v1', 'TOKENBAZAAR_API_KEY', False, 25.0, 120.0))
+                         ('tokenbazaar', 'https://tokenbazaar.in/api/public/v1', 'TOKENBAZAAR_API_KEY', None, 25.0, 120.0))
+        self.assertFalse(PROFILES['tokenbazaar'].proxy_auth)          # the key is required unless --proxy-auth
         self.assertEqual((c.jev_model, c.intent_fallback_model, c.vision_model, c.investigator_model),
                          ('typesafe/jev-latest', 'google/gemini-2.5-flash', 'google/gemini-2.5-flash', None))
 
     def test_roar_profile_and_overrides(self):
         c = Gateway(ROAR).config
-        self.assertEqual((c.base_url, c.api_key_env, c.proxy_auth), ('https://api.roar-ai.com/v1', 'ROAR_API_KEY', True))
+        self.assertEqual((c.base_url, c.api_key_env, c.proxy_auth), ('https://api.roar-ai.com/v1', 'ROAR_API_KEY', None))
+        self.assertTrue(PROFILES['roar'].proxy_auth)                  # default: local key if set, else proxy
         self.assertEqual((c.jev_model, c.intent_fallback_model, c.vision_model, c.investigator_model),
                          ('jev', 'gpt-oss-20b', 'claude-haiku-5-5', 'gpt-oss-20b'))
         self.assertEqual(Gateway(replace(ROAR, vision_model='some-vision')).config.vision_model, 'some-vision')
@@ -198,25 +200,26 @@ if __name__ == '__main__':
 
 
 class SharedCeiling(unittest.TestCase):
-    def test_a_separate_investigator_gateway_gets_only_what_is_left(self):
+    def test_a_separate_live_investigator_gateway_shares_the_ledger(self):
         from pathlib import Path
 
         from ghostaudit.audit import run_audit
         from ghostaudit.investigator import InvestigatorConfig
         from phase4_world import world
 
-        class Spent(ReplayGateway):
-            pass
+        class Live(ReplayGateway):
+            mode = 'live'
         with tempfile.TemporaryDirectory() as tmp:
             root = world(tmp)
-            intent = Spent(lambda p, b: jev_payload('DELETE_ACCOUNT'), ProviderConfig(cache_dir=None, max_cost_paise=300.0))
+            intent = ReplayGateway(lambda p, b: jev_payload('DELETE_ACCOUNT'),
+                                   ProviderConfig(cache_dir=None, max_cost_paise=300.0))
             intent._spent = 120.0                                          # what intent and media calls used
-            inv = ReplayGateway(lambda p, b: self.fail('no call expected'), replace(ROAR, max_cost_paise=300.0))
-            inv.mode = 'replay'
+            inv = Live(lambda p, b: self.fail('no call expected'), replace(ROAR, max_cost_paise=300.0))
             run_audit(root, root / 'deletion_requests.csv', Path(tmp) / 'o.csv', Path(tmp) / 'run', gateway=intent,
                       use_generative=False, investigator=InvestigatorConfig('m', max_rounds=0),
                       investigator_gateway=inv)
-            self.assertEqual(inv.config.max_cost_paise, 180.0)
+            self.assertIs(inv._ledger, intent._ledger)                     # one ceiling, one set of counters
+            self.assertEqual(inv.spent_paise, 120.0)
 
 
 class TransportResets(unittest.TestCase):

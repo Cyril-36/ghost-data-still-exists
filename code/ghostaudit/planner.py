@@ -317,7 +317,8 @@ def plan_case(request: Request, corpus: Corpus, policy: Policy, index: IdentityI
         candidates = [k for k, st in states.items() if plan.intent.target in st.categories]
         tokens = id_tokens(request.request_text)
         named = [k for k in candidates if k[1] in tokens]
-        ungrounded = sorted(t for t in tokens - {k[1] for k in candidates} - plan.subject.tokens if _id_shaped(t))
+        own = {key for _, key in plan.subject.tokens} | set(plan.subject.user_ids)    # the subject's own IDs
+        ungrounded = sorted(t for t in tokens - {k[1] for k in candidates} - own if _id_shaped(t))
         chosen = candidates if plan.intent.whole_category else [] if ungrounded else (
             named if len(named) == 1 else candidates if len(candidates) == 1 else [])
         plan.issues.append(f'SCOPE: {plan.intent.target} {"(all)" if plan.intent.whole_category else "(one)"}; '

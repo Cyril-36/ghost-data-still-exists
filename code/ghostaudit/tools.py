@@ -211,6 +211,15 @@ class SourceText:
                 yield (f'{page}:L{n}' if page else f'L{n}'), line
 
 
+def locator_lines(locator: str) -> set:
+    """The individual line locators a (range) locator covers."""
+    m = _LOCATOR.match(locator or '')
+    if not m:
+        raise ToolError(f'malformed locator {locator!r}')
+    page, a, b = m.group(1), int(m.group(2)), int(m.group(3) or m.group(2))
+    return {f'{page}:L{n}' if page else f'L{n}' for n in range(a, b + 1)}
+
+
 def _clip(result: dict) -> dict:
     text = json.dumps(result, ensure_ascii=False, default=str)
     if len(text) <= MAX_RESULT_CHARS:
@@ -265,13 +274,21 @@ class InvestigationTools:
         if not self.texts.available(source_id, self.case.audit_at):
             raise ToolError(f'{source_id} became available after audit_at; it cannot be used for this case')
 
-    def _note_handles(self, sources=(), text=''):
-        """Sources shown to the model may be cited; resource IDs appearing verbatim in what it was
-        shown become handles it may query further. Nothing else is ever a valid handle."""
-        self.case.inspected.update(sources)
-        self.case.handles.update(_ID_SHAPED.findall(text))
+    def _register(self, result, displayed):
+        """Record what the model was actually shown. `displayed` is [(source_id, locator | None, text,
+        complete)] for every item in `result`; a clipped result keeps only items whose text survives in
+        the preview. Shown sources become inspected, fully shown lines become citable, and resource IDs
+        in shown text become handles. Nothing hidden is ever registered."""
+        preview = result.get('preview') if result.get('truncated') and 'preview' in result else None
+        for source_id, locator, text, complete in displayed:
+            if preview is not None and json.dumps(text, ensure_ascii=False)[1:-1] not in preview:
+                continue
+            self.case.inspected.add(source_id)
+            if locator and complete:
+                self.case.shown.setdefault(source_id, set()).add(locator)
+            self.case.handles.update(_ID_SHAPED.findall(text))
 
-    # -- tools ---------------------------------------------------------------------------------
+    # -- tools: each returns (result, displayed) -------------------------------------------------
     def search_identifiers(self, values):
         values = [v for v in values if isinstance(v, str) and v.strip()][:5]
         rejected = [v for v in values if not self._allowed_value(v)]
@@ -284,13 +301,14 @@ class InvestigationTools:
                 continue
             for locator, line in self.texts.lines(source_id):
                 if any(re.search(rf'(?<![\w.@+-]){re.escape(v)}(?![\w@-])', line, re.IGNORECASE) for v in values):
-                    hits.append({'source_id': source_id, 'locator': locator, 'text': line[:200]})
+                    hits.append((source_id, locator, line))
         activity = [a.activity_id for a in self.texts.activities.values() if a.event_time <= self.case.audit_at
                     and any(v == a.resource_id for v in values)]
         shown = hits[:25]
-        self._note_handles({h['source_id'] for h in shown} | set(activity[:25]), '\n'.join(h['text'] for h in shown))
-        return {'matches': shown, 'total_matches': len(hits), 'truncated': len(hits) > 25,
-                'activity_ids_naming_value': activity[:25], 'activity_truncated': len(activity) > 25}
+        return ({'matches': [{'source_id': s, 'locator': loc, 'text': line[:200]} for s, loc, line in shown],
+                 'total_matches': len(hits), 'truncated': len(hits) > 25,
+                 'activity_ids_naming_value': activity[:25], 'activity_truncated': len(activity) > 25},
+                [(s, loc, line[:200], len(line) <= 200) for s, loc, line in shown])
 
     def inspect_source(self, source_id, start_line=1, max_lines=40, page=''):
         self._eligible_source(source_id)
@@ -301,15 +319,15 @@ class InvestigationTools:
         lines, start = pages[page], max(1, start_line)
         count = max(1, min(max_lines, 60))
         prefix = f'{page}:' if page else ''
-        shown = [{'locator': f'{prefix}L{n}', 'text': lines[n - 1][:300]}
-                 for n in range(start, min(len(lines), start + count - 1) + 1)]
+        numbers = range(start, min(len(lines), start + count - 1) + 1)
         entry = self.texts.manifest.get(source_id)
         parsed = [o for o in self.tools.corpus.by_source.get(source_id, ()) if eligible(o, self.case.audit_at)]
-        self._note_handles({source_id}, '\n'.join(s['text'] for s in shown))
-        return {'source_id': source_id, 'origin': entry.origin if entry else self.texts.kind(source_id),
-                'available_at': self.texts.refs[source_id].available_at.isoformat(), 'page': page,
-                'lines': shown, 'total_lines': len(lines), 'truncated': start + count - 1 < len(lines),
-                'parsed_observations': len(parsed)}
+        return ({'source_id': source_id, 'origin': entry.origin if entry else self.texts.kind(source_id),
+                 'available_at': self.texts.refs[source_id].available_at.isoformat(), 'page': page,
+                 'lines': [{'locator': f'{prefix}L{n}', 'text': lines[n - 1][:300]} for n in numbers],
+                 'total_lines': len(lines), 'truncated': start + count - 1 < len(lines),
+                 'parsed_observations': len(parsed)},
+                [(source_id, f'{prefix}L{n}', lines[n - 1][:300], len(lines[n - 1]) <= 300) for n in numbers])
 
     def inspect_media(self, file_id, page=''):
         self._eligible_source(file_id)
@@ -321,37 +339,41 @@ class InvestigationTools:
             ext = self.texts.media.get(file_id) or {}
             if not ext.get('entities'):
                 return {**result, 'interpreted': False,
-                        'uncertainty': 'no cached reader extraction for this screenshot; nothing can be cited'}
-            text = '\n'.join(self.texts.pages(file_id)[''])
-            self._note_handles({file_id}, text)
-            return _clip({**result, 'interpreted': True, 'reader_model': ext.get('model'),
-                          'page_kind': ext.get('page_kind'), 'unreadable': ext.get('unreadable', []),
-                          'rejected_ids': ext.get('rejected_ids', []),
-                          'lines': [{'locator': loc, 'text': t} for loc, t in self.texts.lines(file_id)][:60]})
+                        'uncertainty': 'no cached reader extraction for this screenshot; nothing can be cited'}, []
+            lines = list(self.texts.lines(file_id))[:60]
+            return ({**result, 'interpreted': True, 'reader_model': ext.get('model'),
+                     'page_kind': ext.get('page_kind'), 'unreadable': ext.get('unreadable', []),
+                     'rejected_ids': ext.get('rejected_ids', []),
+                     'lines': [{'locator': loc, 'text': t} for loc, t in lines]},
+                    [(file_id, loc, t, True) for loc, t in lines])
         pages = self.texts.pages(file_id)
         if not pages:
-            return {**result, 'interpreted': False, 'uncertainty': 'native text extraction failed'}
+            return {**result, 'interpreted': False, 'uncertainty': 'native text extraction failed'}, []
         page = page or 'p1'
         if page not in pages:
             raise ToolError(f'{file_id} has no page {page!r}; pages: {sorted(pages)}')
-        lines = [{'locator': f'{page}:L{n}', 'text': t} for n, t in enumerate(pages[page], start=1)]
-        text = '\n'.join(x['text'] for x in lines)
-        self._note_handles({file_id}, text)
-        return _clip({**result, 'interpreted': True, 'page': page, 'pages': sorted(pages), 'lines': lines[:60],
-                      'identifiers': sorted(set(EMAIL_IN_TEXT.findall(text)) | set(_ID_SHAPED.findall(text))),
-                      'note': 'native text; the document kind is not asserted by this tool'})
+        lines = [(f'{page}:L{n}', t) for n, t in enumerate(pages[page], start=1)][:60]
+        text = '\n'.join(t for _, t in lines)
+        return ({**result, 'interpreted': True, 'page': page, 'pages': sorted(pages),
+                 'lines': [{'locator': loc, 'text': t} for loc, t in lines],
+                 'truncated': len(pages[page]) > 60,
+                 'identifiers': sorted(set(EMAIL_IN_TEXT.findall(text)) | set(_ID_SHAPED.findall(text))),
+                 'note': 'native text; the document kind is not asserted by this tool'},
+                [(file_id, loc, t, True) for loc, t in lines])
 
     def activity_timeline(self, resource_id):
         if resource_id not in self.case.handles:
             raise ToolError(f'{resource_id!r} is not a candidate or returned resource handle')
         events = sorted(self.tools.corpus.resource_observations(resource_id, self.case.audit_at),
-                        key=lambda o: (o.observed_at, o.obs_id))
+                        key=lambda o: (o.observed_at, o.obs_id))[:30]
         items = [{'source_id': o.source_id, 'locator': o.locator, 'kind': o.kind, 'proves_state': o.kind == STATE,
                   'system_id': o.system_id, 'location': o.location, 'presence': o.presence,
                   'observed_at': o.observed_at.isoformat(), 'excerpt': o.excerpt[:160]} for o in events]
-        self._note_handles({o.source_id for o in events[:30]})
-        return {'resource_id': resource_id, 'note': 'CLAIM entries report work, never the resulting state',
-                **_bounded(items, 30)}
+        total = len(self.tools.corpus.resource_observations(resource_id, self.case.audit_at))
+        # Excerpts are summaries, not source lines: they yield handles but no citable lines.
+        return ({'resource_id': resource_id, 'note': 'CLAIM entries report work, never the resulting state',
+                 'items': items, 'returned': len(items), 'total': total, 'truncated': total > len(items)},
+                [(o.source_id, None, o.excerpt[:160], False) for o in events])
 
     def query_sql_snapshot(self, file_id, table, column, value):
         self._eligible_source(file_id)
@@ -372,17 +394,23 @@ class InvestigationTools:
         finally:
             con.close()
         lines = raw.splitlines()
+        insert = re.compile(rf'INSERT INTO "?{re.escape(table)}"?[ (]')
         for r in found:
             key = str(r.get('resource_id') or value)
-            insert = re.compile(rf'INSERT INTO "?{re.escape(table)}"?[ (]')
             r['locator'] = next((f'L{n}' for n, line in enumerate(lines, start=1)
                                  if insert.match(line) and key in line), None)
             r.pop('rowid', None)
-        self._note_handles({file_id}, json.dumps(found, default=str))
-        return _clip({'file_id': file_id, 'table': table, 'filter': {column: value},
-                      'note': 'complete for this table at the snapshot time', **_bounded(found, 20)})
+        page = found[:20]
+        return ({'file_id': file_id, 'table': table, 'filter': {column: value},
+                 'note': 'complete for this table at the snapshot time',
+                 'items': page, 'returned': len(page), 'total': len(found), 'truncated': len(found) > 20},
+                [(file_id, r['locator'], json.dumps({k: v for k, v in r.items() if k != 'locator'}, default=str), True)
+                 for r in page])
 
     def call(self, name, arguments):
         if name not in EVIDENCE_TOOLS:
             raise ToolError(f'unknown tool {name!r}')
-        return _clip(getattr(self, name)(**arguments))
+        result, displayed = getattr(self, name)(**arguments)
+        result = _clip(result)
+        self._register(result, displayed)
+        return result

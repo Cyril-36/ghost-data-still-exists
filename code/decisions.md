@@ -865,3 +865,24 @@ over benchmarking `gpt-6-luna`. It is the Roar profile's `vision_model`, still o
 Measured on the 32 samples (Roar jev, investigator off), all 49 responses came from cache, with 0 calls:
 the predictions are identical to the run without screenshots. These screenshots carry no evidence for
 the sample subjects.
+
+## D072 — Second independent review (against e858907): every finding confirmed and fixed
+
+Tests: `tests/test_review_audit2.py` (18 tests; all 17 original ones failed before these fixes). The 13
+fixtures, TokenBazaar outputs and all 390 historical cache keys are unchanged, and Roar sample predictions
+are unchanged. No output prediction changed.
+
+| Finding | Root cause | Fix |
+|---|---|---|
+| P0 ceiling | `main.py` gave intent and investigator gateways the full `--budget-paise` each. 530be0b already trimmed the investigator to what the intent calls left, but only by run order, with no shared accounting | `Gateway.share_budget`: one ledger (lock, counters, ceiling) for both live gateways, so concurrent reservations through either cannot exceed it together. Standalone and replay gateways keep their own ledgers; replay keeps its zero ceiling. |
+| P1 shown lines | Facts needed only an inspected source, not displayed lines | Tools report exactly what they displayed; `CaseFile.shown` records lines shown in full; a fact citing any other line is UNSHOWN_LINES |
+| P1 hidden handles | SQL handles came from all matching rows (only 20 shown); PDF `identifiers` from all page lines (60 shown); clipped results registered everything | Handles and lines are registered after clipping, only from displayed items whose text survives the preview |
+| P1 planner targets | `tokens - plan.subject.tokens` subtracted `(kind, key)` tuples from strings, so the subject's own user ID counted as an unknown named target | Subtract the subject's identifier values and user IDs |
+| P1 verifier traversal | Reference traversal adopted another person's record and expanded from IDs reused across systems, so a legitimate plan got OMITTED_RESOURCE | Never adopt a record whose state evidence names another known person; never expand from an ambiguous ID (still independent of planner discovery) |
+| P1 stale citation | `all(o is not s for s in support if s is not o)` is always true, so any older supporting observation in the cited source made the citation stale | Stale only if every supporting observation in the cited source is contradicted by a newer one at its copy |
+| P1 citation accounting | WRONG_OPERATION pairs on cited steps counted as correct citations | Correct = exact six-field match of an expected cited step |
+| P1 gap reconstruction | A manifest without a provider record silently rebuilt as TokenBazaar; a rebuild needed the global cache | Phase 4 runs without a provider record are refused (Phase 3 manifests stay TokenBazaar). Each run now stores its validated responses in `model_cache/`, and the rebuild uses them with a zero ceiling: reproducible with no paid call |
+| P2 catalog failure | `load_pricing` let HTTP and transport errors escape | Unpriced operation with `pricing_error` recorded |
+| P2 malformed cache | `json.loads` on a corrupt entry crashed the call | A corrupt or non-object entry is a miss and is deleted |
+| P2 explicit proxy auth | `--proxy-auth` still sent a local key when one was set | Explicit proxy auth never sends one; the Roar profile default sends a local key if set, else relies on the proxy |
+| P2 cost reporting | `model_spent_paise_header` summed the budget ledger (estimates and reserves) | It now sums provider-reported costs only; `budget_charged_paise` is the ledger; `model_cost_paise` splits actual, estimated and unpriced |

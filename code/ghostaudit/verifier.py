@@ -113,17 +113,22 @@ class Verifier:
                 for ref in obs.refs:
                     edges.setdefault(obs.resource_id, set()).add(ref)
                     edges.setdefault(ref, set()).add(obs.resource_id)
+        def systems(rid):
+            return {o.system_id for o in self._observations(rid, cutoff, extra) if o.system_id and o.kind in (STATE, LINK)}
         frontier, seen = [(r, 0) for (_, r), how in owned.items() if how == 'direct'], {r for _, r in owned}
         while frontier:
             rid, depth = frontier.pop(0)
-            for other in sorted(edges.get(rid, ())) if depth < 3 else ():
+            if depth >= 3 or len(systems(rid)) > 1:      # references carry bare IDs: never expand an ambiguous one
+                continue
+            for other in sorted(edges.get(rid, ())):
                 if other in seen:
                     continue
                 seen.add(other)
-                systems = {o.system_id for o in self._observations(other, cutoff, extra)
-                           if o.system_id and o.kind in (STATE, LINK)}
-                if len(systems) == 1:
-                    owned[(systems.pop(), other)] = 'reference'
+                if self._foreign(self._observations(other, cutoff, extra), subject):
+                    continue                             # another known person's record is never the subject's
+                found = systems(other)
+                if len(found) == 1:
+                    owned[(found.pop(), other)] = 'reference'
                     frontier.append((other, depth + 1))
         return owned
 
@@ -228,14 +233,14 @@ class Verifier:
             add('UNSUPPORTED_CITATION', 'BLOCKING', f'{step.evidence_id} does not show {step.operation} for '
                 f'{step.resource_id}', step.system_id, step.resource_id, step.evidence_id)
             return
-        for o in support:
-            location = getattr(o, 'location', None)
-            newer = [n for n in obs if n.kind == STATE and n.system_id == step.system_id and n.location == location
-                     and n.observed_at > o.observed_at and getattr(n, attr) is not None and not test(n)]
-            if newer and all(o is not s for s in support if s is not o):
-                add('STALE_CITATION', 'BLOCKING', f'{newer[0].source_id} later shows a different {attr} for '
-                    f'{step.resource_id}', step.system_id, step.resource_id, step.evidence_id)
-                return
+        def contradicted(o):
+            return [n for n in obs if n.kind == STATE and n.system_id == step.system_id
+                    and n.location == getattr(o, 'location', None) and n.observed_at > o.observed_at
+                    and getattr(n, attr) is not None and not test(n)]
+        if all(contradicted(o) for o in support):        # stale only if no supporting observation is still current
+            newer = contradicted(max(support, key=lambda o: o.observed_at))
+            add('STALE_CITATION', 'BLOCKING', f'{newer[0].source_id} later shows a different {attr} for '
+                f'{step.resource_id}', step.system_id, step.resource_id, step.evidence_id)
 
     def _record(self, fact, span):
         """Whole page for documents and screenshots, the cited lines otherwise."""
