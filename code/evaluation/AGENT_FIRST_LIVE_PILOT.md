@@ -1,5 +1,9 @@
 # Agent-first live pilot — 2026-10-25
 
+Historical initial pilot. The user later reopened testing and expanded the cumulative cap;
+[`AGENT_FIRST_LIVE_CONTINUATION.md`](AGENT_FIRST_LIVE_CONTINUATION.md) records the two verified
+outputs and final cumulative spending. The figures below describe the earlier stopped phase.
+
 Starting revision: `b6a9198`, existing `main`. Additional authorized exposure: **1,000 paise (₹10)**,
 independent of the earlier closed campaign. Initial instruction selected TokenBazaar; subsequent user
 steering selected Roar and Haiku 5.5, then authorized a further attempt with autonomous tools.

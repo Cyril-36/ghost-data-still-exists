@@ -979,3 +979,25 @@ Rs100/USD and actual billing unavailable. Prior 8,947.98576-paise campaign remai
 unchanged. Preserve all original artifacts; commit locally, no push. Full results:
 `evaluation/AGENT_FIRST_LIVE_PILOT.md`. The subsequent explicit user instruction PUSH authorizes
 publishing the verified commit on main.
+
+## D078 — Verify two real agent outputs with staged permission and finalization
+
+Continue from c8e12c9. Explicit user continuation authorizes the two pilot cases and another Rs10,
+raising the cumulative pilot cap to 2,000 paise without resetting any previous event or the older
+closed campaign. Retain optional request-first interpretation by the same primary agent, an optional
+execution finalization window, and precise native schema/field feedback. No planner-generated
+semantics, ownership invention or verifier relaxation. Limits stay eight rounds/40 tools/120k case
+tokens. Eight regression tests prove agent semantic independence, unsafe-proposal rejection and
+field repair. Full suites pass 370 tests on Python 3.11 and 3.14; fixtures, Ruff and real-cache replay pass.
+
+The selected configuration yields two independently verified non-fallback answers: case_05 is exact
+(3/3 steps); case_07 repairs a rejected proposal and matches 3/4 steps. Combined precision 6/6,
+recall 6/7, citations 2/2, statuses 2/2, exact rows 1/2. This matches the fresh deterministic baseline;
+it improves actual agent completion over prior empty fallbacks, not held-out baseline accuracy.
+Do not invent account_007 ownership to match the remaining label. Broader activity search worsened
+case_07 by distracting Haiku with an ownership-only link; revert that experiment and preserve its trace.
+
+Close the entire pilot at 1,438.012 paise conservative exposure, 671.725 paise catalog estimate at
+assumed Rs100/USD, actual billing unavailable. All failed and successful attempts are included;
+prior 8,947.98576-paise campaign stays closed and unchanged. Preserve original root output and logs;
+commit locally without pushing. See `evaluation/AGENT_FIRST_LIVE_CONTINUATION.md`.

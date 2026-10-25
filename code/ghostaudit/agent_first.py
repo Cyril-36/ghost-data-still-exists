@@ -28,9 +28,17 @@ from .verifier import Finding
 STR = {'type': 'string'}
 PROPOSAL_SCHEMA = {'type': 'object', 'additionalProperties': False, 'properties': {
     'authorization': {'type': 'object', 'additionalProperties': False, 'properties': {
-        'decision': {'type': 'string', 'enum': [DELETE, NON_DELETION, UNRESOLVED]},
-        'scope': {'type': 'string', 'enum': [ACCOUNT, ITEM, 'NONE']}, 'target': STR,
-        'whole_category': {'type': 'boolean'}, 'request_quote': STR, 'reason': STR},
+        'decision': {'type': 'string', 'enum': [DELETE, NON_DELETION, UNRESOLVED],
+                     'description': 'The action requested by the customer, not whether deletion has finished. '
+                                    'Missing compliance evidence does not turn a deletion request into NON_DELETION.'},
+        'scope': {'type': 'string', 'enum': [ACCOUNT, ITEM, 'NONE'],
+                  'description': 'Your interpretation of permission: ACCOUNT for removing an account/profile '
+                                 'and its governed copies; ITEM for a bounded artifact/category; NONE otherwise.'},
+        'target': {'type': 'string', 'description': 'Must be the empty string for ACCOUNT or NONE. '
+            'For ITEM, use exactly one supplied data category. Resource IDs belong in steps, not here.'},
+        'whole_category': {'type': 'boolean', 'description': 'Must be false for ACCOUNT or NONE. '
+            'For ITEM only, true means the customer requested every record of that one category.'},
+        'request_quote': STR, 'reason': STR},
         'required': ['decision', 'scope', 'target', 'whole_category', 'request_quote', 'reason']},
     'deletion_status': {'type': 'string', 'enum': ['COMPLETE', 'INCOMPLETE', 'NOT_APPLICABLE']},
     'steps': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False,
@@ -45,6 +53,10 @@ AGENT_TOOLS = [t for t in TOOL_SCHEMAS if t['function']['name'] in (*EVIDENCE_TO
     'type': 'function', 'function': {'name': 'submit_audit', 'description':
         'Propose the final authorization, status and complete ordered steps for independent verification.',
         'parameters': PROPOSAL_SCHEMA}}]
+REQUEST_TOOL = {'type': 'function', 'function': {'name': 'interpret_request',
+    'description': 'Interpret what the customer requests before investigating whether it has happened. '
+                   'Record your own authorization interpretation; you may revise it in your final proposal.',
+    'parameters': PROPOSAL_SCHEMA['properties']['authorization']}}
 HALLUCINATION_CODES = {'INVENTED_RESOURCE', 'INELIGIBLE_CITATION', 'UNSHOWN_WITNESS', 'UNSUPPORTED_CITATION',
                        'UNSUPPORTED_ASSOCIATION', 'FACT_UNSUPPORTED', 'CROSS_PERSON'}
 
@@ -87,7 +99,9 @@ class ProposalVerifier:
         det = classify(request.request_text)
         decision, scope = a['decision'], a['scope']
         if decision == UNRESOLVED:
-            reject('AUTHORIZATION_UNRESOLVED', 'Unresolved authorization requires a disclosed fallback.')
+            reject('AUTHORIZATION_UNRESOLVED', 'UNRESOLVED requires genuine ambiguity in the request permission '
+                'and will produce a disclosed fallback. Missing compliance evidence or an incorrectly encoded '
+                'scope field is not request ambiguity. Re-read the request and choose your own interpretation.')
         if decision == DELETE:
             if hypothetical_deletion(request.request_text):
                 reject('AUTHORIZATION_UNSUPPORTED', 'A hypothetical or capability question does not authorize deletion.')
@@ -102,7 +116,10 @@ class ProposalVerifier:
             if det.scope == ITEM and not det.whole_category and a['whole_category']:
                 reject('SCOPE_EXCEEDED', 'An explicit single-item request cannot become a whole-category deletion.')
             if scope == ACCOUNT and (a['target'] or a['whole_category']):
-                reject('SCOPE_EXCEEDED', 'ACCOUNT has no item target or whole-category flag.')
+                reject('SCOPE_EXCEEDED', 'For authorization.scope="ACCOUNT", authorization.target must be "" '
+                    '(the empty string) and authorization.whole_category must be false. Put resource IDs only '
+                    'in steps.resource_id. This is a field-encoding constraint, not a rejection of ACCOUNT '
+                    'permission; do not change a justified request interpretation merely to fix these fields.')
             if proposal['deletion_status'] == 'NOT_APPLICABLE':
                 reject('STATUS_MISMATCH', 'Authorized deletion cannot be NOT_APPLICABLE.')
         elif decision == NON_DELETION:
@@ -209,7 +226,7 @@ class ProposalVerifier:
 
 class AgentFirst:
     def __init__(self, gateway, config, corpus, index, policy, texts, verifier, *, allow_live=False,
-                 authorization_model=None):
+                 authorization_model=None, finalize_on_pressure=False, request_first=False):
         if not allowed_agent_gateway(gateway, allow_live):
             raise ContractError('agent-first needs replay or explicit bounded live opt-in with retries disabled')
         if authorization_model == config.model:
@@ -218,6 +235,8 @@ class AgentFirst:
         self.policy, self.texts = policy, texts
         self.checker = ProposalVerifier(verifier, policy)
         self.authorization_model = authorization_model
+        self.finalize_on_pressure = finalize_on_pressure
+        self.request_first = request_first
         if authorization_model:
             from .authorization_review import AuthorizationReview
             self.checker.authorization_review = AuthorizationReview(gateway, authorization_model)
@@ -249,21 +268,32 @@ class AgentFirst:
                                       if m.captured_at <= request.audit_at],
                  'limits': self.config.describe()}
         # No deterministic candidates, obligations, status or step list is supplied.
+        opening = {'request': brief['request'], 'instruction':
+            'First interpret the requested action and scope from the customer wording alone. '
+            'Do not assess deletion completeness or source coverage yet.'} if self.request_first else brief
         messages = [{'role': 'system', 'content': self.prompt},
-                    {'role': 'user', 'content': json.dumps(brief, default=str, ensure_ascii=False)}]
+                    {'role': 'user', 'content': json.dumps(opening, default=str, ensure_ascii=False)}]
         start, seen, attempts = len(self.gateway.usage), {}, []
         processed_tokens = 0  # Payload usage survives cache replay; billed gateway usage does not.
         if getattr(self.checker, 'authorization_review', None):
             self.checker.authorization_review.admit = lambda model, messages, limit: self._can_admit(
                 start, model, {'model': model, 'messages': messages, 'max_completion_tokens': limit}, limit)
         for turn in range(self.config.max_rounds):
-            body = {'model': self.config.model, 'messages': messages, 'tools': AGENT_TOOLS,
-                    'tool_choice': 'required', 'max_completion_tokens': self.config.max_completion_tokens}
+            interpreting = self.request_first and turn == 0
+            active_tools = [REQUEST_TOOL] if interpreting else AGENT_TOOLS
+            choice = {'type': 'function', 'function': {'name': 'interpret_request'}} if interpreting else 'required'
+            body = {'model': self.config.model, 'messages': messages, 'tools': active_tools,
+                    'tool_choice': choice, 'max_completion_tokens': self.config.max_completion_tokens}
             request_bound = len(json.dumps(body, ensure_ascii=False).encode()) + self.config.max_completion_tokens
             remaining_rounds = self.config.max_rounds - turn
             remaining_tools = max(0, self.config.max_tool_calls - len(case.tool_calls))
+            finalize = not interpreting and self.finalize_on_pressure and (remaining_rounds == 1 or remaining_tools <= 1
+                or processed_tokens + 2 * request_bound > self.config.max_case_tokens)
+            if finalize:
+                body['tool_choice'] = {'type': 'function', 'function': {'name': 'submit_audit'}}
             messages.append({'role': 'user', 'content': json.dumps({'execution_budget': {
                 'remaining_rounds': remaining_rounds, 'remaining_tool_calls': remaining_tools,
+                'submission_required': finalize,
                 'tokens_processed': processed_tokens,
                 'remaining_case_tokens': max(0, self.config.max_case_tokens - processed_tokens),
                 'case_cost_limit_paise': self.config.max_case_paise,
@@ -278,7 +308,8 @@ class AgentFirst:
                 break
             try:
                 payload = self.gateway.chat('primary_agent', self.config.model, messages, self.version,
-                    lambda p: None, max_tokens=self.config.max_completion_tokens, tools=AGENT_TOOLS, tool_choice='required')
+                    lambda p: None, max_tokens=self.config.max_completion_tokens, tools=active_tools,
+                    tool_choice=body['tool_choice'])
             except ProviderError as exc:
                 if str(exc).startswith('invalid') and case.schema_repairs < self.config.max_schema_repairs:
                     case.schema_repairs += 1
@@ -299,6 +330,15 @@ class AgentFirst:
             for call in message['tool_calls']:
                 if len(case.tool_calls) >= self.config.max_tool_calls:
                     result = {'error': 'TOOL_LIMIT'}
+                elif interpreting and call['function']['name'] == 'interpret_request':
+                    from .casefile import ToolCall
+                    interpretation = strict_json(call['function']['arguments'])
+                    quoted = interpretation['request_quote']
+                    valid = bool(quoted.strip()) and quoted in request.request_text
+                    case.tool_calls.append(ToolCall(case.rounds, 'interpret_request', interpretation, valid))
+                    result = {'recorded': valid, 'note': 'This is your interpretation, not permission granted '
+                        'by code. Re-evaluate ambiguous wording if necessary; final authorization and all '
+                        'evidence still require independent verification.'}
                 elif call['function']['name'] == 'submit_audit':
                     proposal = strict_json(call['function']['arguments'])
                     self.checker.last_authorization_review = None
@@ -325,6 +365,8 @@ class AgentFirst:
                     result = self.executor._execute(case, itools, call, seen)
                 messages.append({'role': 'tool', 'tool_call_id': call['id'],
                                  'content': json.dumps(result, ensure_ascii=False, default=str)})
+            if interpreting:
+                messages.append({'role': 'user', 'content': json.dumps(brief, default=str, ensure_ascii=False)})
             # Every batched call is processed; a later rejection cannot be hidden by an earlier acceptance.
             if accepted is not None and attempts[-1]['accepted']:
                 case.scope, case.target = accepted.intent.scope, accepted.intent.target

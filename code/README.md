@@ -35,13 +35,14 @@ runs offline.
 # Historical investigator caches use a different protocol; missing responses yield disclosed fallbacks.
 python3 code/main.py audit --decision-mode agent-first --provider roar --agent-model claude-haiku-5-5 \
     --requests dataset/sample_deletion_requests.csv --output .runs/agent-first/predictions.csv \
-    --run-dir .runs/agent-first --agent-max-rounds 8
+    --run-dir .runs/agent-first --agent-max-rounds 8 --agent-max-completion-tokens 4000 \
+    --agent-request-first --agent-finalize-on-pressure
 ```
 
 Jev is optional here: `--intent jev` enables cached typed media interpretation, never precomputed
 request intent. `--media-cache` supplies earlier screenshot readings for agent tools. The primary
 model is chosen with `--agent-model` (Gemini, Claude or another native tool-calling model); its new
-proposal protocol still needs separately authorized live evaluation. `--agent-cache` is copied
+proposal protocol has a two-case live pilot; broader model accuracy remains unverified. `--agent-cache` is copied
 before use so invalid/missing entries cannot alter the original cache. `--agent-mode replay` remains
 the default. A separate live path now requires `--agent-mode live --allow-agent-live`, explicit
 `--agent-model`, positive `--agent-budget-paise` and `--agent-call-reserve-paise`, a bounded
@@ -51,7 +52,12 @@ ledger. The authorization reviewer must be a distinct model; it sees only the re
 confirm an otherwise unresolved non-deletion proposal, never author the primary agent's answer.
 Used responses persist under the fresh run's `model_cache/` for replay. See
 [`AGENT_FIRST_REVIEW_FIXES.md`](evaluation/AGENT_FIRST_REVIEW_FIXES.md) for controls and limitations.
-This integration has been tested with mocks only; no new paid experiment has been authorized.
+The first real pilot initially failed; the subsequent controlled continuation produced verified Haiku
+outputs on both pilot cases. Optional `--agent-request-first --agent-finalize-on-pressure` separates
+permission interpretation from evidence investigation and reserves a submission window. The primary
+agent still authors every semantic field. See
+[`AGENT_FIRST_LIVE_CONTINUATION.md`](evaluation/AGENT_FIRST_LIVE_CONTINUATION.md) for exact results,
+limits and closed cumulative spending; no broader accuracy gain or further paid run is authorized.
 
 ```sh
 # Offline: explicit English intent, narrowly recognized native PDF structures, screenshots unread

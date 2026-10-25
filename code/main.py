@@ -135,7 +135,9 @@ def run_agent_first(args):
         return run_audit(args.dataset, args.requests, args.output, args.run_dir,
                          gateway=g if args.intent != 'offline' else None, media_cache=media,
                          decision_mode='agent-first', agent_gateway=g, agent_config=config,
-                         agent_live=live, authorization_model=args.authorization_model)
+                         agent_live=live, authorization_model=args.authorization_model,
+                         agent_finalize_on_pressure=args.agent_finalize_on_pressure,
+                         agent_request_first=args.agent_request_first)
 
 
 def main(argv=None) -> int:
@@ -156,6 +158,10 @@ def main(argv=None) -> int:
     aud.add_argument('--agent-budget-paise', type=float, help='explicit total live ceiling across agent/media/review')
     aud.add_argument('--agent-call-reserve-paise', type=float, help='conservative reservation for each live chat attempt')
     aud.add_argument('--agent-max-calls', type=int, default=20)
+    aud.add_argument('--agent-finalize-on-pressure', action='store_true',
+                     help='request an agent-authored final proposal before the execution allowance expires')
+    aud.add_argument('--agent-request-first', action='store_true',
+                     help='have the primary agent interpret request permission before receiving the evidence inventory')
     aud.add_argument('--authorization-model', help='distinct independent model for uncertain non-deletion confirmation')
     aud.add_argument('--agent-cache', type=Path, default=Path('.cache/ghostaudit'))
     aud.add_argument('--agent-max-rounds', type=int, default=8)

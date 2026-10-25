@@ -83,7 +83,8 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
               investigator_gateway: Gateway | None = None, media_cache: dict | None = None,
               decision_mode: str = 'baseline', agent_gateway: Gateway | None = None,
               agent_config: InvestigatorConfig | None = None, agent_live: bool = False,
-              authorization_model: str | None = None) -> dict:
+              authorization_model: str | None = None, agent_finalize_on_pressure: bool = False,
+              agent_request_first: bool = False) -> dict:
     """gateway=None: offline intent (deterministic only). With a gateway: staged intent (Jev decisions,
     generative fallback for escalations). `investigator` + `investigator_gateway`: routed cases are
     investigated (sequentially). `media_cache`: earlier validated screenshot extractions that
@@ -147,7 +148,8 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
         if agent_config is None:
             raise ContractError('agent-first needs an explicit agent model/configuration')
         primary = AgentFirst(agent_gateway, agent_config, corpus, index, policy, texts, verifier,
-                             allow_live=agent_live, authorization_model=authorization_model)
+                             allow_live=agent_live, authorization_model=authorization_model,
+                             finalize_on_pressure=agent_finalize_on_pressure, request_first=agent_request_first)
         for request in requests:
             p, case, attempts = primary.run(request)
             plans.append(p)
@@ -273,6 +275,8 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
         summary['agent_first'] = {**proposal_metrics(case_files), 'config': agent_config.describe(),
                                   'execution_mode': agent_gateway.mode, 'live_opt_in': agent_live,
                                   'authorization_model': authorization_model,
+                                  'finalize_on_pressure': agent_finalize_on_pressure,
+                                  'request_first': agent_request_first,
                                   'accepted_cases': len(plans) - len(fallbacks), 'fallback_cases': len(fallbacks),
                                   'network_calls': sum(u.mode == 'live' for u in usage),
                                   'rounds': sum(r['rounds'] for r in case_files),
