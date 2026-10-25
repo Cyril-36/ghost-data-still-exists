@@ -2,7 +2,8 @@
 
 Two distinct API shapes, never mixed:
   decide(model, state, questions)  POST {base}/decisions        typed answers + probabilities
-  chat(model, messages, ...)       POST {base}/chat/completions generative text
+  chat(model, messages, ...)       POST {base}/chat/completions generative text (optional native tool calls)
+  list_models()                    GET  {base}/models           read-only catalog: model IDs and kinds
 
 Rules enforced here:
 - Credentials come only from the environment (TOKENBAZAAR_API_KEY); never logged.
@@ -14,14 +15,18 @@ Rules enforced here:
 - Only responses that pass the caller's validator are cached, and a cache hit is validated
   again before use (an invalid entry is discarded); the cache key is a fingerprint of
   endpoint, requested model, prompt/schema version and input.
-- Authentication errors stop immediately; transient errors retry a bounded number
-  of times with backoff.
+- Authentication, payment and permission errors stop immediately; transient errors retry a
+  bounded number of times with backoff, honouring a server-requested wait up to MAX_WAIT_S.
+- Error messages carry the provider's explanation, redacted and truncated, never the request.
+- Tool calls are validated (`tool_call_problem`), never executed: running a tool is the caller's job.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
+import re
 import threading
 import time
 import urllib.error
@@ -31,6 +36,11 @@ from pathlib import Path
 
 DEFAULT_BASE_URL = 'https://tokenbazaar.in/api/public/v1'
 ALLOWED_ORIGINS = ('https://tokenbazaar.in/',)
+MAX_WAIT_S = 30.0                      # longest server-requested wait honoured before a retry
+_WAIT_MESSAGE = re.compile(r'please wait\s+(\S+?)\s*s\b', re.IGNORECASE)
+_HTTP_MEANING = {401: 'authentication failed', 402: 'payment required: account credit exhausted',
+                 403: 'forbidden: key not permitted for this request or model', 429: 'rate limited',
+                 503: 'service unavailable'}
 
 
 class ProviderError(RuntimeError):
@@ -75,6 +85,7 @@ class UsageRecord:
     input_tokens: int | None = None
     output_tokens: int | None = None
     reasoning_tokens: int | None = None
+    cached_input_tokens: int | None = None
     cost_paise_header: float | None = None
     cost_usd_reported: float | None = None
     retries: int = 0
@@ -85,6 +96,166 @@ class UsageRecord:
 
 def fingerprint(*parts) -> str:
     return hashlib.sha256(json.dumps(parts, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
+
+
+def retry_delay(retry_after, message) -> float | None:
+    """Server-requested wait in seconds: the Retry-After header, else 'Please wait 8s' in the body,
+    capped at MAX_WAIT_S. None when neither is a finite non-negative number (caller backs off)."""
+    found = _WAIT_MESSAGE.search(message or '')
+    for raw in (retry_after, found.group(1) if found else None):
+        try:
+            value = float(str(raw).strip())
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(value) and value >= 0:
+            return min(MAX_WAIT_S, value)
+    return None
+
+
+def provider_message(raw: bytes, secret: str | None = None, limit: int = 200) -> str:
+    """The provider's explanation from an error body (JSON `error.message`/`message`/`detail`, else
+    the text), whitespace-collapsed, with bearer tokens and the API key redacted, truncated."""
+    text = raw.decode('utf-8', 'replace') if isinstance(raw, bytes) else ''
+    try:
+        data = json.loads(text)
+    except ValueError:
+        data = None
+    if isinstance(data, dict):
+        err = data.get('error')
+        candidates = (err.get('message') if isinstance(err, dict) else err, data.get('message'), data.get('detail'))
+        text = next((c for c in candidates if isinstance(c, str)), '')
+    text = re.sub(r'(?i)bearer\s+\S+', 'Bearer [REDACTED]', ' '.join(text.split()))
+    if secret:
+        text = text.replace(secret, '[REDACTED]')
+    return text[:limit]
+
+
+def _http_error(endpoint, code, detail) -> str:
+    meaning = _HTTP_MEANING.get(code)
+    return f'{endpoint} HTTP {code}' + (f' ({meaning})' if meaning else '') + (f': {detail}' if detail else '')
+
+
+def _count(value) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def cached_input_tokens(usage) -> int | None:
+    """Prompt tokens served from the provider's cache (`prompt_tokens_details.cached_tokens`)."""
+    for key in ('prompt_tokens_details', 'input_tokens_details'):
+        details = usage.get(key) if isinstance(usage, dict) else None
+        if isinstance(details, dict) and _count(details.get('cached_tokens')) is not None:
+            return details['cached_tokens']
+    return None
+
+
+_JSON_TYPES = {'string': str, 'boolean': bool, 'object': dict, 'array': list, 'null': type(None)}
+
+
+def _schema_problem(value, schema, where) -> str | None:
+    """A small strict JSON-Schema subset: type, enum, properties, required, additionalProperties
+    (unknown keys rejected unless it is true), items."""
+    if not isinstance(schema, dict):
+        return f'{where}: schema is not an object'
+    types = schema.get('type')
+    types = [types] if isinstance(types, str) else types
+    if types:
+        def fits(t):
+            if t == 'integer':
+                return isinstance(value, int) and not isinstance(value, bool)
+            if t == 'number':
+                return isinstance(value, (int, float)) and not isinstance(value, bool)
+            return t in _JSON_TYPES and isinstance(value, _JSON_TYPES[t])
+        if not isinstance(types, list) or not any(fits(t) for t in types):
+            return f'{where}: expected {schema.get("type")}'
+    if 'enum' in schema and value not in schema['enum']:
+        return f'{where}: value not in enum'
+    if isinstance(value, dict):
+        props = schema.get('properties') or {}
+        if not isinstance(props, dict):
+            return f'{where}: properties is not an object'
+        missing = [k for k in schema.get('required') or () if k not in value]
+        if missing:
+            return f'{where}: missing required {missing}'
+        for k, v in value.items():
+            if k in props:
+                problem = _schema_problem(v, props[k], f'{where}.{k}')
+                if problem:
+                    return problem
+            elif schema.get('additionalProperties') is not True:
+                return f'{where}: unsupported argument {k!r}'
+    if isinstance(value, list) and 'items' in schema:
+        for i, v in enumerate(value):
+            problem = _schema_problem(v, schema['items'], f'{where}[{i}]')
+            if problem:
+                return problem
+    return None
+
+
+def _tool_specs(tools, tool_choice):
+    """-> ({function name: parameter schema}, forced function name or None, problem or None)."""
+    specs = {}
+    for tool in tools if isinstance(tools, list) else ():
+        fn = tool.get('function') if isinstance(tool, dict) and tool.get('type') == 'function' else None
+        if not isinstance(fn, dict) or not isinstance(fn.get('name'), str) or not fn['name'] or fn['name'] in specs:
+            return {}, None, 'malformed tool definition'
+        specs[fn['name']] = fn.get('parameters') or {'type': 'object', 'properties': {}}
+    if not specs:
+        return {}, None, 'no tool definitions'
+    forced = None
+    if isinstance(tool_choice, dict):
+        fn = tool_choice.get('function')
+        forced = fn.get('name') if isinstance(fn, dict) else None
+        if forced not in specs:
+            return {}, None, 'tool_choice names no supplied tool'
+    return specs, forced, None
+
+
+def tool_call_problem(payload, tools, tool_choice=None) -> str | None:
+    """Strict check of the tool calls in a chat completion against the supplied `tools`.
+    None when every call is well formed, names a supplied function, and its JSON arguments satisfy
+    that function's parameter schema (and `tool_choice` is respected); otherwise the first problem."""
+    specs, forced, problem = _tool_specs(tools, tool_choice)
+    if problem:
+        return problem
+    choices = payload.get('choices') if isinstance(payload, dict) else None
+    if not isinstance(choices, list) or not choices:
+        return 'no choices'
+    for choice in choices:
+        message = choice.get('message') if isinstance(choice, dict) else None
+        if not isinstance(message, dict):
+            return 'message is not an object'
+        calls = message.get('tool_calls')
+        if calls is None:
+            if tool_choice == 'required' or forced:
+                return 'tool call required but none returned'
+            continue
+        if not isinstance(calls, list) or not calls:
+            return 'tool_calls is not a non-empty list'
+        if tool_choice == 'none':
+            return 'tool call returned although tool_choice is none'
+        ids = set()
+        for call in calls:
+            fn = call.get('function') if isinstance(call, dict) else None
+            if not isinstance(fn, dict) or call.get('type') != 'function':
+                return 'malformed tool call'
+            if not isinstance(call.get('id'), str) or not call['id'] or call['id'] in ids:
+                return 'tool call id missing or duplicated'
+            ids.add(call['id'])
+            name = fn.get('name')
+            if name not in specs or (forced and name != forced):
+                return f'unknown tool {name!r}' if name not in specs else f'tool {name!r} not the forced tool'
+            if not isinstance(fn.get('arguments'), str):
+                return f'{name}: arguments are not a JSON string'
+            try:
+                args = json.loads(fn['arguments'])
+            except ValueError:
+                return f'{name}: arguments are not valid JSON'
+            if not isinstance(args, dict):
+                return f'{name}: arguments are not a JSON object'
+            problem = _schema_problem(args, specs[name], name)
+            if problem:
+                return problem
+    return None
 
 
 def load_env_file(path: Path) -> list[str]:
@@ -161,12 +332,21 @@ class Gateway:
 
     # --- transport ----------------------------------------------------------------------
     def _post(self, path, body):
+        return self._request('POST', path, body)
+
+    def _get(self, path):
+        return self._request('GET', path)[0]
+
+    def _request(self, method, path, body=None):
         key = os.environ.get(self.config.api_key_env)
         if not key:
             raise ProviderError(f'{self.config.api_key_env} is not set')
+        headers = {'Authorization': f'Bearer {key}'}
+        if body is not None:
+            headers['Content-Type'] = 'application/json'
         request = urllib.request.Request(
-            f'{self.config.base_url.rstrip("/")}/{path}', data=json.dumps(body).encode('utf-8'), method='POST',
-            headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'})
+            f'{self.config.base_url.rstrip("/")}/{path}', method=method, headers=headers,
+            data=None if body is None else json.dumps(body).encode('utf-8'))
         with _OPENER.open(request, timeout=self.config.timeout_s) as response:
             cost = response.headers.get('x-tokenbaazar-cost-paise')
             return json.loads(response.read().decode('utf-8')), (float(cost) if cost else None)
@@ -209,15 +389,15 @@ class Gateway:
                     raise ValueError('response is not a JSON object')
                 return payload, cost, retries, round(time.time() - started, 3)
             except urllib.error.HTTPError as exc:
+                detail = self._error_detail(exc)
                 limit = self.config.max_rate_limit_retries if exc.code == 429 else self.config.max_retries
-                if exc.code in (401, 403) or retries >= limit or exc.code not in (408, 429, 500, 502, 503, 504):
+                if retries >= limit or exc.code not in (408, 429, 500, 502, 503, 504):
+                    error = _http_error(endpoint, exc.code, detail)
                     self._record(UsageRecord(role, endpoint, requested_model, None, self.mode, 'error',
                                              time.time() - started, retries=retries, fingerprint=fp,
-                                             error=f'HTTP {exc.code}'), reserve)
-                    raise ProviderError(f'{endpoint} HTTP {exc.code}') from exc
-                retry_after = exc.headers.get('Retry-After') if exc.headers else None
-                if retry_after and retry_after.strip().isdigit():
-                    wait = min(30.0, float(retry_after))
+                                             error=error), reserve)
+                    raise ProviderError(error) from exc
+                wait = retry_delay(exc.headers.get('Retry-After') if exc.headers else None, detail)
             except (urllib.error.URLError, TimeoutError) as exc:
                 if retries >= self.config.max_retries:
                     self._record(UsageRecord(role, endpoint, requested_model, None, self.mode, 'error',
@@ -232,6 +412,13 @@ class Gateway:
             retries += 1
             time.sleep(wait if wait is not None else min(20.0, 1.5 * 2 ** retries))
 
+    def _error_detail(self, exc) -> str:
+        try:
+            raw = exc.read()
+        except Exception:                          # an unreadable body only loses the explanation
+            raw = b''
+        return provider_message(raw, os.environ.get(self.config.api_key_env))
+
     # --- public API ---------------------------------------------------------------------
     def decide(self, role, model, state, questions, version, validate):
         """Typed decision call. `questions` maps question names to {type, instructions, criteria}."""
@@ -241,27 +428,68 @@ class Gateway:
         def usage(p):
             u = p.get('usage') or {}
             return {'input_tokens': u.get('input_tokens'), 'output_tokens': u.get('output_tokens'),
-                    'cost_usd_reported': u.get('cost')}
+                    'cached_input_tokens': cached_input_tokens(u), 'cost_usd_reported': u.get('cost')}
         return self._call(role, 'decisions', model, body, fp, validate, usage)
 
-    def chat(self, role, model, messages, version, validate, max_tokens=4000):
-        body = {'model': model, 'messages': messages, 'max_tokens': max_tokens, 'temperature': 0}
-        fp = fingerprint('chat/completions', model, version, messages, max_tokens)
+    def chat(self, role, model, messages, version, validate, max_tokens=4000, *,
+             max_completion_tokens=None, tools=None, tool_choice=None):
+        """Chat completion. The output limit is sent as the documented `max_completion_tokens`
+        (`max_tokens` stays the Python keyword; the alias wins when both are given). Optional
+        `tools`/`tool_choice` are passed through; the response's tool calls must then pass
+        `tool_call_problem` before the caller's validator. Without tools the cache key is unchanged."""
+        limit = max_tokens if max_completion_tokens is None else max_completion_tokens
+        body = {'model': model, 'messages': messages, 'max_completion_tokens': limit}
+        parts = ['chat/completions', model, version, messages, limit]
+        if tools is not None or tool_choice is not None:
+            problem = _tool_specs(tools, tool_choice)[2]
+            if problem:
+                raise ProviderError(f'chat tools rejected before sending: {problem}')
+            body.update({k: v for k, v in (('tools', tools), ('tool_choice', tool_choice)) if v is not None})
+            parts.append({'tools': tools, 'tool_choice': tool_choice})
+            caller_validate = validate
+
+            def validate(payload):
+                return tool_call_problem(payload, tools, tool_choice) or caller_validate(payload)
+        fp = fingerprint(*parts)
 
         def usage(p):
             u = p.get('usage') or {}
             return {'input_tokens': u.get('prompt_tokens'), 'output_tokens': u.get('completion_tokens'),
-                    'reasoning_tokens': (u.get('completion_tokens_details') or {}).get('reasoning_tokens')}
+                    'reasoning_tokens': (u.get('completion_tokens_details') or {}).get('reasoning_tokens'),
+                    'cached_input_tokens': cached_input_tokens(u)}
         return self._call(role, 'chat/completions', model, body, fp, validate, usage)
+
+    def list_models(self) -> list[dict]:
+        """Read-only GET {base}/models -> [{'id', 'kind'}] for entries with a usable string ID.
+        `kind` is the entry's own `kind` (or `type`) string, else None; no capability is inferred."""
+        try:
+            payload = self._get('models')
+        except urllib.error.HTTPError as exc:
+            raise ProviderError(_http_error('models', exc.code, self._error_detail(exc))) from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            raise ProviderError('models transport failure') from exc
+        except ValueError as exc:
+            raise ProviderError('models returned a non-JSON body') from exc
+        entries = payload.get('data', payload.get('models')) if isinstance(payload, dict) else None
+        if not isinstance(entries, list):
+            raise ProviderError('models response has no model list')
+        out = []
+        for entry in entries:
+            model_id = entry.get('id') if isinstance(entry, dict) else None
+            if isinstance(model_id, str) and model_id.strip():
+                kind = next((entry[k] for k in ('kind', 'type') if isinstance(entry.get(k), str)), None)
+                out.append({'id': model_id, 'kind': kind})
+        return out
 
     def usage_summary(self) -> dict:
         out = {}
         for r in self.usage:
             key = f'{r.role}|{r.requested_model}->{r.returned_model}|{r.mode}|{r.status}'
             s = out.setdefault(key, {'calls': 0, 'input_tokens': 0, 'output_tokens': 0, 'reasoning_tokens': 0,
-                                     'cost_paise_header': 0.0, 'latency_s': 0.0, 'retries': 0})
+                                     'cached_input_tokens': 0, 'cost_paise_header': 0.0, 'latency_s': 0.0,
+                                     'retries': 0})
             s['calls'] += 1
-            for f in ('input_tokens', 'output_tokens', 'reasoning_tokens', 'retries'):
+            for f in ('input_tokens', 'output_tokens', 'reasoning_tokens', 'cached_input_tokens', 'retries'):
                 s[f] += getattr(r, f) or 0
             s['cost_paise_header'] += r.cost_paise_header or 0
             s['latency_s'] += r.latency_s
@@ -286,5 +514,8 @@ class ReplayGateway(Gateway):
 
     def _post(self, path, body):
         return self.responder(path, body), 0.0
+
+    def _get(self, path):
+        return self.responder(path, None)
 
 

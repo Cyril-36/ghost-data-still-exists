@@ -1572,3 +1572,24 @@ branch=claude/gracious-archimedes-1rba87
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T04:00:45Z] TokenBazaar compatibility patch: rebuilt, tested, committed
+
+User Prompt (verbatim, secrets redacted):
+Continue work on `Cyril-36/ghost-data-still-exists`. GitHub access is working. My repository Git identity is already configured (Name: Cyril362005, Email: [REDACTED: owner email]). The previous cloud session pushed only log.txt; the actual TokenBazaar compatibility patch was lost. Implement the missing compatibility patch, test it, commit it and push it. [Full prompt sections 1-7: establish baseline at fedf680; A. chat max_completion_tokens with backward compatibility and cache preservation, temperature removal only if harmless; B. optional tools/tool_choice and a strict tool_call_problem validator, no tool execution, no Phase 4; C. bounded HTTP 429 retries via Retry-After or "Please wait 8s", MAX_WAIT_S, safe fallback; D. cached-input token accounting from usage.prompt_tokens_details.cached_tokens; E. read-only GET /v1/models catalog with shape validation and no inferred capabilities; F. sanitized HTTP errors including 503/402/403; focused offline tests; full suite and Ruff on Python 3.11-3.14; 13 fixtures; 518-case scratch regeneration with cached responses and zero-paise ceiling compared to root output.csv; no repeated live paid calls, live measurements stay PENDING; decision D063; commit and push on the Claude branch, no force-push to main; report and stop before Phase 4.]
+
+Agent Response Summary:
+Rebuilt the patch in code/ghostaudit/providers.py on top of fedf680. Chat now sends max_completion_tokens, keeping the max_tokens keyword and its unchanged cache key, and no longer sends temperature. Added optional tools/tool_choice with a strict tool_call_problem validator and no execution, bounded 429 waits (Retry-After, then "Please wait Ns", capped at MAX_WAIT_S=30), sanitized 401/402/403/503 errors, cached_input_tokens accounting and a read-only list_models(). Added 15 offline tests: 168 pass on Python 3.11/3.12/3.13/3.14, ruff 0.14.0 is clean, and all 13 fixtures match. The model response cache is not in this environment (.cache/ is gitignored), so instead of a cached rerun I showed that this code requests all 390 cache keys behind the 533 historical cache hits, and that offline and zero-budget staged full runs are byte-identical to fedf680; root output.csv and runs/ are untouched. Live checks remain PENDING (HTTP 503), and no network calls were made.
+
+Actions:
+* Edited code/ghostaudit/providers.py, code/decisions.md (D063), code/README.md, code/evaluation/evaluation_report.md
+* Added code/tests/test_provider_compat.py
+* Ran unittest on Python 3.11-3.14, ruff, fixtures, full offline and zero-budget staged audits against a fedf680 worktree, validate; git commit and push
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=claude/gracious-archimedes-1rba87
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none

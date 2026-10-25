@@ -46,7 +46,7 @@ python3 code/evaluation/main.py gaps ...            # missed-step attribution
 python3 code/evaluation/main.py fixtures --out .runs/fixtures
 python3 code/evaluation/main.py intent-benchmark --env-file .env --out .runs/intent   # live, bounded
 
-python3 -m unittest discover -s code/tests      # 153 tests, offline (replay doubles, loopback servers)
+python3 -m unittest discover -s code/tests      # 168 tests, offline (replay doubles, loopback servers)
 ```
 
 `--intent offline|jev|staged` selects the intent mode. `--budget-paise` is a hard
@@ -62,7 +62,7 @@ Each run directory contains:
 - `unresolved_cases.jsonl`: every disclosed fallback and its reason.
 - `coverage.json`: per-source parse and interpretation status.
 - `media_extractions.json`: what was read from each PDF or screenshot.
-- `usage.jsonl`: one line per model attempt, recording requested and returned model, tokens, latency, cost header, retries and cache use.
+- `usage.jsonl`: one line per model attempt, recording requested and returned model, tokens (including cached input tokens), latency, cost header, retries and cache use.
 - `run_manifest.json`: input hashes, code and prompt hashes, engine config, inference modes, and the output SHA-256.
 
 ## Pipeline

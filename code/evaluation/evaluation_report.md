@@ -19,7 +19,12 @@ verification from NOT_FOUND lookups is preserved.
 | Sample, offline mode | 27/32 status, 134/135 precision, 134/193 recall, 2/32 exact | 26/32, 126/127, 126/193, 1/32 exact (D062: a mentioned account closure no longer authorizes account scope; cases 06 and 28 become fallbacks) |
 | Sample, staged mode | 28/32, 142/143, 142/193, 2/32 exact (reproduced from cache) | **PENDING**: needs 2 live Jev target calls (cases 06, 08); gateway HTTP 503 at both commits |
 | Intent benchmark (78 cases, scope-aware) | v2: 72/72 on decision labels only | **PENDING**: needs live calls for the 6 new keep-account cases and target questions |
-| Unit tests | 130 | 153 (Python 3.11–3.14), ruff clean |
+| Unit tests | 130 | 153 (Python 3.11–3.14), ruff clean; 168 after the D063 provider compatibility patch |
+
+The D063 provider compatibility patch adds `tests/test_provider_compat.py` (15 tests, offline). It
+leaves the 13 fixtures, the full offline run and a zero-budget staged run byte-identical to fedf680,
+and the code requests every cache key behind the 533 cached responses of `runs/phase3-hardened`.
+Live chat-parameter compatibility is **PENDING** (gateway HTTP 503).
 
 Why the full output does not change:
 - No full-set request is item-scoped. Jev answers reconcile to 508 ACCOUNT and 10 NON_DELETION.

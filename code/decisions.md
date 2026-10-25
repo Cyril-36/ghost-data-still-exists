@@ -599,3 +599,55 @@ scope for C_scoped_item. Measured offline-mode sample cost: status 27/32 -> 26/3
 matched, exact rows 2 -> 1 (case_06 and case_28 become disclosed fallbacks: each mentions a closed or
 deleted account and a search result, without asking to delete the account now). Staged and full
 outputs unchanged.
+
+# TokenBazaar compatibility patch
+
+Regression tests: `tests/test_provider_compat.py` (15 tests, offline, using replay doubles and loopback
+servers). The file cannot be imported on fedf680, because the functions it tests do not exist there.
+
+## D063 — Gateway follows the documented TokenBazaar contract, keeping cache keys
+
+- Chat sends the documented `max_completion_tokens`. `max_tokens` stays the Python keyword, so callers
+  are unchanged; `max_completion_tokens=` overrides it. The chat cache key still uses the same limit
+  value, so validated responses cached under `max_tokens` remain valid. Earlier live calls showed that
+  `max_tokens=4000` really capped output at about 3996 tokens, so the old field already acted as the
+  same limit. Whether the gateway honours the new field identically is **PENDING** a live check.
+- `temperature: 0` is no longer sent. The documentation says it is ignored, and it was never part of
+  the cache key. Determinism comes from the validated response cache, not from sampling.
+- Optional `tools` / `tool_choice` are passed through to chat. They enter the cache key only when
+  supplied, so calls without tools keep their old keys. Tool definitions are checked before sending.
+  The tool calls in a response must pass `tool_call_problem`, which runs before the caller's
+  validator and is also re-applied to cache hits. It rejects: malformed messages and calls, missing
+  or duplicate IDs, unknown function names, arguments that are not a JSON-object string, and
+  arguments that violate the tool's schema. The schema check covers type, enum, required, items, and
+  unknown keys, which are rejected unless `additionalProperties` is true. It also enforces
+  `tool_choice`. The gateway never executes a tool. Rejected: a tool registry or loop, which is Phase 4
+  investigator work.
+- HTTP 429 waits for `Retry-After`, else for the documented body message "Please wait Ns", capped at
+  `MAX_WAIT_S` = 30 s. A malformed, negative or non-finite value falls back to the existing
+  exponential backoff. Retries stay bounded by `max_rate_limit_retries`.
+- 401, 402 and 403 stop at once. Error messages name the status with its meaning, for example
+  "HTTP 503 (service unavailable): TokenBazaar service is temporarily unavailable". They include the
+  provider's explanation from the JSON `error.message` / `message` / `detail` fields or the body text,
+  with whitespace collapsed, bearer tokens and the API key redacted, and the text truncated to 200
+  characters. The request body is never included.
+- Usage records add `cached_input_tokens`, from `prompt_tokens_details.cached_tokens` (or
+  `input_tokens_details.cached_tokens`) when it is a non-negative integer, and the usage summary sums
+  it. Input, output and reasoning tokens, requested and returned models, and the cost header are
+  unchanged.
+- `list_models()`: a read-only `GET {base}/models` call over the same authenticated, no-redirect
+  transport. It returns `{id, kind}` for entries with a non-empty string ID. `kind` is the entry's own
+  `kind` (or `type`) string, else None. No tool or vision capability is inferred, because the catalog
+  exposes no reliable flags. The live check (HTTP 200; the unversioned path redirects; the three
+  project models are listed with the expected kinds) was made earlier and was not repeated.
+
+Measured, with no cached responses in this environment (`.cache/` is gitignored), 0 network calls
+and 0 paise:
+- All 13 fixtures match their expected output.
+- The full offline run and a zero-budget staged run are byte-identical between fedf680 and this patch.
+- Both versions request the same 637 cache keys.
+- Those keys include all 390 distinct keys behind the 533 cached responses recorded in
+  `runs/phase3-hardened/usage.jsonl`.
+
+The root `output.csv` and `runs/` are unchanged. Live staged sample and scope-aware benchmark
+measurements stay **PENDING**: the decision and chat endpoints return HTTP 503.
