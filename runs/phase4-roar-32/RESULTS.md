@@ -44,3 +44,25 @@ The cause is model tool-use quality, not evidence rules or the verifier:
 The remaining misses in A are unchanged from the error analysis: 31 OWNERSHIP_UNGROUNDED, 11
 RETENTION_CONDITION_UNPROVEN, 5 POST_CUTOFF_ONLY and 3 NOT_IN_STRUCTURED_DATA. Ownership and retention
 stay strict, by decision.
+
+## B3: `gemini-3.8-flash` investigator (your choice after `google/gemini-2.5-flash` was unreachable)
+
+Background: TokenBazaar returned HTTP 503 to the one probe (nothing billed), and Roar does not list
+`gemini-2.5-flash`. `gemini-3.8-flash` is the model TokenBazaar actually served for `gemini-2.5-flash`
+requests. Its probe passed.
+
+| | B3 |
+|---|---|
+| Predictions | identical to A: 28/32 statuses, 1/32 exact, 141/142 precision, 141/193 recall |
+| Routed / investigated / accepted | 15 / 2 that ran / 0; 13 stopped at RUN_BUDGET before or during their first call |
+| Tool use | batches calls (10 and 8 in its two cases, 9 model turns, 19 tool calls); 4 `inspect_media` TOOL_ERRORs (wrong page or non-PDF handle) |
+| Outcome of the two cases | case 01 and case 02 submitted NO_SUPPORTED_ACTION; correct under the strict ownership rule (account records have no grounded link) |
+| Estimated cost | 705.6 paise for 9 calls (59–126 paise each; 6.6–11.5k input tokens per turn); actual billing unreported |
+
+Unlike `gpt-oss-20b`, it batches and submits. But at about ₹3 per investigated case, all 15 routed
+cases would cost about ₹40–45, beyond the ₹15 limit. Experiment total, estimated:
+A 10 + B 348 + crashed B2 attempt ≈ 85 + B2 276 + B3 706 ≈ **1,425 paise (₹14.3)**.
+
+The estimate overshot the 700-paise ceiling by 5.6 paise, because the flat 50-paise chat reserve was below
+the real cost of a Gemini turn. Fixed: a priced call now reserves its worst case (request bytes / 3 as
+input tokens, plus the full output limit, at catalog price).

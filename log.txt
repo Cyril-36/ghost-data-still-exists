@@ -2052,3 +2052,22 @@ branch=claude/gracious-archimedes-1rba87
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T05:44:39Z] gemini-3.8-flash investigator run (B3); budget reached; priced worst-case reserve fix
+
+User Prompt (verbatim, secrets redacted):
+[answer to the question] Roar gemini-3.8-flash (Recommended)
+
+Agent Response Summary:
+One Roar probe for gemini-3.8-flash passed. Run B3 (32 samples, Rs 7 ceiling): the model batched tool calls and submitted 2 cases, both NO_SUPPORTED_ACTION, which is correct under the strict ownership rule. At about 59-126 paise per turn it used the ceiling after 9 calls, so 13 routed cases stopped at RUN_BUDGET. Predictions are identical to A (28/32, 1/32 exact). The experiment total is about Rs 14.3 estimated, so paid runs stopped under the Rs 15 limit. Fixed the 5.6-paise ceiling overshoot: priced calls now reserve their catalog worst case. 227 tests pass on Python 3.11-3.14; ruff clean; 13/13 fixtures; TokenBazaar unchanged.
+
+Actions:
+* probe-tools (roar gemini-3.8-flash); live audit B3; edited ghostaudit/providers.py; test in tests/test_providers_dual.py; runs/phase4-roar-32/B3 and RESULTS.md
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=claude/gracious-archimedes-1rba87
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none

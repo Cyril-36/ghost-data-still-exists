@@ -233,3 +233,27 @@ class TransportResets(unittest.TestCase):
         with unittest.mock.patch('ghostaudit.providers.time.sleep'), self.assertRaisesRegex(ProviderError, 'transport'):
             gw.chat('r', 'm', [{'role': 'user', 'content': 'x'}], 'v', lambda p: None)
         self.assertEqual((len(calls), gw._reserved, gw.usage[-1].status), (2, 0.0, 'error'))
+
+
+class PricedReserve(unittest.TestCase):
+    def test_a_priced_chat_call_reserves_its_worst_case(self):
+        seen = []
+
+        class Watch(ReplayGateway):
+            mode = 'live'
+
+            def _post(self, path, body):
+                seen.append(self._reserved)
+                return ROAR_TOOL_CALL, None
+        gw = Watch(None, replace(ROAR, max_cost_paise=10_000.0))
+        gw.pricing = {'pricey': {'inputPer1M': 0.75, 'outputPer1M': 3.75}}
+        msgs = [{'role': 'user', 'content': 'x' * 30000}]
+        gw.chat('r', 'pricey', msgs, 'v', lambda p: None, max_tokens=2000)
+        worst = (len(json.dumps({'model': 'pricey', 'messages': msgs, 'max_completion_tokens': 2000})) / 3 * 0.75
+                 + 2000 * 3.75) / 1e6 * 8800
+        self.assertAlmostEqual(seen[0], worst, places=6)
+        self.assertGreater(seen[0], gw.config.chat_cost_reserve_paise)
+        with self.assertRaises(ProviderError):                     # a ceiling below the worst case refuses the call
+            low = Watch(None, replace(ROAR, max_cost_paise=worst - 1))
+            low.pricing = gw.pricing
+            low.chat('r', 'pricey', msgs, 'v', lambda p: None, max_tokens=2000)

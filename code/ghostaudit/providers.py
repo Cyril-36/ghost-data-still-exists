@@ -505,7 +505,17 @@ class Gateway:
                 self.pricing[entry.get('id')] = entry['roar_pricing']
         return self.pricing
 
-    def _call(self, role, endpoint, requested_model, body, fp, validate, extract_usage, adapt=None):
+    def _worst_case(self, model, body, output_limit):
+        """Upper-bound cost of one call from catalog prices: every 3 request bytes counted as a token,
+        plus the full output limit. None without a price (the configured flat reserve applies)."""
+        price = self.pricing.get(model)
+        if not price:
+            return None
+        tokens_in = len(json.dumps(body, ensure_ascii=False)) / 3
+        usd = (tokens_in * price.get('inputPer1M', 0) + output_limit * price.get('outputPer1M', 0)) / 1e6
+        return usd * USD_PAISE
+
+    def _call(self, role, endpoint, requested_model, body, fp, validate, extract_usage, adapt=None, reserve=None):
         cached = self._cache_get(fp)
         if cached is not None:
             problem = ('cache entry metadata mismatch' if cached.get('requested_model') != requested_model
@@ -515,8 +525,9 @@ class Gateway:
             if not problem:
                 return cached['response']
             self._cache_path(fp).unlink()          # invalid entry: discard it and ask again
-        reserve = self.config.cost_reserve_paise if endpoint == self.profile.decisions_path \
+        flat = self.config.cost_reserve_paise if endpoint == self.profile.decisions_path \
             else self.config.chat_cost_reserve_paise
+        reserve = max(flat, reserve or 0.0)
         self._reserve(reserve)
         payload, cost, retries, latency = self._send(role, endpoint, requested_model, body, fp, reserve)
         rec = UsageRecord(role, endpoint, requested_model, payload.get('model'), self.mode, 'ok', latency,
@@ -633,7 +644,8 @@ class Gateway:
             return {'input_tokens': u.get('prompt_tokens'), 'output_tokens': u.get('completion_tokens'),
                     'reasoning_tokens': (u.get('completion_tokens_details') or {}).get('reasoning_tokens'),
                     'cached_input_tokens': cached_input_tokens(u)}
-        return self._call(role, 'chat/completions', model, body, fp, validate, usage)
+        return self._call(role, 'chat/completions', model, body, fp, validate, usage,
+                          reserve=self._worst_case(model, body, limit))
 
     def list_models(self) -> list[dict]:
         """Read-only GET {base}/models -> [{'id', 'kind'}] for entries with a usable string ID.
