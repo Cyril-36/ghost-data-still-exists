@@ -12,10 +12,7 @@ ACCOUNT, ITEM = 'DELETE/ACCOUNT', 'DELETE/ITEM/'
 SCENARIOS = {
     'A_delete_account': (ACCOUNT, 'DELETE_ACCOUNT'),
     'B_verify_prior': (ACCOUNT, 'VERIFY_PRIOR_DELETION'),
-    # "My account was closed, but item X remains: delete it" refers to an account deletion the
-    # person already requested: the account scope is authorized (the supplied sample labels
-    # verify the account in such cases) and the narrower item scope is also safe.
-    'C_scoped_item': (ACCOUNT + '|' + ITEM, 'SCOPED_DELETION'),   # target per language: ITEM_TARGETS
+    'C_scoped_item': (ITEM, 'SCOPED_DELETION'),          # target per language: ITEM_TARGETS
     'D_marketing_only': ('NON_DELETION', 'NON_DELETION'),
     'E_export_keep': ('NON_DELETION', 'NON_DELETION'),
     'F_correction': ('NON_DELETION', 'NON_DELETION'),

@@ -33,10 +33,11 @@ TARGETS = ('SEARCH_INDEX_ENTRY', 'USER_EXPORT', 'SUPPORT_ATTACHMENT', 'SUPPORT_M
            'ANALYTICS_PROFILE', 'SEVERAL_OR_UNCLEAR')
 
 
-def target_payload(target, p=0.95):
+def target_payload(target, p=0.95, whole=0.05):
     probs = {t: (p if t == target else round((1 - p) / (len(TARGETS) - 1), 4)) for t in TARGETS}
-    return {'model': 'typesafe/jev-1.13-test', 'answers': {'target': {'type': 'choice', 'choice': target,
-                                                                      'probabilities': probs}}}
+    return {'model': 'typesafe/jev-1.13-test', 'answers': {
+        'target': {'type': 'choice', 'choice': target, 'probabilities': probs},
+        'whole_category': {'type': 'noul', 'noul': whole}}}
 
 
 # --- P0-A: scoped deletion keeps its scope ---------------------------------------------------------

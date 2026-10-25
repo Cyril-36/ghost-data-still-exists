@@ -107,9 +107,10 @@ def _owner_of(facts, record_ids):
 
 
 def _identity(values, report, what):
-    """Identity tokens for one record, or none when they name more than one user reference."""
+    """Identity tokens for one record section, or none when it could name more than one person:
+    more than one user reference, email or phone (the text gives no link between them)."""
     tokens = tokens_from(*values)
-    if len({t for t in tokens if t[0] == 'user'}) > 1:
+    if any(len({t for t in tokens if t[0] == kind}) > 1 for kind in ('user', 'email', 'phone')):
         report.issues.append(f'NOTE: {what}: several people named; identity not attached')
         return frozenset()
     return tokens

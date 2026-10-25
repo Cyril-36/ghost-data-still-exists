@@ -6,8 +6,11 @@ plan_case()  status and steps derived only from those obligations
 
 Status rules (plan sections 4.3, 16.2, 17):
 - NON_DELETION intent                                  -> NOT_APPLICABLE, []
-- ITEM-scoped DELETE: only linked records of the requested category are obligations;
-  the account and every other record are outside the authorization
+- ITEM-scoped DELETE: only the requested record is an obligation - every linked record
+  of the category if the person asked for all of them, otherwise the one record the
+  request names verbatim or the only linked record of that category; with several
+  candidates and none named, the target is unresolved. The account and every other
+  record are outside the authorization
 - any VIOLATED obligation                              -> INCOMPLETE (confirmed)
 - nothing violated, nothing unresolved, >=1 obligation -> COMPLETE (verification only, cited)
 - anything else                                        -> INCOMPLETE best-effort fallback,
@@ -85,6 +88,12 @@ class CasePlan:
 
 # --- discovery -----------------------------------------------------------------------------
 
+def lookup_only(links) -> bool:
+    """Linked only by not-found lookups: the lookup names the subject, but no record returned
+    by it shows that the subject owned the resource."""
+    return all(o.kind == STATE and o.presence == ABSENT for o in links)
+
+
 def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cutoff, max_hops: int = 3):
     """Resources that eligible evidence ties to the subject, with the linking observations.
 
@@ -92,7 +101,8 @@ def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cut
     catalog links, and explicit resource references (e.g. source_resource_id). A record
     whose own eligible state evidence names another known person is never attributed to
     the subject (identity conflict), however it was reached: a lookup that names the
-    subject cannot claim a record that other evidence ties to someone else.
+    subject cannot claim a record that other evidence ties to someone else. A record
+    linked only by not-found lookups never seeds traversal (see lookup_only).
     """
     linked: dict[tuple[str, str], list[Observation]] = {}
     conflicts: dict[tuple[str, str], list[str]] = {}
@@ -136,7 +146,7 @@ def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cut
             for ref in obs.refs:
                 edges.setdefault(obs.resource_id, set()).add((ref, obs))
                 edges.setdefault(ref, set()).add((obs.resource_id, obs))
-    frontier = [(rid, 0) for (_, rid) in linked]
+    frontier = [(rid, 0) for (_, rid), links in linked.items() if not lookup_only(links)]
     visited = {rid for (_, rid) in linked}
     while frontier:
         rid, depth = frontier.pop(0)
@@ -289,24 +299,31 @@ def plan_case(request: Request, corpus: Corpus, policy: Policy, index: IdentityI
         return _fallback(plan, 'IDENTITY_UNRESOLVED: ' + '; '.join(plan.subject.issues))
 
     linked, conflicts = discover(plan.subject, corpus, index, cutoff)
-    outside = 0
-    for (system_id, resource_id), links in sorted(linked.items()):
-        state = reconstruct(corpus, system_id, resource_id, cutoff, plan.subject.tokens)
-        if item and plan.intent.target not in state.categories:
-            outside += 1
-            continue
+    states = {key: reconstruct(corpus, *key, cutoff, plan.subject.tokens) for key in sorted(linked)}
+    if item:
+        candidates = [k for k, st in states.items() if plan.intent.target in st.categories]
+        named = [k for k in candidates if k[1] in request.request_text]
+        chosen = candidates if plan.intent.whole_category else (
+            named if len(named) == 1 else candidates if len(candidates) == 1 else [])
+        plan.issues.append(f'SCOPE: {plan.intent.target} {"(all)" if plan.intent.whole_category else "(one)"}; '
+                           f'{len(states) - len(chosen)} other linked record(s) not assessed')
+        if not chosen:
+            return _fallback(plan, f'SCOPE_TARGET_UNGROUNDED: {len(candidates)} linked {plan.intent.target} '
+                                   'record(s); the request does not identify which one')
+        states = {k: states[k] for k in chosen}
+    for (system_id, resource_id), state in states.items():
+        links = linked[(system_id, resource_id)]
         ob = obligation(state, policy, cutoff)
         ob.links = links
         if conflicts.get((system_id, resource_id)):
             ob.issues += conflicts[(system_id, resource_id)]
             ob.result, ob.verify_op, ob.finding_op, ob.remedy_op = UNRESOLVED, None, None, None
+        elif ob.result == VIOLATED and lookup_only(links):
+            ob.issues.append('OWNERSHIP_UNPROVEN: linked only by a not-found lookup naming the subject; '
+                             'independent ownership evidence is needed before remediation')
+            ob.result, ob.verify_op, ob.finding_op, ob.remedy_op = UNRESOLVED, None, None, None
         plan.obligations.append(ob)
-    if item:
-        plan.issues.append(f'SCOPE: only {plan.intent.target} records requested; {outside} other linked '
-                           'record(s) not assessed')
-        if not plan.obligations:
-            return _fallback(plan, f'SCOPE_TARGET_UNGROUNDED: no linked {plan.intent.target} record')
-    elif not any(o.category == 'USER_PROFILE' for o in plan.obligations):
+    if not item and not any(o.category == 'USER_PROFILE' for o in plan.obligations):
         plan.obligations.append(profile_obligation(plan.subject, corpus, cutoff))
     return _derive(plan)
 

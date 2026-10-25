@@ -34,15 +34,15 @@ _DELETION = re.compile(
     # verification of a deletion the person already requested
     r"|\b(?:account|profile)\b[^.;!?]{0,60}\b(?:is|was|has been|have (?:already )?been) (?:gone|removed|deleted|erased)\b",
     re.I)
-# A deletion that names one specific item ("delete that export file") and neither asks for
-# the account or the person's records to be removed nor refers to an account deletion they
-# already requested is item-scoped: offline, its target cannot be grounded, so it never
-# becomes an account-wide authorization.
+# A deletion that names one specific item ("delete that export file") and does not ask for
+# the account or the person's records to be removed is item-scoped: offline, its target
+# cannot be grounded, so it never becomes an account-wide authorization. Saying that the
+# account was already closed is not a request to delete it now.
 _ACCOUNT_REQUEST = re.compile(
     r"\b(?:delet\w*|eras\w*|wipe|purge|remov\w*)\b[^.;!?]{0,40}"
     r"\b(?:account|profile|personal|records|everything|all (?:of )?my|my (?:data|details|information))\b"
     r"|\bclos\w*\b[^.;!?]{0,25}\baccount\b|\baccount (?:deletion|removal|closure)\b|\bforget me\b"
-    r"|\b(?:account|profile)\b[^.;!?]{0,40}\b(?:delet\w*|eras\w*|remov\w*|clos\w*|gone)\b", re.I)
+    r"|\b(?:account|profile)\b[^.;!?]{0,40}\bbe (?:delet\w*|eras\w*|remov\w*|clos\w*)\b", re.I)
 _ITEM = re.compile(r"\b(?:result|file|export|attachment|download|link|cop(?:y|ies)|entry|listing)s?\b", re.I)
 _PRESERVE = re.compile(
     r"\bkeep (?:my|the) account\b|\bkeep the account as it is\b|\bleave (?:my|the) (?:profile|account)\b"
@@ -61,6 +61,7 @@ class Intent:
     signals: tuple = ()          # raw typed answers behind a model-backed decision
     scope: str | None = None     # DELETE only: ACCOUNT | ITEM
     target: str | None = None    # ITEM only: the one data category the person asked to delete
+    whole_category: bool = False  # ITEM only: every record of `target`, not one particular record
 
 
 def classify(text: str) -> Intent:

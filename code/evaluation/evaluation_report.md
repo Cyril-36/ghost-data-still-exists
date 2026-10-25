@@ -8,15 +8,18 @@ are in `runs/phase3-provisional/benchmarks/`.
 ## Correctness-hardening pass (audit of e0aaef4)
 
 Fixes for the independent audit's findings are recorded in `decisions.md` D044–D057. Regression tests are in
-`tests/test_hardening_regressions.py`: 19 tests, all failing on e0aaef4 and passing now.
+`tests/test_hardening_regressions.py`: 17 test functions, all failing on e0aaef4 and passing now (an earlier
+version of this report said 19, which was wrong). The follow-up patch (D058–D061) adds
+`tests/test_followup_regressions.py`: 6 tests, 5 of which fail on 7b8c216; the sixth checks that absence
+verification from NOT_FOUND lookups is preserved.
 
 | Measurement | e0aaef4 baseline | Hardened |
 |---|---|---|
 | Full 518 rows | 95 / 413 / 10, 61 fallbacks | **byte-identical** (`output.csv` SHA-256 `968454758d71…`) |
-| Sample, offline mode | 27/32 status, 134/135 precision, 134/193 recall, 2/32 exact | **byte-identical predictions** |
-| Sample, staged mode | 28/32, 142/143, 142/193, 2/32 exact (reproduced from cache) | **PENDING**: needs 2 live Jev target calls (cases 06, 08); gateway HTTP 503 at commit time |
+| Sample, offline mode | 27/32 status, 134/135 precision, 134/193 recall, 2/32 exact | 26/32, 126/127, 126/193, 1/32 exact (D062: a mentioned account closure no longer authorizes account scope; cases 06 and 28 become fallbacks) |
+| Sample, staged mode | 28/32, 142/143, 142/193, 2/32 exact (reproduced from cache) | **PENDING**: needs 2 live Jev target calls (cases 06, 08); gateway HTTP 503 at both commits |
 | Intent benchmark (78 cases, scope-aware) | v2: 72/72 on decision labels only | **PENDING**: needs live calls for the 6 new keep-account cases and target questions |
-| Unit tests | 130 | 147 (Python 3.11–3.14), ruff clean |
+| Unit tests | 130 | 153 (Python 3.11–3.14), ruff clean |
 
 Why the full output does not change:
 - No full-set request is item-scoped. Jev answers reconcile to 508 ACCOUNT and 10 NON_DELETION.

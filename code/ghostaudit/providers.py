@@ -129,15 +129,14 @@ class Gateway:
             self._calls += 1
             self._reserved += reserve
 
-    def _release(self, reserve):
-        with self._lock:
-            self._reserved -= reserve
-
-    def _record(self, rec: UsageRecord, charge_if_unknown=0.0):
+    def _record(self, rec: UsageRecord, reserve=0.0):
+        """Append `rec`; for a reserved call, release its reservation and charge its cost in the
+        same critical section, so no call is admitted against a released but uncharged reserve."""
         with self._lock:
             self.usage.append(rec)
-            if rec.mode == 'live' and rec.status != 'error':
-                self._spent += charge_if_unknown if rec.cost_paise_header is None else rec.cost_paise_header
+            self._reserved -= reserve
+            if reserve and rec.mode == 'live' and rec.status != 'error':
+                self._spent += reserve if rec.cost_paise_header is None else rec.cost_paise_header
 
     # --- cache --------------------------------------------------------------------------
     def _cache_path(self, fp):
@@ -184,10 +183,7 @@ class Gateway:
             self._cache_path(fp).unlink()          # invalid entry: discard it and ask again
         reserve = self.config.cost_reserve_paise if endpoint == 'decisions' else self.config.chat_cost_reserve_paise
         self._reserve(reserve)
-        try:
-            payload, cost, retries, latency = self._send(role, endpoint, requested_model, body, fp)
-        finally:
-            self._release(reserve)
+        payload, cost, retries, latency = self._send(role, endpoint, requested_model, body, fp, reserve)
         rec = UsageRecord(role, endpoint, requested_model, payload.get('model'), self.mode, 'ok', latency,
                           retries=retries, request_id=payload.get('id'), cost_paise_header=cost, fingerprint=fp,
                           **extract_usage(payload))
@@ -201,8 +197,9 @@ class Gateway:
                              'requested_model': requested_model, 'fingerprint_parts': endpoint})
         return payload
 
-    def _send(self, role, endpoint, requested_model, body, fp):
-        """POST with bounded retries -> (JSON object, cost header, retries, latency)."""
+    def _send(self, role, endpoint, requested_model, body, fp, reserve):
+        """POST with bounded retries -> (JSON object, cost header, retries, latency). A failure
+        settles the call's reservation here; a success leaves it for the caller to settle."""
         retries, started = 0, time.time()
         while True:
             wait = None
@@ -216,7 +213,7 @@ class Gateway:
                 if exc.code in (401, 403) or retries >= limit or exc.code not in (408, 429, 500, 502, 503, 504):
                     self._record(UsageRecord(role, endpoint, requested_model, None, self.mode, 'error',
                                              time.time() - started, retries=retries, fingerprint=fp,
-                                             error=f'HTTP {exc.code}'))
+                                             error=f'HTTP {exc.code}'), reserve)
                     raise ProviderError(f'{endpoint} HTTP {exc.code}') from exc
                 retry_after = exc.headers.get('Retry-After') if exc.headers else None
                 if retry_after and retry_after.strip().isdigit():
@@ -225,11 +222,12 @@ class Gateway:
                 if retries >= self.config.max_retries:
                     self._record(UsageRecord(role, endpoint, requested_model, None, self.mode, 'error',
                                              time.time() - started, retries=retries, fingerprint=fp,
-                                             error=type(exc).__name__))
+                                             error=type(exc).__name__), reserve)
                     raise ProviderError(f'{endpoint} transport failure') from exc
             except ValueError as exc:                  # body is not a JSON object (may still have been billed)
                 self._record(UsageRecord(role, endpoint, requested_model, None, self.mode, 'invalid',
-                                         time.time() - started, retries=retries, fingerprint=fp, error=str(exc)))
+                                         time.time() - started, retries=retries, fingerprint=fp, error=str(exc)),
+                             reserve)
                 raise ProviderError(f'{endpoint} returned a non-JSON body') from exc
             retries += 1
             time.sleep(wait if wait is not None else min(20.0, 1.5 * 2 ** retries))

@@ -430,7 +430,8 @@ re-checks the CSV hash binding. Labelled PROVISIONAL in the manifest.
 
 # Correctness-hardening pass (independent audit of e0aaef4)
 
-Regression tests: `tests/test_hardening_regressions.py` (19 tests, all fail on e0aaef4).
+Regression tests: `tests/test_hardening_regressions.py` (17 test functions, all fail on e0aaef4; an
+earlier report of 19 counted wrongly).
 Full 518-row output: byte-identical to the e0aaef4 provisional output (measured).
 
 ## D044 — Deletion authorization carries its scope (audit P0-A)
@@ -439,16 +440,14 @@ Full 518-row output: byte-identical to the e0aaef4 provisional output (measured)
 data category. Reconciliation: deletion vs not is still decided by the family probability
 (D038); ACCOUNT scope additionally needs P(DELETE_ACCOUNT)+P(VERIFY_PRIOR_DELETION) >= 0.60
 and a non-SCOPED label, otherwise the deletion is ITEM-scoped (never widened). An ITEM deletion
-needs a bounded Jev choice among deletable categories (`prompts/intent_target_jev_v1.json`,
+needs a bounded Jev choice among deletable categories (`prompts/intent_target_jev_v2.json` since D058,
 asked only for ITEM outcomes); a target below 0.60 or `SEVERAL_OR_UNCLEAR` leaves the request
 UNRESOLVED. The planner assesses only linked records of the target category, never the
 account profile; a DELETE without an established scope is refused. Offline, a deletion that
 names a specific item without asking for the account or the person's records (or referring
 to an account deletion already requested) is UNRESOLVED.
-[sample-informed] "My account was closed, but item X remains — delete it" refers to an account
-deletion the person already requested; the supplied labels verify the account in such cases,
-so ACCOUNT scope is authorized there and the narrower ITEM scope is also safe. The benchmark
-accepts both for that scenario and requires ITEM for "delete X, keep my account".
+Revised by D062: an account closure the person mentions is not an authorization to delete the
+account now; the benchmark requires ITEM scope for every one-item scenario.
 Rejected: adding the target question to the cached intent prompt (would re-buy all 518 intent
 answers for a question that only ITEM requests need); treating every scoped request as
 unresolved (discards grounded item requests).
@@ -549,3 +548,54 @@ become ProviderErrors. A resource ID used by two systems is never traversed. A s
 rejected entities or reader-flagged unreadable fields reports PARTIAL. Not changed: the
 investigator SQL tool's snapshot-time check (P2-3, not used by inference) and PDF parser
 portability (P2-6, documented limitation).
+
+# Follow-up patch (review of 7b8c216)
+
+Regression tests: `tests/test_followup_regressions.py` (6 tests; 5 fail on 7b8c216, the sixth guards
+preserved behaviour). Full 518-row output and offline sample predictions: byte-identical.
+
+## D058 — Item scope names one record, or all records of a category only when asked (review 1)
+
+The target question (`intent_target_jev_v2.json`, never answered live, so no cached answer is
+lost) adds a yes/no `whole_category`: only a clear yes authorizes every linked record of the
+category. Otherwise exactly one record must be grounded from evidence: a linked record of the
+category whose ID appears verbatim in the request, or the only linked record of that category.
+Several candidates with none named leave the request UNRESOLVED (SCOPE_TARGET_UNGROUNDED). The
+model never supplies an identifier. Test: one person, two attachments; "delete the attachment" ->
+unresolved; "delete fx_attach_T2" -> only that record; "delete every file I attached" -> both.
+Rejected: a Jev choice among candidate records (the request text rarely distinguishes them; a
+probability would stand in for evidence).
+
+## D059 — Reservation release and charge are one critical section (review 2)
+
+`Gateway._record(rec, reserve)` releases the reservation and charges the cost under one lock, on
+success, invalid-response and failure paths (a non-JSON body is charged its reserve; HTTP and
+transport errors only release). Test reproduces the interleaving: a second reservation attempted
+after the first response arrived but before it was charged is refused.
+
+## D060 — NOT_FOUND lookups verify absence only (owner's decision on audit P1-3)
+
+A record linked only by not-found lookups naming the subject (`planner.lookup_only`) keeps its
+absence verification (VERIFY_RECORD_ABSENT), but cannot justify a finding or remediation
+(OWNERSHIP_UNPROVEN, unresolved) and never seeds relationship traversal. Measured: no change on
+samples or the full set.
+
+## D061 — A PDF section binds identity only if it names at most one person (review 4)
+
+More than one user reference, email or phone in a record section binds no identity: the text
+gives no link between them. Measured: each supplied PDF section names at most one of each.
+
+Owner's decision recorded: strict retention stays the default; sample cases 11, 13, 16, 31 remain
+a documented mismatch between the available evidence and the expected answers (D052). Sample
+labels are not used to broaden deletion authorization.
+
+## D062 — Sample labels do not broaden authorization (owner's decision)
+
+The first hardening pass let "my account was closed, but item X remains — delete it" authorize
+the account scope offline and in the benchmark's expectation, because the supplied labels verify
+the account in such cases. Reverted: offline, only an explicit request to delete the account
+("delete my account", "the account to be erased") is account-scoped; the benchmark requires ITEM
+scope for C_scoped_item. Measured offline-mode sample cost: status 27/32 -> 26/32, steps 134 -> 126
+matched, exact rows 2 -> 1 (case_06 and case_28 become disclosed fallbacks: each mentions a closed or
+deleted account and a search result, without asking to delete the account now). Staged and full
+outputs unchanged.

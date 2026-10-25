@@ -13,7 +13,9 @@ Stages (cheapest first; every stage can only narrow, never widen, authorization)
      request and it does not contradict a definite deterministic decision. A conflict
      that Jev's flags detected is never escalated: no later stage can waive it.
   5. An ITEM-scoped deletion needs its target: one bounded Jev choice among data
-     categories. Without a probable single target it stays UNRESOLVED.
+     categories plus a yes/no on whether every item of that kind is meant. Without a
+     probable single category it stays UNRESOLVED; which record is meant is grounded by
+     the planner from evidence (planner.plan_case), never by a model.
 Jev probabilities are treated as model scores, not calibrated correctness.
 """
 from __future__ import annotations
@@ -43,7 +45,7 @@ def _load_jev():
 
 
 def _load_target():
-    spec = json.loads((PROMPTS / 'intent_target_jev_v1.json').read_text(encoding='utf-8'))
+    spec = json.loads((PROMPTS / 'intent_target_jev_v2.json').read_text(encoding='utf-8'))
     return spec, f'{spec["version"]}:{fingerprint(spec)[:12]}'
 
 
@@ -155,17 +157,24 @@ def jev_signals(gateway: Gateway, text: str) -> Signals:
                    account_probability=float(probs['DELETE_ACCOUNT'] + probs['VERIFY_PRIOR_DELETION']))
 
 
-def jev_target(gateway: Gateway, text: str) -> tuple[str | None, float, str | None]:
-    """The one data category an ITEM-scoped request asks to delete; None if not probable or unclear."""
+def jev_target(gateway: Gateway, text: str) -> tuple[str | None, float, bool, str | None]:
+    """(data category or None if not probable/unclear, its probability, whether every item of that
+    category is meant (only on a clear yes), returned model) for an ITEM-scoped request."""
     spec, version = _load_target()
     questions = spec['questions']
     labels = questions['target']['criteria']
+
+    def check(p):
+        whole = (p.get('answers') or {}).get('whole_category')
+        return choice_problem(p, 'target', labels) or (
+            None if isinstance(whole, dict) and _probability(whole.get('noul')) else 'whole_category noul invalid')
     payload = gateway.decide('intent_target', JEV_MODEL, spec['state_template'].format(text=text), questions,
-                             version, lambda p: choice_problem(p, 'target', labels))
+                             version, check)
     answer = payload['answers']['target']
     target, p = answer['choice'], float(answer['probabilities'][answer['choice']])
     grounded = target != 'SEVERAL_OR_UNCLEAR' and p >= CHOICE_MIN
-    return (target if grounded else None), p, payload.get('model')
+    whole = payload['answers']['whole_category']['noul'] >= YES
+    return (target if grounded else None), p, whole, payload.get('model')
 
 
 # --- generative fallback ----------------------------------------------------------------------
@@ -269,15 +278,16 @@ def material_concern(sig: Signals) -> str | None:
 
 def ground_target(gateway, text, intent: Intent) -> Intent:
     try:
-        target, p, model = jev_target(gateway, text)
+        target, p, whole, model = jev_target(gateway, text)
     except ProviderError as exc:
         return Intent(UNRESOLVED, f'scoped deletion target: PROVIDER_FAILURE: {exc}', intent.spans, 'staged-v1',
                       intent.signals)
-    signals = intent.signals + (('target', target), ('target_p', p), ('target_model', model))
+    signals = intent.signals + (('target', target), ('target_p', p), ('whole_category', whole),
+                                ('target_model', model))
     if target is None:
         return Intent(UNRESOLVED, f'scoped deletion target not grounded (p={p:.2f})', intent.spans, 'staged-v1',
                       signals)
-    return replace(intent, signals=signals, target=target)
+    return replace(intent, signals=signals, target=target, whole_category=whole)
 
 
 def decide_intents(texts: dict, gateway: Gateway | None, use_generative: bool = True,
