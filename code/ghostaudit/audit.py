@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from .config import STRICT, EngineConfig
@@ -95,6 +95,12 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
     intents = decide_intents({r.case_id: r.request_text for r in requests}, gateway, use_generative)
     plans = [plan_case(r, corpus, policy, index, intents[r.case_id].intent) for r in requests]
 
+    if investigator_gateway is not None and gateway is not None and investigator_gateway is not gateway:
+        # One advertised ceiling for the run: a separate investigator gateway gets only what the intent
+        # and media calls (all finished by now) left of it.
+        left = max(0.0, gateway.config.max_cost_paise - gateway.spent_paise)
+        investigator_gateway.config = replace(investigator_gateway.config,
+                                              max_cost_paise=min(investigator_gateway.config.max_cost_paise, left))
     texts = SourceText(context, {**(media_cache or {}), **getattr(corpus, 'media_extractions', {})})
     verifier = Verifier(corpus, index, context, texts)
     agent = Investigator(investigator_gateway, investigator, corpus, index, policy, texts, verifier.verify) \
@@ -181,6 +187,9 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
             'intent': 'staged (deterministic check -> Jev decisions -> generative fallback)' if gateway and
                       use_generative else 'jev + deterministic check' if gateway else 'deterministic offline',
             'gateway_mode': getattr(gateway, 'mode', None),
+            'providers': {role: {k: getattr(g.config, k) for k in ('provider', 'jev_model', 'intent_fallback_model',
+                                                                    'vision_model', 'investigator_model')}
+                          for role, g in (('intent', gateway), ('investigator', investigator_gateway)) if g},
             'media': ('PDF native text + Jev document kind; screenshots via blind vision reader'
                       if gateway and config.use_media else 'PDF text only (no state); screenshots not read')},
         'source_status': dict(Counter(r.status for r in corpus.reports)),
@@ -189,6 +198,12 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
         'model_cache_hits': sum(1 for u in usage if u.mode == 'cache'),
         'model_usage': {k: v for g in gateways for k, v in g.usage_summary().items()},
         'model_spent_paise_header': round(sum(g.spent_paise for g in gateways), 2),
+        'model_cost_paise': {'actual_reported': round(sum(u.cost_paise_header or 0 for u in usage), 6),
+                             'estimated': round(sum(u.cost_estimate_paise or 0 for u in usage), 6),
+                             'unpriced_live_calls': sum(1 for u in usage if u.mode == 'live' and u.status != 'error'
+                                                        and u.cost_paise_header is None and u.cost_estimate_paise is None),
+                             'run_ceiling': gateway.config.max_cost_paise if gateway else
+                             (investigator_gateway.config.max_cost_paise if investigator_gateway else 0.0)},
         'phase4': _phase4_summary(phase4, investigator if agent else None,
                                   getattr(investigator_gateway, 'mode', None) if agent else None),
         'run_quality': 'best_effort_with_unresolved' if fallbacks else 'strict',

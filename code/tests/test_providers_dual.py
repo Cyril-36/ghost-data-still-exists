@@ -195,3 +195,41 @@ class CliSelection(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SharedCeiling(unittest.TestCase):
+    def test_a_separate_investigator_gateway_gets_only_what_is_left(self):
+        from pathlib import Path
+
+        from ghostaudit.audit import run_audit
+        from ghostaudit.investigator import InvestigatorConfig
+        from phase4_world import world
+
+        class Spent(ReplayGateway):
+            pass
+        with tempfile.TemporaryDirectory() as tmp:
+            root = world(tmp)
+            intent = Spent(lambda p, b: jev_payload('DELETE_ACCOUNT'), ProviderConfig(cache_dir=None, max_cost_paise=300.0))
+            intent._spent = 120.0                                          # what intent and media calls used
+            inv = ReplayGateway(lambda p, b: self.fail('no call expected'), replace(ROAR, max_cost_paise=300.0))
+            inv.mode = 'replay'
+            run_audit(root, root / 'deletion_requests.csv', Path(tmp) / 'o.csv', Path(tmp) / 'run', gateway=intent,
+                      use_generative=False, investigator=InvestigatorConfig('m', max_rounds=0),
+                      investigator_gateway=inv)
+            self.assertEqual(inv.config.max_cost_paise, 180.0)
+
+
+class TransportResets(unittest.TestCase):
+    def test_a_connection_reset_is_a_bounded_transport_failure(self):
+        calls = []
+
+        class Reset(ReplayGateway):
+            mode = 'live'
+
+            def _post(self, path, body):
+                calls.append(1)
+                raise ConnectionResetError(104, 'Connection reset by peer')
+        gw = Reset(None, replace(ROAR, max_retries=1))
+        with unittest.mock.patch('ghostaudit.providers.time.sleep'), self.assertRaisesRegex(ProviderError, 'transport'):
+            gw.chat('r', 'm', [{'role': 'user', 'content': 'x'}], 'v', lambda p: None)
+        self.assertEqual((len(calls), gw._reserved, gw.usage[-1].status), (2, 0.0, 'error'))

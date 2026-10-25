@@ -173,6 +173,7 @@ class Investigator:
                     {'role': 'user', 'content': self._brief(case)}]
         start, seen, sent, candidate = len(self.gateway.usage), {}, set(), plan
         feedback_left = None                 # turns left in the current feedback round; None: routing
+        final_notice = False
         while not case.stop_reason:
             tokens, paise = self._case_usage(start)
             if feedback_left is None and case.rounds >= self.config.max_rounds:
@@ -185,6 +186,10 @@ class Investigator:
                     paise + self.gateway.config.chat_cost_reserve_paise > self.config.max_case_paise:
                 case.stop_reason = 'CASE_BUDGET'
                 break
+            if feedback_left is None and case.rounds == self.config.max_rounds - 1 and not final_notice:
+                final_notice = True                  # pacing only: limits and evidence rules are unchanged
+                messages.append({'role': 'user', 'content': 'This is your final turn. In this turn, propose every '
+                                 'fact the evidence you inspected supports, then call submit_case_file.'})
             try:
                 payload = self.gateway.chat('investigator', self.config.model, messages, self.version,
                                             lambda p: None, max_tokens=self.config.max_completion_tokens,

@@ -2031,3 +2031,24 @@ branch=claude/gracious-archimedes-1rba87
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T05:40:29Z] Live 32-sample Phase 4 experiment on Roar (A/B/B2); investigator made no change
+
+User Prompt (verbatim, secrets redacted):
+Dual-provider support is complete at e858907. Stop planning and move to REAL Phase 4 evaluation. [... controlled 32-case experiment with Roar jev and the gpt-oss-20b investigator: A with the investigator off, B with it live; reuse the Jev cache; no generative fallback and no substituted screenshot model; separate outputs; run budget at most Rs 15; reuse the probe; compare A, B and the historical C; report per-configuration metrics and case-by-case changes; check the fallback-validation and shared-ceiling details; make only evidence-supported targeted improvements; do not weaken rules; commit and push; no 518 run.]
+[interruption] use gemini 2.5 flash
+
+Agent Response Summary:
+A (Roar jev, investigator off): 28/32 statuses, 1/32 exact, 141/142 precision, 141/193 recall, 10 paise estimated. B (gpt-oss-20b investigator live): 15 routed and 15 investigated, 0 accepted (14 round limit, 1 model error), predictions identical to A, about Rs 3.5 estimated. B2 added batching guidance and a final-turn notice and was still identical (13 round limit, 1 submission with no supported action). Root cause: gpt-oss-20b makes one tool call per turn and does not submit. Fixed a crash on connection reset (now a bounded transport failure), made the run ceiling shared across separate gateways, and made gap analysis provider-aware. A closing-tool restriction was tried and reverted (it turns exploration into model errors). For gemini-2.5-flash: Roar does not list it; the TokenBazaar key is now set, but one probe returned HTTP 503 with nothing billed. Total about Rs 7.2 estimated; actual Roar billing is unreported.
+
+Actions:
+* Live audit runs A, B, B2 (32 samples); one TokenBazaar probe (503); score, errors
+* Edited ghostaudit/audit.py, providers.py, investigator.py, prompts/investigator_v1.md, evaluation/gap_analysis.py; tests in tests/test_providers_dual.py; added runs/phase4-roar-32/
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=claude/gracious-archimedes-1rba87
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none

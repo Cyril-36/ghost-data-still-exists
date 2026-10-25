@@ -28,6 +28,7 @@ Rules enforced here:
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import math
 import os
@@ -560,7 +561,7 @@ class Gateway:
                                              error=error), reserve)
                     raise ProviderError(error) from exc
                 wait = retry_delay(exc.headers.get('Retry-After') if exc.headers else None, detail)
-            except (urllib.error.URLError, TimeoutError) as exc:
+            except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException) as exc:
                 if retries >= self.config.max_retries:
                     self._record(UsageRecord(role, endpoint, requested_model, None, self.mode, 'error',
                                              time.time() - started, retries=retries, fingerprint=fp,
