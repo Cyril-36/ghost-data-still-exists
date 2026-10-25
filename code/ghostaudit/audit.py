@@ -28,7 +28,7 @@ from .corpus import build_corpus
 from .identity import IdentityIndex
 from .intent_models import decide_intents
 from .inputs import load_context, load_requests
-from .output import write_output
+from .output import read_output, write_output
 from .investigator import Investigator, InvestigatorConfig, route_reasons
 from .planner import VIOLATED, CasePlan, plan_case, withhold
 from .policy import Policy
@@ -95,6 +95,15 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
                 'coverage.json', 'usage.jsonl', 'run_manifest.json', 'model_cache'}
     if output.is_relative_to(run_dir) and output.relative_to(run_dir).parts[0] in reserved:
         raise ContractError('output conflicts with a run diagnostic')
+    if output.suffix.lower() != '.csv':
+        raise ContractError('output destination must be a CSV prediction file')
+    if output.exists():
+        if not output.is_file():
+            raise ContractError('output destination must be a regular prediction file')
+        try:
+            read_output(output)
+        except (ContractError, UnicodeError, OSError) as exc:
+            raise ContractError('refusing to replace an existing file that is not a prediction CSV') from exc
     if run_dir.exists() and (not run_dir.is_dir() or any(run_dir.iterdir())):
         raise ContractError('run directory is not empty; use a fresh path to preserve previous run artifacts')
     context = load_context(dataset)

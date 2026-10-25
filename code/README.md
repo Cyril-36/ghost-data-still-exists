@@ -84,6 +84,9 @@ rounds, and the stop reason. `case_plans.jsonl` gains `routing`, `verifier` and 
 
 Use a fresh `--run-dir` for every audit. Nonempty directories and paths that could overwrite
 dataset files, requests or diagnostics are rejected. Existing results remain available for validation.
+The output destination must end in `.csv`. An existing destination must already parse as a
+prediction CSV; unrelated files are refused before inference. Fresh CSV paths and deliberate
+replacement of the final `output.csv` remain supported.
 
 `--intent offline|jev|staged` selects the intent mode. `--budget-paise` bounds admitted
 spending against one shared reservation ledger. Reservations use catalog estimates when available

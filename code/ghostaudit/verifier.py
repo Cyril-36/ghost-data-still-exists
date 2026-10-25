@@ -223,6 +223,11 @@ class Verifier:
         self._check_coverage(plan, owned, steps_by_resource, extra, cutoff, case, add)
         return out
 
+    def _absence_scopes(self, step, obs, cutoff, subject_tokens):
+        categories = self._categories(step.system_id, [o for o in obs if eligible(o, cutoff)], cutoff)
+        return [s for s in self.corpus.scopes if s.system_id == step.system_id and s.category in categories
+                and eligible(s, cutoff) and step.resource_id not in s.members and self.corpus.covers(s, subject_tokens)]
+
     def _check_citation(self, step, obs, cutoff, add):
         ref = self.context.evidence.get(step.evidence_id)
         if ref is None or ref.available_at > cutoff:
@@ -233,8 +238,8 @@ class Verifier:
         here = [o for o in obs if o.source_id == step.evidence_id and o.system_id == step.system_id and o.kind == STATE]
         support = [o for o in here if test(o)]
         if not support and step.operation == 'VERIFY_RECORD_ABSENT':
-            support = [s for s in self.corpus.scopes if s.source_id == step.evidence_id and s.system_id == step.system_id
-                       and eligible(s, cutoff) and step.resource_id not in s.members and self.corpus.covers(s, frozenset())]
+            support = [s for s in self._absence_scopes(step, obs, cutoff, frozenset())
+                       if s.source_id == step.evidence_id]
         if not support:
             add('UNSUPPORTED_CITATION', 'BLOCKING', f'{step.evidence_id} does not show {step.operation} for '
                 f'{step.resource_id}', step.system_id, step.resource_id, step.evidence_id)
@@ -259,9 +264,8 @@ class Verifier:
         observations or omission from an exhaustive listing that covers the subject, must agree."""
         events = [(o.observed_at, o.location, o.presence, o.source_id) for o in obs
                   if o.kind == STATE and o.system_id == step.system_id and o.presence]
-        events += [(s.observed_at, s.location, ABSENT, s.source_id) for s in self.corpus.scopes
-                   if s.system_id == step.system_id and eligible(s, cutoff) and step.resource_id not in s.members
-                   and self.corpus.covers(s, subject.tokens)]
+        events += [(s.observed_at, s.location, ABSENT, s.source_id)
+                   for s in self._absence_scopes(step, obs, cutoff, subject.tokens)]
         latest = {}
         for event in sorted(events, key=lambda e: (e[0], e[2] == PRESENT)):   # ties: presence wins
             latest[event[1]] = event
@@ -273,8 +277,7 @@ class Verifier:
 
     def _check_treatment_copies(self, step, obs, cutoff, subject, add):
         states = [o for o in obs if o.kind == STATE and o.system_id == step.system_id]
-        omitted = [(s.location, s.observed_at) for s in self.corpus.scopes if s.system_id == step.system_id
-                   and eligible(s, cutoff) and step.resource_id not in s.members and self.corpus.covers(s, subject.tokens)]
+        omitted = [(s.location, s.observed_at) for s in self._absence_scopes(step, obs, cutoff, subject.tokens)]
         for location in {o.location for o in states}:
             local = [o for o in states if o.location == location]
             presence = [(o.observed_at, o.presence) for o in local if o.presence]
