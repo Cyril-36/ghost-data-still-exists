@@ -651,3 +651,31 @@ and 0 paise:
 
 The root `output.csv` and `runs/` are unchanged. Live staged sample and scope-aware benchmark
 measurements stay **PENDING**: the decision and chat endpoints return HTTP 503.
+
+# Review of 7de8e4d (targeted fixes)
+
+Regression tests: `tests/test_review_7de8e4d.py` (6 tests). With the fixes reverted, the planner tests
+fail (2 of 2) and the provider tests fail (4 of 4, in 18 subtests).
+
+## D064 — Exact target identifiers; strict tool JSON and schemas; validators settle reserves
+
+- Item targets match identifier tokens exactly. `planner.id_tokens` collects the request's
+  `[A-Za-z0-9][A-Za-z0-9_.:-]*` tokens, without emails, so one ID never matches a longer ID it
+  prefixes. Suppose the request names an ID-shaped token (it contains `_` and a digit) that is neither
+  a linked candidate nor a subject identifier. Then, unless the whole category was asked for, the case
+  stays UNRESOLVED (SCOPE_TARGET_UNGROUNDED), and the sole linked record is no longer substituted. No
+  supplied request contains such a token, so outputs are unchanged.
+- Tool-call arguments are parsed by `strict_json`. It rejects NaN, Infinity, numbers that overflow to
+  infinity, duplicate keys at any depth, and nesting deep enough to cause a recursion error.
+- Developer tool schemas are checked by `schema_definition_problem` before any reservation or network
+  call. Only the enforced subset is allowed: type, enum, properties, required (which must name
+  declared properties), boolean additionalProperties, and items, plus the annotations description and
+  title. The top level must be an object schema. Any other keyword, such as pattern, anyOf or
+  minimum, is refused rather than silently left unchecked.
+- A validator or usage extractor that raises becomes an `invalid` usage record. For a live response,
+  the reservation is released and charged in the same critical section, as in D059. For a cache hit,
+  the entry is discarded and the call is asked again. Before this fix, the exception escaped with the
+  reserve still held.
+
+Measured, offline with 0 network calls: the 13 fixtures, the full offline run and the zero-budget
+staged run are byte-identical to 7de8e4d, and the same cache keys are requested.

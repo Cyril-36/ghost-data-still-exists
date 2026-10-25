@@ -19,13 +19,14 @@ Status rules (plan sections 4.3, 16.2, 17):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from datetime import datetime, timezone
 
 from .contracts import OutputRow, Request, Step
 from .corpus import Corpus
 from .identity import IdentityIndex, SubjectIdentity, resolve_subject
 from .intent import ACCOUNT, DELETE, ITEM, NON_DELETION, Intent, classify
-from .observations import ABSENT, LINK, PRESENT, STATE, Observation
+from .observations import ABSENT, EMAIL_IN_TEXT, LINK, PRESENT, STATE, Observation
 from .output import canonical_steps
 from .policy import Policy, PolicyError
 from .state import ResourceState, reconstruct
@@ -278,6 +279,18 @@ def profile_obligation(subject, corpus, cutoff) -> Obligation:
 
 # --- case plan ---------------------------------------------------------------------------------
 
+_ID_TOKEN = re.compile(r'[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?')
+
+
+def id_tokens(text: str) -> frozenset:
+    """Exact identifier tokens of a request (emails removed), so an ID never matches a longer ID it prefixes."""
+    return frozenset(_ID_TOKEN.findall(EMAIL_IN_TEXT.sub(' ', text)))
+
+
+def _id_shaped(token: str) -> bool:
+    return '_' in token and any(ch.isdigit() for ch in token)
+
+
 def plan_case(request: Request, corpus: Corpus, policy: Policy, index: IdentityIndex,
               intent: Intent | None = None) -> CasePlan:
     """`intent` comes from the staged intent layer; without it the offline classifier is used."""
@@ -302,14 +315,17 @@ def plan_case(request: Request, corpus: Corpus, policy: Policy, index: IdentityI
     states = {key: reconstruct(corpus, *key, cutoff, plan.subject.tokens) for key in sorted(linked)}
     if item:
         candidates = [k for k, st in states.items() if plan.intent.target in st.categories]
-        named = [k for k in candidates if k[1] in request.request_text]
-        chosen = candidates if plan.intent.whole_category else (
+        tokens = id_tokens(request.request_text)
+        named = [k for k in candidates if k[1] in tokens]
+        ungrounded = sorted(t for t in tokens - {k[1] for k in candidates} - plan.subject.tokens if _id_shaped(t))
+        chosen = candidates if plan.intent.whole_category else [] if ungrounded else (
             named if len(named) == 1 else candidates if len(candidates) == 1 else [])
         plan.issues.append(f'SCOPE: {plan.intent.target} {"(all)" if plan.intent.whole_category else "(one)"}; '
                            f'{len(states) - len(chosen)} other linked record(s) not assessed')
         if not chosen:
             return _fallback(plan, f'SCOPE_TARGET_UNGROUNDED: {len(candidates)} linked {plan.intent.target} '
-                                   'record(s); the request does not identify which one')
+                                   'record(s); the request does not identify which one'
+                                   + (f'; it names {ungrounded}, not a linked record' if ungrounded else ''))
         states = {k: states[k] for k in chosen}
     for (system_id, resource_id), state in states.items():
         links = linked[(system_id, resource_id)]

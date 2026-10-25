@@ -135,6 +135,14 @@ def _http_error(endpoint, code, detail) -> str:
     return f'{endpoint} HTTP {code}' + (f' ({meaning})' if meaning else '') + (f': {detail}' if detail else '')
 
 
+def _checked(validate, payload) -> str | None:
+    """Run a response validator; an exception is a validation problem, not a crash."""
+    try:
+        return validate(payload)
+    except Exception as exc:
+        return f'validator raised {type(exc).__name__}'
+
+
 def _count(value) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
@@ -149,6 +157,60 @@ def cached_input_tokens(usage) -> int | None:
 
 
 _JSON_TYPES = {'string': str, 'boolean': bool, 'object': dict, 'array': list, 'null': type(None)}
+_SCHEMA_TYPES = frozenset(_JSON_TYPES) | {'integer', 'number'}
+_SCHEMA_KEYS = frozenset({'type', 'enum', 'properties', 'required', 'additionalProperties', 'items',
+                          'description', 'title'})
+
+
+def strict_json(text: str):
+    """json.loads that rejects NaN/Infinity, non-finite numbers (1e999) and duplicate object keys."""
+    def no_constant(name):
+        raise ValueError(f'unsupported JSON constant {name}')
+
+    def finite(raw):
+        value = float(raw)
+        if not math.isfinite(value):
+            raise ValueError(f'non-finite number {raw}')
+        return value
+
+    def unique(pairs):
+        keys = [k for k, _ in pairs]
+        if len(keys) != len(set(keys)):
+            raise ValueError('duplicate object key')
+        return dict(pairs)
+    return json.loads(text, parse_constant=no_constant, parse_float=finite, object_pairs_hook=unique)
+
+
+def schema_definition_problem(schema, where='parameters') -> str | None:
+    """A developer-supplied parameter schema must use only the subset `_schema_problem` enforces, so
+    nothing is silently unchecked: known keywords, known types, well-formed properties/required/items,
+    and `additionalProperties` as a boolean."""
+    if not isinstance(schema, dict):
+        return f'{where}: schema is not an object'
+    unknown = sorted(set(schema) - _SCHEMA_KEYS)
+    if unknown:
+        return f'{where}: unsupported schema keywords {unknown}'
+    types = schema.get('type')
+    types = [types] if isinstance(types, str) else types
+    if 'type' in schema and (not isinstance(types, list) or not types or not set(types) <= _SCHEMA_TYPES):
+        return f'{where}: unsupported type {schema.get("type")!r}'
+    if 'enum' in schema and not isinstance(schema['enum'], list):
+        return f'{where}: enum is not a list'
+    if 'additionalProperties' in schema and not isinstance(schema['additionalProperties'], bool):
+        return f'{where}: additionalProperties must be a boolean'
+    props = schema.get('properties', {})
+    if not isinstance(props, dict):
+        return f'{where}: properties is not an object'
+    required = schema.get('required', [])
+    if not isinstance(required, list) or not all(isinstance(k, str) and k in props for k in required):
+        return f'{where}: required must list declared properties'
+    for name, sub in props.items():
+        problem = schema_definition_problem(sub, f'{where}.{name}')
+        if problem:
+            return problem
+    if 'items' in schema:
+        return schema_definition_problem(schema['items'], f'{where}[]')
+    return None
 
 
 def _schema_problem(value, schema, where) -> str | None:
@@ -198,7 +260,11 @@ def _tool_specs(tools, tool_choice):
         fn = tool.get('function') if isinstance(tool, dict) and tool.get('type') == 'function' else None
         if not isinstance(fn, dict) or not isinstance(fn.get('name'), str) or not fn['name'] or fn['name'] in specs:
             return {}, None, 'malformed tool definition'
-        specs[fn['name']] = fn.get('parameters') or {'type': 'object', 'properties': {}}
+        params = fn.get('parameters', {'type': 'object', 'properties': {}})
+        problem = schema_definition_problem(params, f'{fn["name"]}.parameters')
+        if problem or params.get('type') != 'object':
+            return {}, None, problem or f'{fn["name"]}.parameters: top-level type must be object'
+        specs[fn['name']] = params
     if not specs:
         return {}, None, 'no tool definitions'
     forced = None
@@ -247,9 +313,9 @@ def tool_call_problem(payload, tools, tool_choice=None) -> str | None:
             if not isinstance(fn.get('arguments'), str):
                 return f'{name}: arguments are not a JSON string'
             try:
-                args = json.loads(fn['arguments'])
-            except ValueError:
-                return f'{name}: arguments are not valid JSON'
+                args = strict_json(fn['arguments'])
+            except (ValueError, RecursionError):
+                return f'{name}: arguments are not strict JSON'
             if not isinstance(args, dict):
                 return f'{name}: arguments are not a JSON object'
             problem = _schema_problem(args, specs[name], name)
@@ -355,7 +421,7 @@ class Gateway:
         cached = self._cache_get(fp)
         if cached is not None:
             problem = ('cache entry metadata mismatch' if cached.get('requested_model') != requested_model
-                       or not isinstance(cached.get('response'), dict) else validate(cached['response']))
+                       or not isinstance(cached.get('response'), dict) else _checked(validate, cached['response']))
             self._record(UsageRecord(role, endpoint, requested_model, cached.get('returned_model'), 'cache',
                                      'invalid' if problem else 'ok', fingerprint=fp, error=problem or ''))
             if not problem:
@@ -365,9 +431,13 @@ class Gateway:
         self._reserve(reserve)
         payload, cost, retries, latency = self._send(role, endpoint, requested_model, body, fp, reserve)
         rec = UsageRecord(role, endpoint, requested_model, payload.get('model'), self.mode, 'ok', latency,
-                          retries=retries, request_id=payload.get('id'), cost_paise_header=cost, fingerprint=fp,
-                          **extract_usage(payload))
-        problem = validate(payload)
+                          retries=retries, request_id=payload.get('id'), cost_paise_header=cost, fingerprint=fp)
+        try:                                       # a raising extractor or validator still settles the reserve
+            for k, v in extract_usage(payload).items():
+                setattr(rec, k, v)
+            problem = _checked(validate, payload)
+        except Exception as exc:
+            problem = f'usage extraction raised {type(exc).__name__}'
         if problem:
             rec.status, rec.error = 'invalid', problem
             self._record(rec, reserve)

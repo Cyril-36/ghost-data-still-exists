@@ -46,7 +46,7 @@ python3 code/evaluation/main.py gaps ...            # missed-step attribution
 python3 code/evaluation/main.py fixtures --out .runs/fixtures
 python3 code/evaluation/main.py intent-benchmark --env-file .env --out .runs/intent   # live, bounded
 
-python3 -m unittest discover -s code/tests      # 168 tests, offline (replay doubles, loopback servers)
+python3 -m unittest discover -s code/tests      # 174 tests, offline (replay doubles, loopback servers)
 ```
 
 `--intent offline|jev|staged` selects the intent mode. `--budget-paise` is a hard
