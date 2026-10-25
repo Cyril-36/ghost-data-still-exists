@@ -13,6 +13,8 @@ from phase4_world import EMAIL, OTHER, T_CAPTURE, world
 AUDIT = (T_CAPTURE, 'security_service', 'fx_audit_P', 'SECURITY_AUDIT_LOG', 'FOUND', EMAIL)
 ATTACH = (T_CAPTURE, 'support_platform', 'fx_attach_L', 'SUPPORT_ATTACHMENT', 'FOUND', EMAIL)
 FOREIGN = (T_CAPTURE, 'security_service', 'fx_audit_Q', 'SECURITY_AUDIT_LOG', 'FOUND', OTHER)
+GONE = (T_CAPTURE, 'security_service', 'fx_audit_N', 'SECURITY_AUDIT_LOG', 'NOT_FOUND', EMAIL)
+UNTYPED = (T_CAPTURE, 'ledger_service', 'fx_misc_P', '', 'FOUND', EMAIL)
 
 
 def undecided(*keys, reason='No retention or hold period is supplied for this audit log.'):
@@ -65,13 +67,15 @@ class DisclosedUnresolvedRecords(unittest.TestCase):
                 self.assertEqual((summary['fallback_count'], row.steps), (1, ()))
 
     def test_disclosure_cannot_skip_a_decidable_foreign_stepped_or_unseen_record(self):
-        root = world(self.actor.base / 'mixed', lookup_rows=[AUDIT, ATTACH, FOREIGN])
+        root = world(self.actor.base / 'mixed', lookup_rows=[AUDIT, ATTACH, FOREIGN, GONE, UNTYPED])
         audit = ('security_service', 'fx_audit_P')
         cases = {'decidable': ([audit, ('support_platform', 'fx_attach_L')], 'DISCLOSURE_UNSUPPORTED'),
                  'foreign': ([audit, ('security_service', 'fx_audit_Q')], 'DISCLOSURE_UNSUPPORTED'),
                  'stepped': ([audit], 'DISCLOSURE_UNSUPPORTED'),
                  'unseen': ([audit, ('security_service', 'fx_audit_Z')], 'INVENTED_RESOURCE'),
-                 'repeated': ([audit, audit], 'DISCLOSURE_UNSUPPORTED')}
+                 'repeated': ([audit, audit], 'DISCLOSURE_UNSUPPORTED'),
+                 'lookup_only': ([audit, ('security_service', 'fx_audit_N')], 'DISCLOSURE_UNSUPPORTED'),
+                 'untyped': ([audit, ('ledger_service', 'fx_misc_P')], 'DISCLOSURE_UNSUPPORTED')}
         for name, (keys, code) in cases.items():
             with self.subTest(name):
                 p = scripted.proposal(root, 'fx_account_P', 'fx_file_L')

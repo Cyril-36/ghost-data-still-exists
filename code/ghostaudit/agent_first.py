@@ -286,12 +286,16 @@ class ProposalVerifier:
                 reject('DISCLOSURE_UNSUPPORTED', f'{key[0]}/{key[1]} has steps; a record is either planned '
                        'or left unresolved, not both.')
                 continue
-            if not subject.resolved or key not in owned:
-                reject('DISCLOSURE_UNSUPPORTED', f'No eligible evidence ties {key[1]} to the subject in '
-                       f'{key[0]}; an unrelated record needs no disclosure.')
+            if not subject.resolved or owned.get(key) not in ('direct', 'reference'):
+                reject('DISCLOSURE_UNSUPPORTED', f'No eligible evidence links {key[1]} to the subject in '
+                       f'{key[0]} (not-found lookups are not a link); an unlinked record needs no disclosure.')
                 continue
             categories, problems = self._policy_problems(*key, plan.request.audit_at, extra)
-            if categories and not problems:
+            if not categories:
+                reject('DISCLOSURE_UNSUPPORTED', f'No eligible evidence says what {key[1]} is; that is missing '
+                       'evidence to retrieve, not an undecidable policy.')
+                continue
+            if not problems:
                 reject('DISCLOSURE_UNSUPPORTED', f'The supplied policy decides {key[0]}/{key[1]} '
                        f'({", ".join(sorted(categories))}); plan its steps instead.')
                 continue
