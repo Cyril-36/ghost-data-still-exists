@@ -1970,3 +1970,23 @@ branch=claude/gracious-archimedes-1rba87
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T05:01:16Z] API key check: key not in environment; chat and Jev endpoints return HTTP 503
+
+User Prompt (verbatim, secrets redacted):
+CHECK the api key is it working
+[then, after interrupting:] use jev
+
+Agent Response Summary:
+TOKENBAZAAR_API_KEY is still not set in this session; only variable names were checked, and no .env exists. The network policy now allows tokenbazaar.in: the free /v1/models catalog returns HTTP 200 with 163 entries. One minimal 1-token chat request (google/gemini-2.5-flash-lite) and one minimal Jev /decisions request (typesafe/jev-latest, a single yes/no question) both returned HTTP 503 "TokenBazaar service is temporarily unavailable", with no cost header and nothing billed. Because the service is down, it cannot be established whether a key would be accepted. Paid probing stopped; no live accuracy is claimed.
+
+Actions:
+* Checked env var names; GET /v1/models; one POST /chat/completions and one POST /decisions (both 503)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=claude/gracious-archimedes-1rba87
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none
