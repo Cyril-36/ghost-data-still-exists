@@ -1,23 +1,37 @@
 """SYNTHETIC multilingual intent evaluation set (team-written; not used in any prompt).
 
-Twelve scenario types in each of six languages. `expected` is the final authorization
-decision the system should reach; `label` is the intended Jev category. Contradictory
-or hypothetical requests must stay UNRESOLVED: authorizing deletion there is unsafe.
+Thirteen scenario types in each of six languages. `expected` is the final authorization
+the system should reach, including its scope: 'DELETE/ACCOUNT', 'DELETE/ITEM/<category>',
+'NON_DELETION' or 'UNRESOLVED' ('|' separates acceptable alternatives); `label` is the intended Jev category. Contradictory or
+hypothetical requests must stay UNRESOLVED, and a one-item request must never become an
+account deletion: both are unsafe. M_item_keep_account was added after the audit of
+e0aaef4 and is listed last so the earlier cases keep their cached batch composition.
 """
 
+ACCOUNT, ITEM = 'DELETE/ACCOUNT', 'DELETE/ITEM/'
 SCENARIOS = {
-    'A_delete_account': ('DELETE', 'DELETE_ACCOUNT'),
-    'B_verify_prior': ('DELETE', 'VERIFY_PRIOR_DELETION'),
-    'C_scoped_item': ('DELETE', 'SCOPED_DELETION'),
+    'A_delete_account': (ACCOUNT, 'DELETE_ACCOUNT'),
+    'B_verify_prior': (ACCOUNT, 'VERIFY_PRIOR_DELETION'),
+    # "My account was closed, but item X remains: delete it" refers to an account deletion the
+    # person already requested: the account scope is authorized (the supplied sample labels
+    # verify the account in such cases) and the narrower item scope is also safe.
+    'C_scoped_item': (ACCOUNT + '|' + ITEM, 'SCOPED_DELETION'),   # target per language: ITEM_TARGETS
     'D_marketing_only': ('NON_DELETION', 'NON_DELETION'),
     'E_export_keep': ('NON_DELETION', 'NON_DELETION'),
     'F_correction': ('NON_DELETION', 'NON_DELETION'),
     'G_login_keep': ('NON_DELETION', 'NON_DELETION'),
-    'H_double_negative_delete': ('DELETE', 'DELETE_ACCOUNT'),
+    'H_double_negative_delete': (ACCOUNT, 'DELETE_ACCOUNT'),
     'I_double_negative_keep': ('NON_DELETION', 'NON_DELETION'),
     'J_hypothetical': ('UNRESOLVED', 'AMBIGUOUS'),
     'K_contradictory': ('UNRESOLVED', 'AMBIGUOUS'),
-    'L_delete_with_legal_retention': ('DELETE', 'DELETE_ACCOUNT'),
+    'L_delete_with_legal_retention': (ACCOUNT, 'DELETE_ACCOUNT'),
+    'M_item_keep_account': (ITEM, 'SCOPED_DELETION'),
+}
+ITEM_TARGETS = {
+    'C_scoped_item': {'en': 'USER_EXPORT', 'es': 'USER_EXPORT', 'pt': 'SEARCH_INDEX_ENTRY', 'fr': 'SUPPORT_ATTACHMENT',
+                      'ko': 'USER_EXPORT', 'ja': 'SUPPORT_ATTACHMENT'},
+    'M_item_keep_account': {'en': 'USER_EXPORT', 'es': 'SUPPORT_ATTACHMENT', 'pt': 'SEARCH_INDEX_ENTRY',
+                            'fr': 'USER_EXPORT', 'ko': 'SUPPORT_ATTACHMENT', 'ja': 'SEARCH_INDEX_ENTRY'},
 }
 
 TEXTS = {
@@ -108,11 +122,24 @@ TEXTS = {
 }
 
 
+ITEM_KEEP_ACCOUNT = {
+    'en': "Please delete the export file of my data you generated last week, but keep my account open. I still shop here.",
+    'es': "Borren, por favor, el archivo adjunto que envié al soporte, pero no cierren mi cuenta; la sigo usando.",
+    'pt': "Removam o resultado de busca que mostra meu perfil antigo, mas mantenham minha conta ativa.",
+    'fr': "Supprimez l'export de mes données que vous avez généré, mais gardez mon compte ouvert, je l'utilise encore.",
+    'ko': "지원팀에 보낸 첨부 파일만 삭제해 주세요. 계정은 계속 사용할 거라 유지해 주세요.",
+    'ja': "検索結果に出てくる古いプロフィールの表示だけ削除してください。アカウントはこのまま使い続けます。",
+}
+
+
 def cases():
-    """[(case_key, language, scenario, text, expected_decision, expected_label)]"""
+    """[(case_key, language, scenario, text, expected, expected_label)]"""
     out = []
-    for lang, texts in TEXTS.items():
-        for scenario, text in texts.items():
-            expected, label = SCENARIOS[scenario]
-            out.append((f'{lang}:{scenario}', lang, scenario, text, expected, label))
+    rows = [(lang, scenario, text) for lang, texts in TEXTS.items() for scenario, text in texts.items()]
+    rows += [(lang, 'M_item_keep_account', text) for lang, text in ITEM_KEEP_ACCOUNT.items()]
+    for lang, scenario, text in rows:
+        expected, label = SCENARIOS[scenario]
+        if expected.endswith(ITEM):
+            expected += ITEM_TARGETS[scenario][lang]
+        out.append((f'{lang}:{scenario}', lang, scenario, text, expected, label))
     return out

@@ -5,6 +5,33 @@ is **PROVISIONAL**. Every number below was measured on the commit that contains
 this file. Run artifacts are in `runs/phase3-provisional/`, and benchmark artifacts
 are in `runs/phase3-provisional/benchmarks/`.
 
+## Correctness-hardening pass (audit of e0aaef4)
+
+Fixes for the independent audit's findings are recorded in `decisions.md` D044–D057. Regression tests are in
+`tests/test_hardening_regressions.py`: 19 tests, all failing on e0aaef4 and passing now.
+
+| Measurement | e0aaef4 baseline | Hardened |
+|---|---|---|
+| Full 518 rows | 95 / 413 / 10, 61 fallbacks | **byte-identical** (`output.csv` SHA-256 `968454758d71…`) |
+| Sample, offline mode | 27/32 status, 134/135 precision, 134/193 recall, 2/32 exact | **byte-identical predictions** |
+| Sample, staged mode | 28/32, 142/143, 142/193, 2/32 exact (reproduced from cache) | **PENDING**: needs 2 live Jev target calls (cases 06, 08); gateway HTTP 503 at commit time |
+| Intent benchmark (78 cases, scope-aware) | v2: 72/72 on decision labels only | **PENDING**: needs live calls for the 6 new keep-account cases and target questions |
+| Unit tests | 130 | 147 (Python 3.11–3.14), ruff clean |
+
+Why the full output does not change:
+- No full-set request is item-scoped. Jev answers reconcile to 508 ACCOUNT and 10 NON_DELETION.
+- No linked record has evidence naming another known person.
+- No SQL snapshot has conflicting times.
+- Each PDF names a single record.
+- Media enrichment was established before every affected cutoff.
+- Every profile listing row carries an identifier.
+
+The fixes are guards against failure scenarios the data does not currently contain. Each is exercised by its regression test.
+
+Sample cases 06 and 08 are now item-scoped. Jev's account-wide probability for them is 0.54 and 0.48, below the 0.60 needed for account scope. They need the target answer, and until then they fail closed: the disclosed fallback has no steps.
+
+Gap analysis now rebuilds the audited run's own evidence, including media from cached responses. On the offline and cached staged sample runs it still finds 0 eligible ownership links missed by the engine.
+
 ## Data roles and leakage limits
 
 - **`sample_output.csv` (32 labeled cases):** evaluation only. All 32 were inspected in earlier phases, so sample scores are development measurements. Rules discovered from samples are flagged `[sample-informed]` in `decisions.md`; in Phase 3 that is D038, family probability.

@@ -9,7 +9,9 @@ fallback), PDF document kind (Jev), and blind literal screenshot reading (vision
 Final status, evidence validation and CSV construction are deterministic.
 
 The root `output.csv` (518 rows) is **provisional**. Its run diagnostics are in
-`runs/phase3-provisional/`, and `validate --run-dir` re-checks the hash binding.
+`runs/phase3-hardened/` (produced by the hardened code; byte-identical to the earlier
+provisional output kept with its run in `runs/phase3-provisional/` as the comparison
+baseline), and `validate --run-dir` re-checks the hash binding.
 
 ## Setup
 
@@ -30,11 +32,11 @@ python3 code/main.py audit --requests dataset/sample_deletion_requests.csv \
 
 # Staged (Jev typed intent -> generative fallback; PDF kind; blind screenshot reader), hard spend ceiling
 python3 code/main.py audit --requests dataset/deletion_requests.csv --output output.csv \
-    --run-dir runs/phase3-provisional --intent staged --env-file .env --budget-paise 1500
+    --run-dir runs/phase3-hardened --intent staged --env-file .env --budget-paise 1500
 
 # Validate structure, case set, order, citation existence and eligibility, and disclosed fallbacks
 python3 code/main.py validate --requests dataset/deletion_requests.csv \
-    --predictions output.csv --run-dir runs/phase3-provisional
+    --predictions output.csv --run-dir runs/phase3-hardened
 
 # Evaluation (labels are read here only)
 python3 code/evaluation/main.py score --requests dataset/sample_deletion_requests.csv --dataset dataset \
@@ -44,13 +46,15 @@ python3 code/evaluation/main.py gaps ...            # missed-step attribution
 python3 code/evaluation/main.py fixtures --out .runs/fixtures
 python3 code/evaluation/main.py intent-benchmark --env-file .env --out .runs/intent   # live, bounded
 
-python3 -m unittest discover -s code/tests      # 130 tests, offline (replay doubles)
+python3 -m unittest discover -s code/tests      # 147 tests, offline (replay doubles, loopback servers)
 ```
 
 `--intent offline|jev|staged` selects the intent mode. `--budget-paise` is a hard
-spend ceiling checked before every call. Validated model responses are cached
-under `.cache/ghostaudit/` (gitignored), keyed by endpoint, requested model, prompt
-hash and input. A rerun with a warm cache makes 0 network calls, and the manifest
+spend ceiling: every call reserves a worst-case cost before it is sent (25 paise per
+decision, 120 per chat call), so concurrent calls cannot overrun it. Gateway calls never
+follow redirects, so the bearer token cannot reach another origin. Validated model
+responses are cached under `.cache/ghostaudit/` (gitignored), keyed by endpoint,
+requested model, prompt hash and input, and re-validated on every read. A rerun with a warm cache makes 0 network calls, and the manifest
 records `model_calls` and `model_cache_hits`.
 
 Each run directory contains:
@@ -64,8 +68,10 @@ Each run directory contains:
 ## Pipeline
 
 ```
-request ─► deterministic check ─► Jev (choice + 3 yes/no) ─► reconcile ─► DELETE | NOT_APPLICABLE | UNRESOLVED
+request ─► deterministic check ─► Jev (choice + 3 yes/no) ─► reconcile ─► DELETE(ACCOUNT | ITEM) | NOT_APPLICABLE | UNRESOLVED
+                                           ├─ conflict flagged by Jev ─► UNRESOLVED (never escalated)
                                            └─ uncertain/disagreeing ─► generative (verbatim spans) ─┘
+                                   ITEM ─► Jev target choice (one data category) ─► only that category is planned
 evidence ─► parsers (JSON, SQL, logs, text, activity, PDF text) ─► observations + explicit scopes
          └► media: PDF kind (Jev) / screenshot blind reader ─► validated literal facts ─► observations
 identity (validity + availability) ─► discovery (catalog links, multi-hop relationship edges)
@@ -75,7 +81,7 @@ state at audit_at per copy ─► policy (supplied conditions only) ─► oblig
 | Layer | Decides | Never decides |
 |---|---|---|
 | Deterministic | parsing, identity, cutoff, state, policy, obligations, status, steps, citations, CSV | — |
-| Jev (`typesafe/jev-latest`) | intent category and preserve/marketing/conflict flags; PDF document kind | IDs, dates, facts, status |
+| Jev (`typesafe/jev-latest`) | intent category and preserve/marketing/conflict flags; the one data category of an item-scoped deletion; PDF document kind | IDs, dates, facts, status |
 | Generative (`google/gemini-2.5-flash`) | intent only when Jev is uncertain or disagrees (spans must be verbatim) | status, evidence |
 | Vision (same model ID) | literal text on screenshots, read blind | flags, states, status, steps |
 
@@ -95,7 +101,11 @@ The defaults are strict. Relaxations exist only as recorded experiments
 
 **Working (tested):**
 - All 79 structured sources parse, and all 15 media files are interpreted.
-- Six correctness fixes have regression tests that fail on the Phase 2 code.
+- Six Phase 2 correctness fixes and the independent audit's hardening fixes have regression
+  tests that fail on the code they fixed (`test_phase3_regressions.py`,
+  `test_hardening_regressions.py`).
+- A deletion request carries its authorization scope: a request to delete one item never
+  authorizes the account or other records.
 - Multilingual intent scored 72/72 on a separately written six-language set and 32/32 on the samples, with no unsafe authorizations.
 - Disclosed fallbacks are bound to the output hash.
 - Outputs are byte-identical across hash seeds.

@@ -425,3 +425,127 @@ Root `output.csv` (518 rows) is produced by the strict default configuration wit
 and media, from cached validated responses; its diagnostics, disclosures, code/prompt
 fingerprints and inference modes are in `runs/phase3-provisional/` and `validate --run-dir`
 re-checks the CSV hash binding. Labelled PROVISIONAL in the manifest.
+
+---
+
+# Correctness-hardening pass (independent audit of e0aaef4)
+
+Regression tests: `tests/test_hardening_regressions.py` (19 tests, all fail on e0aaef4).
+Full 518-row output: byte-identical to the e0aaef4 provisional output (measured).
+
+## D044 — Deletion authorization carries its scope (audit P0-A)
+
+`Intent.scope` is `ACCOUNT` or `ITEM`; an ITEM deletion also carries `target`, one supplied
+data category. Reconciliation: deletion vs not is still decided by the family probability
+(D038); ACCOUNT scope additionally needs P(DELETE_ACCOUNT)+P(VERIFY_PRIOR_DELETION) >= 0.60
+and a non-SCOPED label, otherwise the deletion is ITEM-scoped (never widened). An ITEM deletion
+needs a bounded Jev choice among deletable categories (`prompts/intent_target_jev_v1.json`,
+asked only for ITEM outcomes); a target below 0.60 or `SEVERAL_OR_UNCLEAR` leaves the request
+UNRESOLVED. The planner assesses only linked records of the target category, never the
+account profile; a DELETE without an established scope is refused. Offline, a deletion that
+names a specific item without asking for the account or the person's records (or referring
+to an account deletion already requested) is UNRESOLVED.
+[sample-informed] "My account was closed, but item X remains — delete it" refers to an account
+deletion the person already requested; the supplied labels verify the account in such cases,
+so ACCOUNT scope is authorized there and the narrower ITEM scope is also safe. The benchmark
+accepts both for that scenario and requires ITEM for "delete X, keep my account".
+Rejected: adding the target question to the cached intent prompt (would re-buy all 518 intent
+answers for a question that only ITEM requests need); treating every scoped request as
+unresolved (discards grounded item requests).
+Measured: no full-set request is ITEM-scoped (508 ACCOUNT, 10 NON_DELETION, unchanged).
+
+## D045 — A conflict Jev detected is never escalated (audit P0-D)
+
+`material_concern`: conflicting_instructions yes; marketing_only yes on any non-NON_DELETION
+label; preserve_account yes on an account-scoped or ambiguous label. Such requests stay
+UNRESOLVED without a generative call. When a request is escalated for another reason
+(low probability, deterministic disagreement), a generative ACCOUNT authorization is rejected
+if Jev said the account must be kept. Rejected: asking the generative model to "explain" the
+conflict away — its output would still be a model claim against a detected contradiction.
+
+## D046 — Authenticated requests never follow redirects (audit P0-B)
+
+Reproduced: urllib forwarded `Authorization` to a different origin on a 302. All gateway
+calls use an opener whose redirect handler refuses every redirect (the API does not redirect;
+a POST redirect would be converted to GET anyway). Test: local origin + foreign server.
+
+## D047 — PDF facts bind to their own record section (audit P0-C)
+
+A harvested identifier or retention date belongs to the record ID whose mention most closely
+precedes it on the same page; facts before any mention belong to the document's record only
+when the document names exactly one. A section naming more than one user reference binds no
+identity. Measured: each supplied PDF names one record, so no current observation changed.
+
+## D048 — Media enrichment is available only once it was established (audit P1-2)
+
+A screenshot/PDF observation enriched from structured evidence (system, category, catalog
+label) is available from the earliest time at which that evidence already gave the same
+answer (`media._settled_at`), never earlier than the capture. Measured: 3 media observations
+depend on catalog links logged 7 minutes after capture and are delayed accordingly; output
+unchanged. Rejected: the latest time of every consulted source (first implementation) — it
+dropped four full-set screenshot findings whose system was already established before the
+cutoff and merely re-confirmed later; enrichment only from sources available at capture —
+discards those same-session links.
+
+## D049 — Cross-person guard on every ownership link (audit P1-3)
+
+A record whose own eligible state evidence names another known person is never attributed to
+the subject, whether reached directly or by traversal (the multi-hop guard of D033 now applies
+to direct links). A NOT_FOUND exact lookup that names both the resource and the subject still
+links them: the lookup record is the system's own pairing, and the supplied labels verify such
+resources (sample cases 11, 13, 14; 36 full-set obligations). Removing that link entirely, as the
+audit proposes, is a policy choice left to the project owner. Measured effect of the guard: none.
+
+## D050 — Trace identity is temporal (audit P1-4)
+
+A log trace's lookup keys attach to a line only if they were logged at or before it.
+Measured: no change (every `*_started` line precedes its result in the corpus).
+
+## D051 — Subject-level profile absence (audit P1-1)
+
+Kept as SATISFIED (status may be COMPLETE) only when every row in each latest covering
+full-table listing carries an identifier and none is the subject's; a row with no identifier
+blocks it (UNPROVEN_ABSENCE). The obligation is labelled `SUBJECT_LEVEL_ABSENCE` and produces
+no step (no resource ID). Measured on all 95 COMPLETE rows: every listing row carries a full
+identity of someone else (11 rows' identities are of people absent from user_identities), so
+none flips. Rejected: marking all 95 incomplete — the evidence does establish that the subject
+has no profile row in any covering snapshot.
+
+## D052 — Retention and legal hold conditions (audit P1-5)
+
+Verified, not changed. Rule_12 needs a supplied retention end; rule_13 a supplied hold whose
+end is after audit_at. Legal-hold records carry `retained_until` and a reason; none carries an
+open-ended or released hold flag, so a separate evaluator would have no evidence to read.
+Sample cases 11, 13, 16, 31: the security record (audit_record_9394, _4816, _9528, _6909) appears
+only in an exact lookup or a snapshot row with no retention field, in any source before or
+after the cutoff; the labels expect VERIFY_RECORD_PRESENT. Strict default kept.
+
+## D053 — Budget reservations cover calls in flight (audit P1-6)
+
+Each call reserves a worst-case cost (25 paise per decision, 120 per chat call; the largest
+billed calls on record are 1 and 99 paise) before it is sent; spent + reserved + next reserve must fit the ceiling; a live response without a cost
+header is charged its reserve. Test: four concurrent calls at a 50-paise ceiling.
+
+## D054 — Cache hits are validated on every read (audit P1-7)
+
+The current validator runs on each cached response, together with a requested-model check; an
+invalid entry is deleted and the call is made again. All 526 existing entries validate.
+
+## D055 — Conflicting SQL snapshot times quarantine the snapshot (audit P1-8)
+
+No state or scope is emitted and the source is PARTIAL. Measured: no supplied snapshot conflicts.
+
+## D056 — Gap analysis uses the audited run's evidence (audit P1-9)
+
+The corpus is rebuilt with the run's engine configuration and a cache-only gateway (zero call
+ceiling); it must reproduce the run's source status and media extractions, or the analysis
+stops. Ownership details are written by the same `gaps` command.
+
+## D057 — Other hardening (audit P2)
+
+Typed answers are validated by one function (`choice_problem`) for intent, target, document
+kind and candidate choice; booleans are not probabilities; malformed or non-JSON responses
+become ProviderErrors. A resource ID used by two systems is never traversed. A screenshot with
+rejected entities or reader-flagged unreadable fields reports PARTIAL. Not changed: the
+investigator SQL tool's snapshot-time check (P2-3, not used by inference) and PDF parser
+portability (P2-6, documented limitation).

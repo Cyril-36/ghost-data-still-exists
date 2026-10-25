@@ -4,12 +4,16 @@ Stages (cheapest first; every stage can only narrow, never widen, authorization)
   1. Jev (`/decisions`): one call per request -> `intent` choice + three yes/no flags.
      Different requests are never mixed into one Jev state.
   2. Deterministic reconciliation of the four answers (thresholds below). Contradictions
-     or low-probability answers stay UNRESOLVED.
+     or low-probability answers stay UNRESOLVED. A deletion is ACCOUNT-scoped only when
+     the account-wide labels are themselves probable; otherwise it is ITEM-scoped.
   3. The deterministic English classifier is an independent check: if it gives a definite
      decision that disagrees with Jev, the request is escalated, not auto-resolved.
   4. Only escalated requests go to the generative model, batched with opaque handles,
      and its answer counts only if every supporting span is a verbatim substring of the
-     request and it does not contradict a definite deterministic decision.
+     request and it does not contradict a definite deterministic decision. A conflict
+     that Jev's flags detected is never escalated: no later stage can waive it.
+  5. An ITEM-scoped deletion needs its target: one bounded Jev choice among data
+     categories. Without a probable single target it stays UNRESOLVED.
 Jev probabilities are treated as model scores, not calibrated correctness.
 """
 from __future__ import annotations
@@ -17,10 +21,10 @@ from __future__ import annotations
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
-from .intent import DELETE, NON_DELETION, UNRESOLVED, Intent, classify
+from .intent import ACCOUNT, DELETE, ITEM, NON_DELETION, UNRESOLVED, Intent, classify
 from .providers import Gateway, ProviderError, fingerprint
 
 PROMPTS = Path(__file__).resolve().parent.parent / 'prompts'
@@ -38,6 +42,11 @@ def _load_jev():
     return spec, f'{spec["version"]}:{fingerprint(spec)[:12]}'
 
 
+def _load_target():
+    spec = json.loads((PROMPTS / 'intent_target_jev_v1.json').read_text(encoding='utf-8'))
+    return spec, f'{spec["version"]}:{fingerprint(spec)[:12]}'
+
+
 def _load_generative():
     text = (PROMPTS / 'intent_generative_v1.md').read_text(encoding='utf-8')
     return text, f'intent-generative-v1:{fingerprint(text)[:12]}'
@@ -52,6 +61,7 @@ class Signals:
     flags: tuple                     # ((name, value), ...) value: float prob (Jev) or bool (generative)
     model: str | None = None
     spans: tuple = ()
+    account_probability: float | None = None   # Jev: P(DELETE_ACCOUNT) + P(VERIFY_PRIOR_DELETION)
 
     def flag(self, name) -> str:
         """'yes' | 'no' | 'uncertain'."""
@@ -76,11 +86,18 @@ def reconcile(sig: Signals) -> Intent:
         return Intent(UNRESOLVED, f'conflicting instructions flag is {conflicting}', sig.spans, method, signals)
     preserve, marketing = sig.flag('preserve_account'), sig.flag('marketing_only')
     if sig.label in DELETION_LABELS:
-        if preserve != 'no' or marketing != 'no':
-            # e.g. "delete X but keep my account": a deletion choice disagreeing with a flag
-            return Intent(UNRESOLVED, f'deletion choice disagrees with flags (preserve={preserve}, '
-                                      f'marketing_only={marketing})', sig.spans, method, signals)
-        return Intent(DELETE, f'{sig.label} with consistent flags', sig.spans, method, signals)
+        if marketing != 'no':
+            return Intent(UNRESOLVED, f'deletion choice disagrees with marketing_only={marketing}',
+                          sig.spans, method, signals)
+        if sig.label == 'SCOPED_DELETION' or (sig.account_probability is not None
+                                              and sig.account_probability < CHOICE_MIN):
+            # Deletion is probable, account-wide deletion is not: authorize only one item.
+            # Keeping the account is consistent with deleting one item.
+            return Intent(DELETE, f'{sig.label}: item-scoped deletion', sig.spans, method, signals, scope=ITEM)
+        if preserve != 'no':
+            return Intent(UNRESOLVED, f'account deletion disagrees with preserve_account={preserve}',
+                          sig.spans, method, signals)
+        return Intent(DELETE, f'{sig.label} with consistent flags', sig.spans, method, signals, scope=ACCOUNT)
     if sig.label == 'NON_DELETION':
         return Intent(NON_DELETION, 'non-deletion request', sig.spans, method, signals)
     return Intent(UNRESOLVED, f'unknown label {sig.label!r}', sig.spans, method, signals)
@@ -88,22 +105,35 @@ def reconcile(sig: Signals) -> Intent:
 
 # --- Jev -------------------------------------------------------------------------------------
 
+def _probability(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1
+
+
+def choice_problem(payload, name, labels) -> str | None:
+    """Validation of the typed `choice` answer `name` in a /decisions payload against its labels."""
+    answers = payload.get('answers')
+    answer = answers.get(name) if isinstance(answers, dict) else None
+    if not isinstance(answer, dict) or answer.get('choice') not in labels:
+        return 'choice outside the declared labels'
+    probs = answer.get('probabilities')
+    if not isinstance(probs, dict) or set(probs) != set(labels):
+        return 'probabilities do not cover exactly the declared labels'
+    if not all(map(_probability, probs.values())) or abs(sum(probs.values()) - 1) > 0.05:
+        return 'probabilities are not a distribution'
+    return None
+
+
 def _validate_jev(questions):
     def check(payload):
         answers = payload.get('answers')
         if not isinstance(answers, dict) or set(answers) != set(questions):
-            return f'answers {sorted(answers or {})} != questions {sorted(questions)}'
-        choice = answers['intent']
-        probs = choice.get('probabilities') or {}
-        if choice.get('choice') not in questions['intent']['criteria'] or set(probs) != set(
-                questions['intent']['criteria']):
-            return 'intent choice/probabilities outside the declared labels'
-        if not all(isinstance(v, (int, float)) and 0 <= v <= 1 for v in probs.values()) \
-                or abs(sum(probs.values()) - 1) > 0.05:
-            return 'intent probabilities are not a distribution'
+            return f'answers {sorted(answers or {}) if isinstance(answers, dict) else answers!r} != questions'
+        problem = choice_problem(payload, 'intent', questions['intent']['criteria'])
+        if problem:
+            return f'intent: {problem}'
         for name in FLAGS:
-            v = answers[name].get('noul')
-            if not isinstance(v, (int, float)) or not 0 <= v <= 1:
+            v = answers[name].get('noul') if isinstance(answers[name], dict) else None
+            if not _probability(v):
                 return f'{name} noul value {v!r} invalid'
         return None
     return check
@@ -121,7 +151,21 @@ def jev_signals(gateway: Gateway, text: str) -> Signals:
     # won: probability split between VERIFY_PRIOR and SCOPED is still certainty about deletion.
     family = DELETION_LABELS if label in DELETION_LABELS else {label}
     return Signals('jev', label, float(sum(probs[k] for k in family)),
-                   tuple((f, float(a[f]['noul'])) for f in FLAGS), payload.get('model'))
+                   tuple((f, float(a[f]['noul'])) for f in FLAGS), payload.get('model'),
+                   account_probability=float(probs['DELETE_ACCOUNT'] + probs['VERIFY_PRIOR_DELETION']))
+
+
+def jev_target(gateway: Gateway, text: str) -> tuple[str | None, float, str | None]:
+    """The one data category an ITEM-scoped request asks to delete; None if not probable or unclear."""
+    spec, version = _load_target()
+    questions = spec['questions']
+    labels = questions['target']['criteria']
+    payload = gateway.decide('intent_target', JEV_MODEL, spec['state_template'].format(text=text), questions,
+                             version, lambda p: choice_problem(p, 'target', labels))
+    answer = payload['answers']['target']
+    target, p = answer['choice'], float(answer['probabilities'][answer['choice']])
+    grounded = target != 'SEVERAL_OR_UNCLEAR' and p >= CHOICE_MIN
+    return (target if grounded else None), p, payload.get('model')
 
 
 # --- generative fallback ----------------------------------------------------------------------
@@ -212,6 +256,30 @@ def _agrees(det: Intent, other: Intent) -> bool:
     return det.decision == UNRESOLVED or det.decision == other.decision
 
 
+def material_concern(sig: Signals) -> str | None:
+    """An authorization conflict the typed answers detected; no later stage may waive it."""
+    if sig.flag('conflicting_instructions') == 'yes':
+        return 'conflicting instructions'
+    if sig.label != 'NON_DELETION' and sig.flag('marketing_only') == 'yes':
+        return 'request limited to marketing'
+    if sig.label not in ('SCOPED_DELETION', 'NON_DELETION') and sig.flag('preserve_account') == 'yes':
+        return 'asks to keep the account'
+    return None
+
+
+def ground_target(gateway, text, intent: Intent) -> Intent:
+    try:
+        target, p, model = jev_target(gateway, text)
+    except ProviderError as exc:
+        return Intent(UNRESOLVED, f'scoped deletion target: PROVIDER_FAILURE: {exc}', intent.spans, 'staged-v1',
+                      intent.signals)
+    signals = intent.signals + (('target', target), ('target_p', p), ('target_model', model))
+    if target is None:
+        return Intent(UNRESOLVED, f'scoped deletion target not grounded (p={p:.2f})', intent.spans, 'staged-v1',
+                      signals)
+    return replace(intent, signals=signals, target=target)
+
+
 def decide_intents(texts: dict, gateway: Gateway | None, use_generative: bool = True,
                    concurrency: int = 4) -> dict:
     """texts: {key: request_text} -> {key: IntentOutcome}. gateway=None means offline (deterministic only)."""
@@ -222,21 +290,27 @@ def decide_intents(texts: dict, gateway: Gateway | None, use_generative: bool = 
     def run_jev(item):
         k, t = item
         try:
-            return k, reconcile(jev_signals(gateway, t)), ''
+            return k, jev_signals(gateway, t), ''
         except ProviderError as exc:
             return k, None, f'PROVIDER_FAILURE: {exc}'
     with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
-        jev = {k: (i, err) for k, i, err in pool.map(run_jev, sorted(texts.items()))}
+        jev = {k: (s, err) for k, s, err in pool.map(run_jev, sorted(texts.items()))}
 
     outcomes, escalate = {}, []
     for k in sorted(texts):
-        j, err = jev[k]
+        s, err = jev[k]
+        j = reconcile(s) if s is not None else None
         d = det[k]
         if j is not None and j.decision != UNRESOLVED and _agrees(d, j):
             outcomes[k] = IntentOutcome(j, 'jev', d, j)
             continue
+        concern = material_concern(s) if s is not None else None
         reason = err or (j.reason if j.decision == UNRESOLVED else
                          f'deterministic {d.decision} disagrees with jev {j.decision}')
+        if concern:
+            outcomes[k] = IntentOutcome(Intent(UNRESOLVED, f'{reason}; not escalated: jev detected {concern}',
+                                               (), 'staged-v1', j.signals), 'unresolved', d, j)
+            continue
         outcomes[k] = IntentOutcome(Intent(UNRESOLVED, reason, (), 'staged-v1'), 'unresolved', d, j,
                                     escalated_because=reason)
         escalate.append(k)
@@ -251,11 +325,18 @@ def decide_intents(texts: dict, gateway: Gateway | None, use_generative: bool = 
                 o.intent = Intent(UNRESOLVED, f'{o.escalated_because}; generative: {g}', (), 'staged-v1')
                 continue
             o.generative = reconcile(g)
-            if o.generative.decision != UNRESOLVED and _agrees(o.deterministic, o.generative):
+            s = jev[k][0]
+            widens = (o.generative.scope == ACCOUNT and s is not None and s.flag('preserve_account') == 'yes')
+            if o.generative.decision != UNRESOLVED and _agrees(o.deterministic, o.generative) and not widens:
                 o.intent, o.stage = o.generative, 'generative'
             else:
                 o.intent = Intent(UNRESOLVED, f'{o.escalated_because}; generative {o.generative.decision}: '
                                               f'{o.generative.reason}', o.generative.spans, 'staged-v1')
+    for k, o in outcomes.items():
+        if o.intent.decision == DELETE and o.intent.scope == ITEM:
+            o.intent = ground_target(gateway, texts[k], o.intent)
+            if o.intent.decision == UNRESOLVED:
+                o.stage = 'unresolved'
     return outcomes
 
 
@@ -274,12 +355,8 @@ def choose_candidate(gateway: Gateway, role: str, question: str, context: str,
         raise ValueError('need 2-12 non-empty candidates')
     questions = {'choice': {'type': 'choice', 'instructions': question, 'criteria': dict(candidates)}}
 
-    def check(payload):
-        answer = (payload.get('answers') or {}).get('choice') or {}
-        if answer.get('choice') not in candidates or set(answer.get('probabilities') or {}) != set(candidates):
-            return 'selected handle outside the candidate set'
-        return None
-    payload = gateway.decide(role, JEV_MODEL, context, questions, f'choose-candidate-v1:{role}', check)
+    payload = gateway.decide(role, JEV_MODEL, context, questions, f'choose-candidate-v1:{role}',
+                             lambda p: choice_problem(p, 'choice', candidates))
     answer = payload['answers']['choice']
     handle = answer['choice']
     probs = answer['probabilities']

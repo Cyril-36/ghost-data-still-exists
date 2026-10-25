@@ -46,7 +46,8 @@ def parse_source(entry, raw: bytes):
         report.issues.append(f'PARSE_ERROR: {type(exc).__name__}: {exc}')
         return [], [], report
     report.observations, report.scopes, report.issues = len(observations), len(scopes), issues
-    if any(i.startswith(('PARSE_ERROR', 'PARTIAL_SCOPE', 'UNRECOGNIZED_FORMAT', 'CONTRADICTORY_STATE'))
+    if any(i.startswith(('PARSE_ERROR', 'PARTIAL_SCOPE', 'UNRECOGNIZED_FORMAT', 'CONTRADICTORY_STATE',
+                         'TEMPORAL_CONFLICT'))
            for i in issues):
         report.status = 'PARTIAL'
     return observations, scopes, report

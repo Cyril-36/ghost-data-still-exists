@@ -20,7 +20,7 @@ from ghostaudit.inputs import load_context, load_requests  # noqa: E402
 from ghostaudit.output import read_output, validate_output  # noqa: E402
 
 from evaluation.fixtures import FIXTURES, write_fixture  # noqa: E402
-from evaluation.gap_analysis import analyze, render  # noqa: E402
+from evaluation.gap_analysis import analyze, ownership_details, render  # noqa: E402
 from evaluation.scoring import render_markdown, score  # noqa: E402
 
 
@@ -67,6 +67,7 @@ def main(argv=None) -> int:
             return 0
         if args.command == 'gaps':
             result = analyze(args.dataset, args.requests, args.predictions, args.expected, args.run_dir)
+            result['ownership'] = ownership_details(args.dataset, args.requests, result, args.run_dir)
             args.out_dir.mkdir(parents=True, exist_ok=True)
             (args.out_dir / 'gaps.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
             (args.out_dir / 'gaps.md').write_text(render(result), encoding='utf-8')

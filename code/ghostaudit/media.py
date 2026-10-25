@@ -2,7 +2,9 @@
 
 PDFs: native text extraction (deterministic, offline) -> literal harvest -> ONE bounded
 Jev choice for the document kind -> deterministic mapping. Without a gateway the text
-is extracted but no state is derived (kind unknown).
+is extracted but no state is derived (kind unknown). Identifiers and retention dates
+belong to the record whose mention precedes them on the same page; a section that
+names two people binds no identity at all.
 
 Screenshots: one blind vision call per image (no case, subject or expected answer in the
 prompt) -> strict JSON -> deterministic validation and mapping. A row yields:
@@ -21,7 +23,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from .intent_models import JEV_MODEL, PROMPTS, _strict_json
+from .intent_models import JEV_MODEL, PROMPTS, _strict_json, choice_problem
 from .observations import PRESENT, STATE, Observation, SourceReport, classify_token, tokens_from
 from .parsers import sniff
 from .parsers.pdfsrc import PdfError, extract_pdf_text, harvest
@@ -54,38 +56,71 @@ class MediaResult:
     extractions: dict = field(default_factory=dict)  # source_id -> raw validated extraction (diagnostics)
 
 
-def _systems_for(corpus, resource_id):
-    """Systems that state or catalog evidence places this record in. Operation claims are
+# Enrichment from structured evidence (system, category, catalog label). A media observation
+# is available only from the earliest time at which the structured evidence it relies on
+# already gave the same answer, so a later source never makes an earlier capture look
+# enriched before a cutoff.
+
+def _settled_at(entry, used, decide):
+    """Earliest availability, not before the capture, at which `used` already yields decide(used)."""
+    final = decide(used)
+    for t in sorted({entry.captured_at} | {o.available_at for o in used if o.available_at > entry.captured_at}):
+        if decide([o for o in used if o.available_at <= t]) == final:
+            return t
+
+
+def _systems(observations):
+    """Systems that state or catalog evidence places a record in. Operation claims are
     ignored: a claim's target is where work was attempted, not which system owns the record."""
-    return {o.system_id for o in corpus.by_resource.get(resource_id, ())
-            if o.system_id and o.kind in (STATE, 'LINK')}
+    return {o.system_id for o in observations if o.system_id and o.kind in (STATE, 'LINK')}
 
 
-def _catalog_label(corpus, label):
-    """Resource whose catalog link carries exactly this label, e.g. 'tombstone_x (user_x)'."""
-    hits = {o.resource_id for o in corpus.observations
-            if o.kind == 'LINK' and o.resource_id and f'({label})' in o.excerpt}
+def _catalog_links(corpus, label):
+    """Catalog links carrying exactly this label, e.g. 'tombstone_x (user_x)'."""
+    return [o for o in corpus.observations if o.kind == 'LINK' and o.resource_id and f'({label})' in o.excerpt]
+
+
+def _unique_resource(links):
+    hits = {o.resource_id for o in links}
     return hits.pop() if len(hits) == 1 else None
 
 
-def _categories_for(corpus, resource_id):
-    return {o.category for o in corpus.by_resource.get(resource_id, ()) if o.category}
-
-
 # --- PDFs -----------------------------------------------------------------------------------------
+
+def _position(locator):
+    _, page, _, line = locator.split()          # 'page P line L'
+    return int(page), int(line)
+
+
+def _owner_of(facts, record_ids):
+    """Locator -> the record whose section it is in, or None when that is not established."""
+    mentions = sorted((_position(loc), v) for v, loc in facts['resource_ids'] if v in record_ids)
+
+    def owner(locator):
+        here = _position(locator)
+        before = [(pos, rid) for pos, rid in mentions if pos[0] == here[0] and pos <= here]
+        if before:
+            nearest = {rid for pos, rid in before if pos == before[-1][0]}
+            return nearest.pop() if len(nearest) == 1 else None
+        return record_ids[0] if len(record_ids) == 1 else None
+    return owner
+
+
+def _identity(values, report, what):
+    """Identity tokens for one record, or none when they name more than one user reference."""
+    tokens = tokens_from(*values)
+    if len({t for t in tokens if t[0] == 'user'}) > 1:
+        report.issues.append(f'NOTE: {what}: several people named; identity not attached')
+        return frozenset()
+    return tokens
 
 def _doc_kind(gateway, text):
     spec = json.loads((PROMPTS / 'document_kind_jev_v1.json').read_text(encoding='utf-8'))
     version = f'{spec["version"]}:{fingerprint(spec)[:12]}'
     questions = spec['questions']
 
-    def check(payload):
-        a = (payload.get('answers') or {}).get('kind') or {}
-        if a.get('choice') not in questions['kind']['criteria']:
-            return 'kind outside the declared document kinds'
-        return None
     payload = gateway.decide('document_kind', JEV_MODEL, spec['state_template'].format(text=text[:6000]),
-                             questions, version, check)
+                             questions, version, lambda p: choice_problem(p, 'kind', questions['kind']['criteria']))
     a = payload['answers']['kind']
     return a['choice'], float(a['probabilities'][a['choice']]), payload.get('model')
 
@@ -113,14 +148,15 @@ def interpret_pdf(entry, raw, corpus, gateway) -> tuple[list, SourceReport, dict
         report.issues.append(f'PROVIDER_FAILURE: document kind: {exc}')
         return [], report, extraction
     extraction['kind'] = {'choice': kind, 'p': p, 'model': model}
-    tokens = tokens_from(*(v for v, _ in facts['emails']), *(v for v, _ in facts['phones']),
-                         *(v for v, _ in facts['resource_ids'] if classify_token(v)))
+    identity_facts = [*facts['emails'], *facts['phones'], *((v, loc) for v, loc in facts['resource_ids']
+                                                            if classify_token(v))]
     record_ids = sorted({v for v, _ in facts['resource_ids'] if not classify_token(v)})
+    owner = _owner_of(facts, record_ids)
     observations = []
 
-    def obs(rid, system, category, locator, **kw):
+    def obs(rid, system, category, locator, tokens, available_at, **kw):
         observations.append(Observation(
-            source_id=entry.file_id, available_at=entry.captured_at, observed_at=entry.captured_at,
+            source_id=entry.file_id, available_at=available_at, observed_at=entry.captured_at,
             locator=locator, excerpt=f'{kind}: {rid} ({locator})', kind=STATE, proof='DOCUMENT_TEXT',
             system_id=system, resource_id=rid, category=category, presence=PRESENT, tokens=tokens,
             attributes=(('document_kind', kind), ('kind_p', p), ('model', model)), **kw))
@@ -129,26 +165,32 @@ def interpret_pdf(entry, raw, corpus, gateway) -> tuple[list, SourceReport, dict
         report.issues.append(f'NOTE: document kind {kind} below probability threshold ({p:.2f}); no state derived')
     elif kind in DOC_KINDS:
         category = DOC_KINDS[kind]
-        retention = sorted({d for d, _ in facts['retain_until']})
-        for rid in record_ids:
-            systems = _systems_for(corpus, rid)
-            system = systems.pop() if len(systems) == 1 else (
+        def system_of(observations):
+            systems = _systems(observations)
+            return next(iter(systems)) if len(systems) == 1 else (
                 entry.origin if entry.origin in corpus.system_categories and not systems else None)
+        for rid in record_ids:
+            known = corpus.by_resource.get(rid, [])
+            system = system_of(known)
             if system is None:
                 report.issues.append(f'NOTE: {rid}: system not established; no state derived')
                 continue
             locator = next(loc for v, loc in facts['resource_ids'] if v == rid)
+            tokens = _identity([v for v, loc in identity_facts if owner(loc) == rid], report, rid)
+            retention = sorted({d for d, loc in facts['retain_until'] if owner(loc) == rid})
             extra = {'retention_until': retention[0]} if category == 'SECURITY_AUDIT_LOG' and len(retention) == 1 else {}
-            obs(rid, system, category, locator, **extra)
+            obs(rid, system, category, locator, tokens, _settled_at(entry, known, system_of), **extra)
     elif kind == 'CUSTOMER_STATEMENT_OR_EXPORT':
         # A document is the content of a catalogued resource only through an exact catalog label.
         labels = {v for v, _ in facts['labels']}
+        tokens = _identity([v for v, _ in identity_facts], report, 'statement')
         for link in (o for o in corpus.observations if o.kind == 'LINK' and o.resource_id):
             m = re.search(r'\(([^)]+)\)', link.excerpt)
             if m and m.group(1) in labels:
                 cats = corpus.system_categories.get(link.system_id, set())
                 if len(cats) == 1:
-                    obs(link.resource_id, link.system_id, next(iter(cats)), f'catalog label {m.group(1)}')
+                    obs(link.resource_id, link.system_id, next(iter(cats)), f'catalog label {m.group(1)}', tokens,
+                        max(entry.captured_at, link.available_at))
     elif kind == 'LEGAL_RETENTION_REGISTER':
         rows = [loc for _, loc in facts['retain_until']]
         report.issues.append(f'NOTE: {len(rows)} retention rows keyed by order reference; no order reference '
@@ -220,25 +262,34 @@ def interpret_screenshot(entry, raw, corpus, gateway) -> tuple[list, SourceRepor
         if classify_token(rid):
             # A user key shown as a page title is not a record ID; it names a record only
             # through an exact catalog label (or it is skipped).
-            resolved = _catalog_label(corpus, rid)
+            links = _catalog_links(corpus, rid)
+            resolved = _unique_resource(links)
             if resolved is None:
                 continue
             values.append(rid)
-            rid = resolved
-        slot = merged.setdefault(rid, {'fields': {}, 'values': []})
+            rid, resolved_at = resolved, _settled_at(entry, links, _unique_resource)
+        else:
+            resolved_at = entry.captured_at
+        slot = merged.setdefault(rid, {'fields': {}, 'values': [], 'resolved_at': entry.captured_at})
         slot['fields'].update(e.get('fields') or {})
         slot['values'] += values
+        slot['resolved_at'] = max(slot['resolved_at'], resolved_at)
+
+    def row_decision(observations):
+        """(system, consistent with the page and the structured categories) for one row."""
+        systems = _systems(observations)
+        structured = {o.category for o in observations if o.category}
+        system = next(iter(systems)) if len(systems) == 1 else (page_system if not systems else None)
+        consistent = system is not None and page_category is not None and (
+            not structured or structured == {page_category}) and (page_system is None or system == page_system)
+        return system, consistent
     observations = []
     for rid, slot in sorted(merged.items()):
         tokens = tokens_from(*slot['values'])
-        systems = _systems_for(corpus, rid)
-        structured_categories = _categories_for(corpus, rid)
-        system = systems.pop() if len(systems) == 1 else (page_system if not systems else None)
-        category = page_category
-        consistent = system is not None and category is not None and (
-            not structured_categories or structured_categories == {category}) and (
-            page_system is None or system == page_system)
-        base = dict(source_id=entry.file_id, available_at=entry.captured_at, observed_at=entry.captured_at,
+        known = corpus.by_resource.get(rid, [])
+        (system, consistent), category = row_decision(known), page_category
+        available_at = max(slot['resolved_at'], _settled_at(entry, known, row_decision))
+        base = dict(source_id=entry.file_id, available_at=available_at, observed_at=entry.captured_at,
                     locator=f'screenshot entity {rid}', excerpt=json.dumps(slot['fields'], ensure_ascii=False)[:400],
                     system_id=system, resource_id=rid, tokens=tokens,
                     attributes=(('page_kind', data['page_kind']), ('model', data.get('_model')),
@@ -258,7 +309,8 @@ def interpret_screenshot(entry, raw, corpus, gateway) -> tuple[list, SourceRepor
         report.issues.append(f'UNSUPPORTED_MODEL_FACT: rejected malformed resource IDs {rejected}')
     if data.get('unreadable'):
         report.issues.append(f'UNREADABLE_MEDIA: reader flagged {data["unreadable"]}')
-    report.status = 'INTERPRETED'
+    # Read, but with rejected entities or unreadable fields: some of its facts are missing.
+    report.status = 'PARTIAL' if rejected or data.get('unreadable') else 'INTERPRETED'
     report.observations = len(observations)
     return observations, report, {'page_kind': data['page_kind'], 'page_title': data.get('page_title'),
                                   'entities': {rid: slot['fields'] for rid, slot in merged.items()},

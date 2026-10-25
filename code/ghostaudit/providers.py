@@ -6,11 +6,14 @@ Two distinct API shapes, never mixed:
 
 Rules enforced here:
 - Credentials come only from the environment (TOKENBAZAAR_API_KEY); never logged.
-- Every call is checked against a cost ceiling and call ceiling BEFORE it is sent.
+- Every call reserves its worst-case cost before it is sent, so concurrent calls cannot
+  together exceed the ceiling; a live response without a cost header is charged that reserve.
+- Redirects are never followed, so the bearer token cannot reach another origin.
 - Every attempt is recorded: role, requested and returned model, tokens, latency,
   cost (gateway header, paise), retries, cache hit/miss, mode (live|replay).
-- Only responses that pass the caller's validator are cached; the cache key is a
-  fingerprint of endpoint, requested model, prompt/schema version and input.
+- Only responses that pass the caller's validator are cached, and a cache hit is validated
+  again before use (an invalid entry is discarded); the cache key is a fingerprint of
+  endpoint, requested model, prompt/schema version and input.
 - Authentication errors stop immediately; transient errors retry a bounded number
   of times with backoff.
 """
@@ -38,6 +41,14 @@ class BudgetExceeded(ProviderError):
     """The configured cost or call ceiling would be exceeded."""
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None            # urllib then raises HTTPError for the 3xx response
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 @dataclass(frozen=True)
 class ProviderConfig:
     base_url: str = DEFAULT_BASE_URL
@@ -47,7 +58,8 @@ class ProviderConfig:
     max_rate_limit_retries: int = 5        # HTTP 429 gets a longer, still bounded, backoff
     max_cost_paise: float = 2000.0         # whole-run ceiling (Rs 20) unless raised explicitly
     max_calls: int = 3000
-    cost_reserve_paise: float = 25.0       # assumed worst-case cost of the next call
+    cost_reserve_paise: float = 25.0       # assumed worst-case cost of one /decisions call
+    chat_cost_reserve_paise: float = 120.0  # assumed worst-case cost of one chat call
     cache_dir: str | None = '.cache/ghostaudit'
 
 
@@ -99,6 +111,7 @@ class Gateway:
         self.usage: list[UsageRecord] = []
         self._lock = threading.Lock()
         self._spent = 0.0
+        self._reserved = 0.0
         self._calls = 0
 
     # --- accounting ---------------------------------------------------------------------
@@ -106,20 +119,25 @@ class Gateway:
     def spent_paise(self) -> float:
         return self._spent
 
-    def _reserve(self):
+    def _reserve(self, reserve):
         with self._lock:
             if self._calls + 1 > self.config.max_calls:
                 raise BudgetExceeded(f'call ceiling {self.config.max_calls} reached')
-            if self._spent + self.config.cost_reserve_paise > self.config.max_cost_paise:
+            if self._spent + self._reserved + reserve > self.config.max_cost_paise:
                 raise BudgetExceeded(f'cost ceiling {self.config.max_cost_paise} paise would be exceeded '
-                                     f'(spent {self._spent:.1f})')
+                                     f'(spent {self._spent:.1f}, in flight {self._reserved:.1f})')
             self._calls += 1
+            self._reserved += reserve
 
-    def _record(self, rec: UsageRecord):
+    def _release(self, reserve):
+        with self._lock:
+            self._reserved -= reserve
+
+    def _record(self, rec: UsageRecord, charge_if_unknown=0.0):
         with self._lock:
             self.usage.append(rec)
-            if rec.mode == 'live' and rec.cost_paise_header:
-                self._spent += rec.cost_paise_header
+            if rec.mode == 'live' and rec.status != 'error':
+                self._spent += charge_if_unknown if rec.cost_paise_header is None else rec.cost_paise_header
 
     # --- cache --------------------------------------------------------------------------
     def _cache_path(self, fp):
@@ -150,23 +168,49 @@ class Gateway:
         request = urllib.request.Request(
             f'{self.config.base_url.rstrip("/")}/{path}', data=json.dumps(body).encode('utf-8'), method='POST',
             headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'})
-        with urllib.request.urlopen(request, timeout=self.config.timeout_s) as response:
+        with _OPENER.open(request, timeout=self.config.timeout_s) as response:
             cost = response.headers.get('x-tokenbaazar-cost-paise')
             return json.loads(response.read().decode('utf-8')), (float(cost) if cost else None)
 
     def _call(self, role, endpoint, requested_model, body, fp, validate, extract_usage):
         cached = self._cache_get(fp)
         if cached is not None:
-            self._record(UsageRecord(role, endpoint, requested_model, cached.get('returned_model'), 'cache', 'ok',
-                                     fingerprint=fp))
-            return cached['response']
-        self._reserve()
+            problem = ('cache entry metadata mismatch' if cached.get('requested_model') != requested_model
+                       or not isinstance(cached.get('response'), dict) else validate(cached['response']))
+            self._record(UsageRecord(role, endpoint, requested_model, cached.get('returned_model'), 'cache',
+                                     'invalid' if problem else 'ok', fingerprint=fp, error=problem or ''))
+            if not problem:
+                return cached['response']
+            self._cache_path(fp).unlink()          # invalid entry: discard it and ask again
+        reserve = self.config.cost_reserve_paise if endpoint == 'decisions' else self.config.chat_cost_reserve_paise
+        self._reserve(reserve)
+        try:
+            payload, cost, retries, latency = self._send(role, endpoint, requested_model, body, fp)
+        finally:
+            self._release(reserve)
+        rec = UsageRecord(role, endpoint, requested_model, payload.get('model'), self.mode, 'ok', latency,
+                          retries=retries, request_id=payload.get('id'), cost_paise_header=cost, fingerprint=fp,
+                          **extract_usage(payload))
+        problem = validate(payload)
+        if problem:
+            rec.status, rec.error = 'invalid', problem
+            self._record(rec, reserve)
+            raise ProviderError(f'invalid {endpoint} response: {problem}')
+        self._record(rec, reserve)
+        self._cache_put(fp, {'response': payload, 'returned_model': payload.get('model'),
+                             'requested_model': requested_model, 'fingerprint_parts': endpoint})
+        return payload
+
+    def _send(self, role, endpoint, requested_model, body, fp):
+        """POST with bounded retries -> (JSON object, cost header, retries, latency)."""
         retries, started = 0, time.time()
         while True:
             wait = None
             try:
                 payload, cost = self._post(endpoint, body)
-                break
+                if not isinstance(payload, dict):
+                    raise ValueError('response is not a JSON object')
+                return payload, cost, retries, round(time.time() - started, 3)
             except urllib.error.HTTPError as exc:
                 limit = self.config.max_rate_limit_retries if exc.code == 429 else self.config.max_retries
                 if exc.code in (401, 403) or retries >= limit or exc.code not in (408, 429, 500, 502, 503, 504):
@@ -183,20 +227,12 @@ class Gateway:
                                              time.time() - started, retries=retries, fingerprint=fp,
                                              error=type(exc).__name__))
                     raise ProviderError(f'{endpoint} transport failure') from exc
+            except ValueError as exc:                  # body is not a JSON object (may still have been billed)
+                self._record(UsageRecord(role, endpoint, requested_model, None, self.mode, 'invalid',
+                                         time.time() - started, retries=retries, fingerprint=fp, error=str(exc)))
+                raise ProviderError(f'{endpoint} returned a non-JSON body') from exc
             retries += 1
             time.sleep(wait if wait is not None else min(20.0, 1.5 * 2 ** retries))
-        rec = UsageRecord(role, endpoint, requested_model, payload.get('model'), self.mode, 'ok',
-                          round(time.time() - started, 3), retries=retries, request_id=payload.get('id'),
-                          cost_paise_header=cost, fingerprint=fp, **extract_usage(payload))
-        problem = validate(payload)
-        if problem:
-            rec.status, rec.error = 'invalid', problem
-            self._record(rec)
-            raise ProviderError(f'invalid {endpoint} response: {problem}')
-        self._record(rec)
-        self._cache_put(fp, {'response': payload, 'returned_model': payload.get('model'),
-                             'requested_model': requested_model, 'fingerprint_parts': endpoint})
-        return payload
 
     # --- public API ---------------------------------------------------------------------
     def decide(self, role, model, state, questions, version, validate):

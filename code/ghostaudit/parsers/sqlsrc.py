@@ -113,10 +113,10 @@ def parse_sql(source_id, available_at, raw: bytes):
         scope_times = {r['origin_system']: r['captured_at'] for r in rows(con, 'snapshot_scope')}
     stamps = {s for s in [head['captured_at'], head['completed_at'], *scope_times.values()] if s}
     if len(stamps) != 1:
-        issues.append(f'TEMPORAL_CONFLICT: snapshot times {sorted(stamps)}')
-        if not stamps:
-            return observations, scopes, issues
-    observed_at = max(parse_utc(s, 'snapshot time') for s in stamps)
+        # No single point in time: the snapshot cannot say what was true when, so it is quarantined.
+        issues.append(f'TEMPORAL_CONFLICT: snapshot times {sorted(stamps)}; no state emitted')
+        return observations, scopes, issues
+    observed_at = parse_utc(stamps.pop(), 'snapshot time')
 
     json_tables = [t for t, cols in schema.items() if 'record_json' in cols]
 

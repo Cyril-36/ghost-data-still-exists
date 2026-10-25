@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 
 DELETE, NON_DELETION, UNRESOLVED = 'DELETE', 'NON_DELETION', 'UNRESOLVED'
+ACCOUNT, ITEM = 'ACCOUNT', 'ITEM'   # authorization scope of a DELETE decision
 
 _ENGLISH = {'the', 'my', 'please', 'and', 'i', 'to', 'of', 'is', 'that', 'this', 'with', 'it', 'me', 'you', 'can',
             'your', 'do', 'not', 'was', 'have', 'be', 'for', 'too', 'any', 'all', 'are', 'from', 'what', 'would'}
@@ -33,6 +34,16 @@ _DELETION = re.compile(
     # verification of a deletion the person already requested
     r"|\b(?:account|profile)\b[^.;!?]{0,60}\b(?:is|was|has been|have (?:already )?been) (?:gone|removed|deleted|erased)\b",
     re.I)
+# A deletion that names one specific item ("delete that export file") and neither asks for
+# the account or the person's records to be removed nor refers to an account deletion they
+# already requested is item-scoped: offline, its target cannot be grounded, so it never
+# becomes an account-wide authorization.
+_ACCOUNT_REQUEST = re.compile(
+    r"\b(?:delet\w*|eras\w*|wipe|purge|remov\w*)\b[^.;!?]{0,40}"
+    r"\b(?:account|profile|personal|records|everything|all (?:of )?my|my (?:data|details|information))\b"
+    r"|\bclos\w*\b[^.;!?]{0,25}\baccount\b|\baccount (?:deletion|removal|closure)\b|\bforget me\b"
+    r"|\b(?:account|profile)\b[^.;!?]{0,40}\b(?:delet\w*|eras\w*|remov\w*|clos\w*|gone)\b", re.I)
+_ITEM = re.compile(r"\b(?:result|file|export|attachment|download|link|cop(?:y|ies)|entry|listing)s?\b", re.I)
 _PRESERVE = re.compile(
     r"\bkeep (?:my|the) account\b|\bkeep the account as it is\b|\bleave (?:my|the) (?:profile|account)\b"
     r"|\bleave the account active\b|\bcontinue using\b|\bstill (?:need|want|use)\b"
@@ -48,6 +59,8 @@ class Intent:
     spans: tuple[str, ...] = ()
     method: str = 'deterministic-english-v1'
     signals: tuple = ()          # raw typed answers behind a model-backed decision
+    scope: str | None = None     # DELETE only: ACCOUNT | ITEM
+    target: str | None = None    # ITEM only: the one data category the person asked to delete
 
 
 def classify(text: str) -> Intent:
@@ -57,9 +70,13 @@ def classify(text: str) -> Intent:
     if not words or english == 0 or other >= english or _NON_LATIN.search(text):
         return Intent(UNRESOLVED, 'language not supported by the deterministic English classifier')
     keep = [m.group(0) for m in _PRESERVE.finditer(text)]
-    deletion = [m.group(0) for m in _DELETION.finditer(_NEGATED.sub(' ', text))]
+    affirmative = _NEGATED.sub(' ', text)
+    deletion = [m.group(0) for m in _DELETION.finditer(affirmative)]
     if deletion and not keep:
-        return Intent(DELETE, 'explicit deletion request', tuple(deletion))
+        if _ITEM.search(affirmative) and not _ACCOUNT_REQUEST.search(affirmative):
+            return Intent(UNRESOLVED, 'deletion of a specific item; its target cannot be grounded offline',
+                          tuple(deletion))
+        return Intent(DELETE, 'explicit deletion request', tuple(deletion), scope=ACCOUNT)
     if keep and not deletion:
         return Intent(NON_DELETION, 'explicit preservation or non-deletion scope', tuple(keep))
     if keep and deletion:

@@ -2,8 +2,9 @@
 
 Wrappers: plain key=value, bracket, pipe, JSON, RFC 5424 syslog, and cloud
 (`requestId=... message="k=\\"v\\" ..."`). Identity on a `*_started` line is
-attached to resources on lines of the same (file, service, trace) only; traces
-are never merged across files.
+attached to resources on lines of the same (file, service, trace) only, and only
+from lines logged at or before the line it is attached to; traces are never
+merged across files.
 """
 from __future__ import annotations
 
@@ -186,11 +187,11 @@ def parse_log(source_id, available_at, raw: bytes):
         # Not degraded: logs only contribute explicit lookups, never omission-based absence.
         issues.append('NOTE: export_started without export_completed marker')
 
-    trace_tokens = defaultdict(set)
+    trace_tokens = defaultdict(list)       # (service, trace) -> [(logged at, identity tokens)]
     trace_targets = defaultdict(set)
-    for _, _, d, _ in parsed:
+    for _, when, d, _ in parsed:
         if d.get('trace'):
-            trace_tokens[(d.get('service'), d['trace'])] |= _identity(d)
+            trace_tokens[(d.get('service'), d['trace'])].append((when, _identity(d)))
             if d.get('resource_id') and not d.get('event', '').endswith('_started'):
                 trace_targets[(d.get('service'), d['trace'])].add(d['resource_id'])
 
@@ -220,7 +221,8 @@ def parse_log(source_id, available_at, raw: bytes):
         # A trace's lookup keys describe its single target; if one trace touches several
         # resources the keys cannot be assigned to any of them.
         single_target = bool(d.get('trace')) and len(trace_targets[key]) == 1
-        tokens = own | (trace_tokens[key] if single_target else set())
+        earlier = set().union(*(t for at, t in trace_tokens[key] if at <= when)) if single_target else set()
+        tokens = own | earlier
         if facts.get('presence') == ABSENT and event != 'record_lookup':
             # A query key is the lookup's input, not an attribute of a returned record:
             # a not-found lookup cannot show that the target belongs to that person.

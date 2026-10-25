@@ -801,3 +801,519 @@ branch=main
 repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
 worktree=main
 parent_agent=none
+
+## [2026-10-25T01:00:53Z] Independent audit of e0aaef4: correctness and security hardening pass
+
+User Prompt (verbatim, secrets redacted):
+Full code audit — Ghost Data Still Exists
+Audited commit: e0aaef4cfa6e3b45e3ecc80ee7c9839d9e382c8e
+Changes required before final submission
+I reviewed the repository source, submission contract, parsing and identity logic, model integrations, planning, validation, and evaluation approach. I also independently checked the committed CSV against the input case set and evidence registry.
+
+The foundation is substantial, but I found defects that the existing tests do not adequately cover. Passing 130 tests is encouraging; it is not sufficient evidence that the audit decisions are correct.
+1. Critical findings
+C1 — Scoped deletion becomes full-account authorization
+
+intent_models.py → reconcile(); planner.py → plan_case()
+
+SCOPED_DELETION is mapped to the same DELETE outcome as a full-account deletion. The planner then evaluates every discovered account and data obligation, with no retained request scope.
+
+For example, a request to delete only an exported file could produce remediation for the person's entire account. The benchmark also labels scoped deletion as DELETE, so its reported perfect intent score does not detect this distinction.
+
+Fix: Preserve authorization scope as a structured object. A narrowly scoped request must not authorize unrelated deletion obligations. Add adversarial end-to-end fixtures, not just intent-label tests.
+
+
+
+C2 — Provider redirects can expose the API key
+
+providers.py → _post()
+
+The origin is checked for the initial request, but urllib.request.urlopen() follows redirects. I independently reproduced that Python's default redirect handler forwards an Authorization header to a different HTTPS origin on supported redirect types.
+
+Fix: Reject cross-origin redirects before forwarding credentials. Add an offline test with a simulated redirect. Rotate any previously exposed key.
+
+
+
+C3 — PDF identifiers are attached across records
+
+media.py → interpret_pdf()
+
+The code collects email and phone tokens from an entire PDF and attaches the resulting token set to each extracted resource. A document mentioning two different people can therefore make both resources appear associated with both people.
+
+Likewise, a single retention date found in a document can be assigned to multiple security records without proving which one it belongs to.
+
+Fix: Extract per-record rows or spans, bind identifiers and retention facts only within their proven context, and reject ambiguous associations.
+
+
+
+C4 — Later log entries can affect earlier identity links
+
+parsers/logsrc.py → parse_log()
+
+The parser builds trace_tokens using every entry in a trace before constructing time-stamped observations. A future log entry containing an identity can consequently supply that identity to an earlier lookup observation. Filtering the resulting observation by its original timestamp does not undo the later-derived link.
+
+Fix: Construct trace context temporally, using only evidence available by the relevant observation time. Test a future identity event sharing a trace with an earlier resource lookup.
+
+
+
+These findings are derived from identifiable code paths. They establish failure scenarios; they do not prove that all four scenarios occur in the supplied 518 cases.
+2. Findings affecting the current output
+These are not merely theoretical concerns. I checked the committed run diagnostics against the output file.
+COMPLETE rows
+95
+None has a resource-specific primary-account verification
+
+Empty INCOMPLETE plans
+37
+Fallbacks with no actionable steps
+
+Cited steps
+883
+All use registered, cutoff-eligible source IDs
+
+
+H1 — Every COMPLETE row lacks a resource-specific account verification
+planner.py → profile_obligation() and _derive()
+
+All 95 COMPLETE cases rely on a subject-level absence conclusion for the primary profile, but none produces a resource-specific account verification step.
+
+A full-table listing that contains no known identifier is useful negative evidence. However, it does not always prove that an unknown account record was deleted: an unlinked or already-anonymized record could still exist.
+
+This may explain a significant part of the weak exact-row performance.
+
+Required change: Distinguish subject-level absence evidence from proof of absence of a particular account resource. Where the actual account identifier cannot be established, retain that uncertainty rather than silently treating a missing verification step as completed.
+H2 — The staged fallback can override a Jev safety concern
+intent_models.py → decide_intents()
+
+Jev's yes/no flags can correctly make a contradictory request unresolved. However, an escalated generative response can later authorize deletion if the deterministic English classifier was also unresolved.
+
+The final reconciliation does not require the generative answer to address or resolve the original Jev contradiction.
+
+Required change: Make explicit conflicts persistent safety constraints. A generative model may provide new supporting evidence, but cannot simply replace a contradictory answer with a favorable one.
+H3 — Media identity enrichment is not time-scoped
+media.py → _systems_for(), _catalog_label() and _categories_for()
+
+These helpers search the entire structured corpus without filtering by the media capture time or case audit cutoff.
+
+That means an earlier screenshot or PDF can be assigned an identity, category, or system relationship using metadata established by a later source. The new observation is then timestamped as though that relationship was already known when the media was captured.
+
+Required change: Preserve provenance for each enrichment link and enforce temporal eligibility at the point where evidence is combined.
+H4 — Retention rules need separate condition handling
+policy.py → Policy.treatment()
+
+The supplied rules distinguish a security record within a retention period from a record under an active legal hold. The implementation effectively handles both through retention_until.
+
+Keeping the strict fallback is preferable to inventing retention facts, but a separate legal-hold condition evaluator is still necessary.
+
+The four sample retention regressions should be rechecked against this distinction, not fixed using a blanket presume_retention switch.
+3. Reliability, budget and evaluation findings
+The detailed report includes additional issues that should be addressed before enabling the investigator.
+Priority	Finding	Why it matters
+High	Concurrent model calls do not reserve their full cost	The advertised hard spending limit can be exceeded
+High	Cached responses bypass validation on retrieval	Corrupt or stale cached model output may be trusted
+High	NOT_FOUND lookups sometimes create ownership links	A failed query can associate a resource with the wrong person
+High	Conflicting SQL snapshot timestamps are not fully quarantined	Temporally inconsistent evidence can be treated as parsed successfully
+High	Ownership gap analysis excludes model-enriched media	Its claimed discovery limitations are not fully established
+Medium	Relationship traversal uses unqualified resource IDs	Two systems reusing an identifier can cause incorrect graph links
+Medium	Some malformed model responses can raise uncaught exceptions	A bad provider response can interrupt the run
+
+There is also a policy-interpretation gap: conditions for shared support attachments, legal holds, and backups are not always evaluated independently before applying their treatments.
+4. What passed the audit
+The implementation also has meaningful strengths:
+- Clean separation of inference and evaluation labels.
+- Canonical, deterministic output ordering.
+- Registered citation IDs and eligibility checks.
+- A read-only, restricted SQLite evidence loader.
+- Explicit distinction between workflow claims and observed states.
+- Jev integration with measured usage, caching and controlled retries.
+- Useful regression tests for historical identity, replica exposure and search-result ownership.
+I independently checked the output mechanics, including every operation tuple, step order and evidence reference. All passed.
+5. Recommended development order
+I would change our immediate plan from “build the investigator” to a focused correctness-hardening phase first.
+1. Fix scoped-deletion authorization and contradictory-model escalation.
+2. Secure TokenBazaar redirects and concurrent budget accounting.
+3. Correct PDF, screenshot and lookup-based identity provenance.
+4. Revisit the 95 COMPLETE decisions and retention conditions.
+5. Add targeted adversarial tests, rerun the full corpus, and measure exact-row accuracy again.
+6. Only then integrate the bounded investigator and independent semantic verifier.
+Keep the current commit and provisional output as the comparison baseline. Avoid a wholesale rewrite.
+Ghost Data Still Exists — Phase 3 independent code audit
+Audit target: Cyril-36/ghost-data-still-exists, commit e0aaef4cfa6e3b45e3ecc80ee7c9839d9e382c8e (main at time of review).
+Scope: all principal inference, parsing, model-gateway, planner, contract/CLI modules; review of regression and benchmark suites and submission artifacts; independent revalidation of committed CSV through a separate JavaScript CSV/JSON/registry checker.
+Method limitation: GitHub connection supplied source, but network/DNS restrictions prevented cloning the repository into the execution container; therefore the 130 Python tests and a full runtime audit were not independently rerun. Some defects below are demonstrable control-flow/counterexample findings, not observed errors in the 518 supplied cases. The redirect-header leak was reproduced separately with Python's standard-library redirect handler.
+Executive conclusion
+Do not freeze this commit as the final implementation. Schema/order/citation mechanics are strong, but the code has high-severity authorization, provenance, identity-linkage and hard-budget defects. Fix them with isolated regression tests before implementing the full investigator. Keep strict retention as a conservative default while adding an explicit legal-hold condition evaluator.
+Independently checked submission mechanics
+- Exactly 518 output data rows for 518 input requests; no duplicates or missing cases.
+- 2,405 output steps; all operation/state/phase tuples legal; step numbers contiguous; canonical phase/operation/system/resource order; zero failures in these checks.
+- 883 cited steps: no unregistered IDs; no sources whose listed availability time is after the corresponding case's audit_at; cited/uncited step phase rules pass.
+- Status totals: 95 COMPLETE, 413 INCOMPLETE, 10 NOT_APPLICABLE.
+- Run records: 61 disclosed fallbacks; 37 INCOMPLETE outputs have zero steps.
+- All 95 COMPLETE case plans use a subject-level USER_PROFILE absence obligation, without a resource-specific primary-account verification step. This is an actual output characteristic, not a hypothetical bug.
+- The run manifest records 533 cache hits and zero newly billed calls in the final provisional invocation. It does not independently prove accuracy of the cached model outputs.
+- Source report says Phase 3 sample 28/32 status accuracy, 2/32 exact rows; 130 Python tests passing is a developer-reported result, not independently rerun.
+Stop-ship findings (P0)
+P0-1 — Scoped deletion loses its scope, potentially authorizing unrelated deletion
+Where: code/ghostaudit/intent_models.py:30,78-83, code/ghostaudit/planner.py:244-267, and code/evaluation/intent_cases.py.
+
+SCOPED_DELETION, VERIFY_PRIOR_DELETION and full DELETE_ACCOUNT all reduce to the same Intent(DELETE). plan_case() ignores original category/scope and evaluates all linked resources. A stand-alone request to remove a download or support attachment, without authorizing closure of the account, can produce a full-account deletion plan. The synthetic benchmark encodes C_scoped_item -> DELETE, so 72/72 intent accuracy does not test preservation of scope.
+
+Fix/test: Have the intent contract retain action, account-authorization, and requested resource category/target/scope. Apply only supported scoped obligations. Test “delete this one export; keep my account,” “remove one search result” without account deletion, and verification of a previously closed account. Check not just the intent label but the entire resulting remediation plan. An uncertain target must remain unresolved.
+P0-2 — TokenBazaar API bearer token can cross origins on redirects
+Where: code/ghostaudit/providers.py:146-154.
+
+Gateway checks the initial URL prefix, then uses urllib.request.urlopen with default redirection. Independent Python standard-library reproduction confirmed 301/302/303 redirects to another HTTPS origin preserve the Authorization header. The request body may become GET, but bearer credentials still travel. The plan explicitly forbids credential-bearing cross-origin redirects.
+
+Fix/test: Disable automatic redirects for authorized requests; validate same scheme + exact hostname/origin before any redirect. Fail closed on cross-origin hops. Regression test with a simulated 302 cross-origin redirect and assertion the foreign handler receives no Authorization. Rotate any previously exposed key.
+P0-3 — Per-document identity and retention facts are attached to unrelated PDF records
+Where: code/ghostaudit/media.py:116-145.
+
+tokens aggregates all emails/phones in a PDF, then obs() applies it to every resource_id. The security document also applies the single detected retain_until date to each resource if it has multiple records. The committed media extraction summary shows a security PDF with two resource IDs and one date, and a support PDF with two resource IDs, one email and one phone. A shared PDF therefore permits false ownership/retention attribution.
+
+Fix/test: Parse PDF record-local rows/spans with page/line provenance. Link each identity and retention fact only to the supported record. If no unique mapping exists, create unresolved relations, not resource state. Add a two-user/two-resource PDF with a single retention date and assert no cross-person relation.
+P0-4 — Generative fallback can override Jev's original conflict/uncertainty flags
+Where: code/ghostaudit/intent_models.py:221-260.
+
+Jev may return UNRESOLVED due to preserve_account or conflicting_instructions. The generative stage can later produce DELETE, and _agrees() consults only deterministic intent (frequently UNRESOLVED for non-English), not Jev's conflict signals. Thus the purported one-way safety rule (“every stage can only narrow authorization”) is not enforced for these cases.
+
+Fix/test: Track persistent safety constraints from all stages. A generative response must explicitly reconcile contradictory spans, with an independent validation gate, instead of overriding them. Test non-English contradictory requests where Jev identifies preserve/conflict but the generative response incorrectly returns DELETE.
+High severity: evidence correctness (P1)
+P1-1 — The 95 COMPLETE rows do not prove a named primary profile is absent
+Where: code/ghostaudit/planner.py:215-241,281-310.
+
+profile_obligation() marks subject-level absence SATISFIED from comprehensive listings that lack the subject's currently known identity tokens. It has no primary-account resource ID, and _derive() excludes unrepresentable obligations from steps. All 95 COMPLETE plans in the committed run lack a resource-specific account verification; they verify other resources only. Unknown account IDs or anonymized/unlinked records cannot necessarily be ruled out by token omission.
+
+Fix/test: Separate verified resource-ID-specific absence from subject-level absence evidence. Subject-level absence may contribute to confidence, but do not assert all profile obligations settled if the record ID or copy coverage is unknown. Test unlinked anonymized account in a full-table snapshot, unknown primary ID and missing one known replica. Re-score after tightening; report honest fallback trade-off.
+P1-2 — Later sources can be silently repackaged as earlier media corroboration
+Where: code/ghostaudit/media.py:57-73,126-149,224-252.
+
+_systems_for, _categories_for and _catalog_label search global corpus without case cutoff or relation availability. They use later structured/catalog sources to assign old screenshots/PDFs an identity, system or category, then emit an observation timestamped at the earlier media capture. This violates provenance and can cause pre-cutoff ownership leaks.
+
+Fix/test: Keep enrichment links as separate attributed observations with their true timestamp, and join only after a cutoff-filtered query. Test a media capture available before audit plus a catalog link available after audit: the inferred link must not appear earlier.
+P1-3 — NOT_FOUND results sometimes become ownership links
+Where: code/ghostaudit/parsers/jsonsrc.py:58-67, parsers/textsrc.py:31-39, parsers/logsrc.py:223-229.
+
+JSON family-A NOT_FOUND results attach subject_reference to their target resource_id; text handover does likewise. The log parser explicitly clears query tokens for ABSENT in non-record_lookup events but exempts record_lookup. As a result, a query for Alice returning NOT_FOUND on an arbitrary resource can be misread as proof that resource belongs to Alice. Some Phase 3 fixes addressed 404 lookups elsewhere, but these paths remain.
+
+Fix/test: Separate lookup query subject from returned record ownership. A NOT_FOUND lookup can establish absence for a known ID but cannot itself add an identity-resource ownership edge. Test unknown/decoy targets across JSON family A, handover and log record_lookup.
+P1-4 — Log trace context is constructed non-temporally
+Where: parsers/logsrc.py:189-225.
+
+The parser collects all identity tokens in a (service,trace) group before creating individually timestamped observations. A log entry later than the observation can populate its ownership tokens. Ordinarily a correctly captured file becomes available after its last event, so a cutoff before that later event would also exclude the whole file. The exploit therefore depends on inconsistent capture metadata or a malformed/adversarial export; it is a defensive temporal-integrity gap, not proof of existing mislabeled rows.
+
+Fix/test: Sort trace events, record the provenance/time of each identity, and reject a source with event time after capture time as a usable state source. Ensure trace correlation is explicitly scoped to the correct target and does not override conflicting identities.
+P1-5 — Policy conditions are partially hardcoded rather than interpreted
+Where: code/ghostaudit/policy.py:61-79; dataset/deletion_rules.csv.
+
+Security audit retention is conditional on a supplied retention period; legal records are conditional on an active legal hold. The code uses retention_until for both and does not model an explicit hold-active condition. SUPPORT_ATTACHMENT is unconditionally DELETE even though the supplied rule is “attachment belongs only to the deletion subject”; SUPPORT_MESSAGE assumes shared context. BACKUP_ARCHIVE assumes restore access can always be blocked. Without a matching condition, these should be proven, false, or unresolved—not automatically approved.
+
+Fix/test: Category-specific condition facts with explicit evidence and three-valued truth; use deterministic dates/booleans where available, bounded semantic interpretation only where needed. Do not flip on presume_retention; audit the four sample regressions with security vs legal distinction.
+P1-6 — Claimed hard cost ceiling is not hard under concurrency
+Where: code/ghostaudit/providers.py:109-126,157-198.
+
+_reserve() increments call count but does not reserve money for in-flight calls. The preflight compares only completed spend plus the one fixed 25-paise reserve. With four simultaneous requests, several can pass the budget threshold before any cost is recorded. Actual vision acquisition cost averages about 48 paise/call in the Phase 3 usage report, greater than the reserve. max_cost_paise can therefore be exceeded despite documentation that it is a hard ceiling.
+
+Fix/test: Track in-flight reservations atomically, use conservative role-specific maximum cost, reconcile completed costs and release unused reserve. Stop/alert on missing or excessive cost headers. Test four concurrent calls at a boundary budget with delayed responses.
+P1-7 — Cached responses bypass current validation
+Where: code/ghostaudit/providers.py:157-163.
+
+A cache hit returns cached['response'] without calling the supplied validate. A malformed, tampered, or stale cache entry can therefore bypass the validation that only runs on live responses. Fingerprints cover requested model and prompt but do not force revalidation or define a cache format version.
+
+Fix/test: Validate every cached response and its metadata/format before consumption; evict invalid cache safely. Add cache corruption, model-version drift and concurrent-write tests.
+P1-8 — SQL snapshot time conflicts can still yield usable state and PARSED reporting
+Where: code/ghostaudit/parsers/sqlsrc.py parse_sql; code/ghostaudit/parsers/**init**.py.
+
+A snapshot with contradictory header/scope timestamps adds TEMPORAL_CONFLICT but continues with the maximum timestamp. parse_source() does not classify TEMPORAL_CONFLICT as PARTIAL/FAILED. It can appear as fully PARSED despite inconsistent temporal provenance.
+
+Fix/test: Reject state emission on conflicting capture metadata or quarantine it as partial/unresolved; test conflicting snapshot/header times with an audit cutoff between them.
+P1-9 — The gap/ownership evaluation does not use the same media-enriched corpus as inference
+Where: code/evaluation/gap_analysis.py analyze() and ownership_details().
+
+Both routines construct build_corpus(context) without the live/cache gateway. With media enabled by default but no gateway, PDF text yields no state and screenshots yield no observations. The measured Phase 3 pipeline does incorporate validated model-derived media observations. Consequently the reported counts “0 grounded ownership links missed” and individual gap causes are computed on a different evidence universe from the predictions. This does not automatically make each attribution wrong, but it invalidates any claim that the analysis exhaustively checked all eligible media relationships.
+
+Fix/test: Persist and reload the validated, versioned media-derived observations from the audited run (or rebuild with the identical cached gateway/config), and have gap analysis use that exact corpus. Assert equivalence of evidence/source counts and IDs to the run manifest before assigning cause labels.
+Medium: resilience and scoring (P2)
+P2-1 — Model response schema validation is incomplete
+intent_models.py _validate_jev assumes nested answers are dictionaries; choose_candidate does not verify probability shape, numeric range or finite values; generative_signals may raise on malformed results such as duplicate/mixed handle types or non-object entries. media.py vision validation checks little beyond page kind and entity fields type, and _doc_kind assumes probability keys exist. Test null/missing fields, booleans masquerading as numeric probabilities, NaN, unexpected arrays, duplicate handles and huge responses. Convert failures to unresolved/FAILED, never uncaught crashes.
+P2-2 — The 37 empty INCOMPLETE rows may score poorly
+The problem statement asks INCOMPLETE results for complete findings/remediation/checks; diagnostic disclosures are a sensible safe fallback but are not transmitted as part of output.csv. There are 37 INCOMPLETE [] rows, plus other partial plans. Keep the ethical conservative fallback, but prioritize investigating and reducing them rather than presenting structure validation as semantic completeness.
+P2-3 — Read-only investigator SQL tool does not check snapshot observation time
+tools.py:80-97 gates by manifest captured_at but not the snapshot's actual extracted observation time. It returns raw rows and calls the table exhaustive_table_listing=true regardless of source-level temporal/schema conflicts. Make the tool return only vetted, cutoff-eligible snapshot observations or explicitly mark them unverified.
+P2-4 — Cross-system resource-ID traversal can conflate resources
+planner.py discover() stores relationship edges and its visited set by bare resource ID, not (system_id,resource_id). If two systems use the same ID string, graph traversal may merge/cut off distinct resources. Test reused identifiers in separate systems and ambiguous edges.
+P2-5 — Model-transcribed screenshots marked INTERPRETED despite unresolved fields
+media.py reports INTERPRETED even when some IDs were rejected or the model reports unreadable values. This is valid for “processed”, not proof of total semantic coverage. Separate processed status from accepted observations, rejected entities and unresolved fields in reports.
+P2-6 — Custom PDF parser has limited format portability
+parsers/pdfsrc.py hand-interprets operators and ToUnicode maps and handles the supplied PDFs, but a broader PDF corpus may use multi-byte CMap encodings, object streams, indirect resource dictionaries, etc. Do not count the current four extracted PDFs as general PDF-parser robustness. Add small adversarial PDF fixtures or use a mature library where allowed.
+P2-7 — Tests validate happy paths and known regressions but under-cover authorization/provenance
+The checked test files include useful mixed-search, replica and missing-retention regressions. Missing critical cross-module fixtures include: scoped-only deletion preserving account; contradictory Jev escalated to erroneous generative DELETE; PDF with two subjects; future catalog linking earlier media; cross-origin redirect; concurrent budget overshoot; malformed cached payload; reused resource IDs across systems; unsupported active-hold condition. Add these before adding more agents.
+Positive engineering findings
+- Deterministic output formatting, canonical step ordering, restricted operation table and audited CSV construction.
+- Read-only SQL snapshot loader uses SQLite authorizer, in-memory database and execution budget (still test parser errors).
+- Exact evidence registry, explicit audit-time checks in core queries and separate claim-versus-state observations.
+- Identity changes, replica exposure and search ownership bugs from Phase 2 have targeted regressions in Phase 3.
+- Model decision prompts, request isolation, cache fingerprints, logging, per-provider usage and declared fallback modes.
+- Inputs and sample gold labels are separated in inference; developer report acknowledges sample-informed decisions.
+- 518-row CSV is mechanically valid; the absence of a semantic verifier is explicitly acknowledged, not concealed.
+Proposed fix order — minimal patches, no wholesale rewrite
+1. P0 safety patch: scoped authorization contract plus sample-preserving end-to-end tests; staged escalation cannot waive conflicting Jev flags; disable cross-origin credential redirects.
+2. P0/P1 evidence patch: PDF per-record links/retention; cutoff-aware media provenance; no ownership from NOT_FOUND; quarantine contradictory SQL timing.
+3. P1 decision patch: profile absence proof with explicit resource coverage, category-conditional policy evaluation, source-grounded active legal holds; strictly justify COMPLETE.
+4. P1 reliability patch: atomic concurrent cost reserves, cache revalidation, fail-safe malformed response validation.
+5. P2 hardening: investigator tools' cutoff, system-qualified graph keys, partial media reporting, adversarial portability fixtures.
+6. Run all tests and static lint; independently evaluate statuses, step precision/recall, sequence/exact rows, false COMPLETE, fallbacks; regenerate the full 518-row output only from a passing build and preserve comparison artifacts.
+7. Only then implement/enable the bounded investigator and independent verifier, using the same reference baseline and measured cost/benefit. The verifier should prioritize the above unsafe assumptions as adversarial cases.
+Retention decision
+Keep presume_retention=false as the default; the supplied policy conditions are not automatically true when evidence is absent. But implement separate condition evaluation for an active legal hold vs security retention duration, and review cases 11, 13, 16 and 31 for alternate eligible evidence. The original 2/32 exact-row sample score is low, but optimizing it with unjustified assumptions is not sound.
+Release gate
+Do not claim this commit is hidden-test-ready until P0 defects are fixed, the known P1 risks are bounded or resolved, an independent verifier covers COMPLETE/absence, and test results have been reproduced in a clean checkout. A model-only intent benchmark of 72/72 is not equivalent to end-to-end deletion authorization accuracy or 518-row output quality.
+
+Direct source: https://github.com/Cyril-36/ghost-data-still-exists/tree/e0aaef4cfa6e3b45e3ecc80ee7c9839d9e382c8e
+I want you to perform a focused correctness and security hardening pass on my existing Ghost Data Still Exists implementation.
+
+The attached independent audit identifies 20 findings. Read the entire audit report, `plan.md`, `problem_statement.md`, `code/decisions.md`, and the relevant implementation and tests before making any changes.
+
+**Repository:** `Cyril-36/ghost-data-still-exists`
+
+**Baseline commit:** `e0aaef4cfa6e3b45e3ecc80ee7c9839d9e382c8e`
+
+I do not want a rewrite. The current implementation already handles structured evidence, model-backed intent, media extraction, policy evaluation, and a valid provisional 518-row output. Preserve the working architecture.
+
+## 1. Rules for this task
+
+Follow these strictly:
+
+- Make the smallest changes that correctly resolve the findings.
+- No unnecessary new classes, wrappers, frameworks, or dependencies.
+- No unrelated refactoring or formatting changes.
+- Reuse existing types, parsers, validators, and interfaces where possible.
+- Do not weaken audit-time cutoff rules, ownership requirements, or evidence validation.
+- Do not hardcode case IDs, expected labels, resource IDs, or sample-specific exceptions.
+- Keep sample labels completely outside inference.
+- Preserve deterministic output generation.
+- Run offline tests before any paid model calls.
+- Do not spend API credits without a justified need.
+- Do not expose secrets in code, commits, logs, or test artifacts.
+
+First inspect the current Git state and preserve any uncommitted work. Verify that the baseline and audit findings still apply.
+
+## 2. First priority: fix the four P0 findings
+
+### A. Scoped deletion authorization
+
+Currently `SCOPED_DELETION` is collapsed into a general DELETE decision, and the planner can treat a request to delete one resource as authorization to delete the entire account.
+
+Introduce a minimal, explicit authorization-scope representation.
+
+Distinguish:
+- Full account deletion.
+- Verification of previously requested account deletion.
+- Deletion of a specific resource or category.
+- Non-deletion.
+- Ambiguous or contradictory authorization.
+
+Do not send every scoped request through the full-account deletion planner.
+
+If the requested target cannot be grounded, keep it unresolved.
+
+Add end-to-end tests proving that removing one export, search result, or attachment does not authorize deletion of unrelated records or the account itself.
+
+Update the intent benchmark so success requires the correct authorization scope, not just a DELETE label.
+
+### B. Provider credential redirects
+
+Inspect `code/ghostaudit/providers.py`.
+
+Ensure an authenticated request cannot forward its bearer token to a different origin through an HTTP redirect.
+
+Reject cross-origin redirects before any credentials are sent to the destination. Preserve the documented TokenBazaar endpoint behavior without weakening this control.
+
+Add an offline test simulating a cross-origin redirect.
+
+### C. PDF evidence association
+
+Inspect `code/ghostaudit/media.py` and `parsers/pdfsrc.py`.
+
+The current code may attach all document-level identity tokens to every record mentioned in the same PDF.
+
+Fix this by binding identifiers and retention facts to the specific resource or local document section that supports them.
+
+Preserve page and line provenance.
+
+When multiple records or people are present and the association cannot be established, leave the relationship unresolved.
+
+Add a synthetic PDF test with two different people, two records, and one retention date.
+
+### D. Contradictory model escalation
+
+Inspect `code/ghostaudit/intent_models.py`.
+
+If Jev detects contradictory instructions, account preservation, or another material authorization conflict, the generative fallback must not silently override that concern.
+
+Require explicit resolution supported by the actual request text. If the contradiction remains, return UNRESOLVED.
+
+Add multilingual tests where the first model identifies a conflict but the fallback incorrectly proposes DELETE.
+
+## 3. Second priority: investigate the P1 findings
+
+After the four P0 fixes pass, examine the remaining P1 findings from the audit.
+
+For each finding:
+
+1. Verify whether the reported problem actually exists in the current code.
+2. Write a minimal regression test demonstrating the failure.
+3. Implement the smallest justified fix.
+4. Confirm the test fails before the fix and passes afterward.
+5. Record the effect on existing behavior.
+
+Pay particular attention to:
+
+- Whether a subject-level absent profile is enough to justify COMPLETE.
+- Cutoff-aware provenance for media enrichment.
+- NOT_FOUND lookups incorrectly establishing ownership.
+- Future log entries affecting earlier trace relationships.
+- Independent evaluation of security retention and active legal holds.
+- Concurrent model-cost reservations.
+- Cache validation on every read.
+- Conflicting SQL snapshot timestamps.
+- Gap analysis using the same evidence universe as inference.
+
+Do not automatically mark all current COMPLETE cases incomplete. Investigate what their evidence actually establishes and apply one consistent rule.
+
+Keep `presume_retention=false` as the default.
+
+For sample cases 11, 13, 16, and 31, report the exact retention evidence and why their predictions differ. Do not change the policy merely to improve sample accuracy.
+
+## 4. Tests and reproducibility
+
+Keep the existing 130 tests and add targeted tests for the actual defects.
+
+Run:
+
+- The complete unit test suite.
+- Ruff lint.
+- All synthetic evaluation fixtures.
+- The sample evaluation.
+- Full 518-row output generation and validation.
+
+Use validated cached model responses where compatible. Invalidate affected cache entries when prompt, schema, or interpretation changes.
+
+Preserve the existing provisional output and its metrics as the baseline.
+
+Baseline:
+- 518 valid rows.
+- 95 COMPLETE, 413 INCOMPLETE, 10 NOT_APPLICABLE.
+- 28/32 sample status accuracy.
+- 142/143 step precision.
+- 142/193 step recall.
+- 2/32 exact-row accuracy.
+- 61 disclosed fallbacks.
+- Zero false COMPLETE cases against the supplied sample labels.
+
+Measure both improvements and regressions. Do not claim a fix improved accuracy unless the evaluation demonstrates it.
+
+## 5. Do not build Phase 4 features yet
+
+Do not implement the investigator runtime, independent semantic verifier, dashboard, or any additional agent framework in this task.
+
+I want a reliable correctness baseline first.
+
+Do not attempt to compensate for missing evidence by guessing relationships or using later-captured sources.
+
+## 6. Code quality requirements
+
+I want clean, maintainable code.
+
+- Prefer simple functions over elaborate abstractions.
+- Avoid duplicated logic.
+- Avoid speculative fallback pathways.
+- Avoid excessive comments that restate the code.
+- Avoid broad exception handling that hides failures.
+- Preserve existing public APIs where possible.
+- Do not add files unless they serve a clear purpose.
+- Remove temporary experiments and dead code introduced by your changes.
+- Keep runtime dependencies minimal.
+
+Every meaningful change must have a specific failure scenario that justifies it.
+
+## 7. Deliverables and stopping point
+
+Work in the existing repository without rewriting history.
+
+First complete the P0 safety patch and its tests. Then proceed through the P1 fixes that can be validated without introducing large new architectural changes.
+
+Before committing, review the entire diff for unnecessary code and regressions.
+
+Provide a report containing:
+
+1. Which audit findings were confirmed, disproven, or remain unverified.
+2. The root cause of each confirmed issue.
+3. Files and functions changed.
+4. Regression tests added, including which failed before each fix.
+5. Tests and lint results.
+6. Sample metrics before and after.
+7. Full-corpus status, step, and fallback differences.
+8. Exact model calls and cost, if any.
+9. Remaining risks.
+10. Lines added/deleted and any new dependencies.
+
+Commit and push only after the appropriate tests pass. Preserve the previous baseline.
+
+Stop after the correctness-hardening work and provide the commit SHA for my review.
+
+**My priority is correct behavior with minimal code, not producing more code.**
+
+Agent Response Summary:
+Verified each audit finding against the code and data, wrote 19 regression tests that fail on e0aaef4, and applied minimal fixes: authorization scope for item deletions, no credential-bearing redirects (leak reproduced), record-local PDF facts, Jev conflicts never escalated, cutoff-aware media enrichment, cross-person ownership guard, temporal log traces, quarantined SQL time conflicts, in-flight budget reservations, cache revalidation, gap analysis on the run's evidence. The full 518-row output is byte-identical; strict retention kept; NOT_FOUND exact-lookup ownership kept with a guard and flagged for the owner.
+
+Actions:
+* Edited code/ghostaudit/{intent,intent_models,planner,providers,media,audit}.py, parsers/{logsrc,sqlsrc,__init__}.py
+* Edited code/evaluation/{gap_analysis,intent_benchmark,intent_cases,main}.py; added prompts/intent_target_jev_v1.json, tests/test_hardening_regressions.py
+* Ran unit tests (3.11-3.14), ruff, fixtures, offline and cached sample runs, full 518 run; probed gateway (HTTP 503, nothing billed)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T02:30:05Z] Continue where you left off
+
+User Prompt (verbatim, secrets redacted):
+Continue where you left off.
+
+Agent Response Summary:
+Finished the hardening implementation, measured offline and cached results, documented decisions D044-D057 and report sections. The live gateway returned HTTP 503 throughout, so the staged sample score and the scope-aware intent benchmark remain pending.
+
+Actions:
+* Wrote decisions, README, evaluation and usage report sections
+* Generated runs/phase3-hardened and validated output.csv
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T03:08:00Z] Commit now
+
+User Prompt (verbatim, secrets redacted):
+Commit now
+
+Agent Response Summary:
+Committed and pushed the hardening pass with the two live measurements marked pending (gateway HTTP 503), to be added in a follow-up commit.
+
+Actions:
+* Secret scan, git commit, git push origin main
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none

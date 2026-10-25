@@ -6,6 +6,8 @@ plan_case()  status and steps derived only from those obligations
 
 Status rules (plan sections 4.3, 16.2, 17):
 - NON_DELETION intent                                  -> NOT_APPLICABLE, []
+- ITEM-scoped DELETE: only linked records of the requested category are obligations;
+  the account and every other record are outside the authorization
 - any VIOLATED obligation                              -> INCOMPLETE (confirmed)
 - nothing violated, nothing unresolved, >=1 obligation -> COMPLETE (verification only, cited)
 - anything else                                        -> INCOMPLETE best-effort fallback,
@@ -19,7 +21,7 @@ from datetime import datetime, timezone
 from .contracts import OutputRow, Request, Step
 from .corpus import Corpus
 from .identity import IdentityIndex, SubjectIdentity, resolve_subject
-from .intent import DELETE, NON_DELETION, Intent, classify
+from .intent import ACCOUNT, DELETE, ITEM, NON_DELETION, Intent, classify
 from .observations import ABSENT, LINK, PRESENT, STATE, Observation
 from .output import canonical_steps
 from .policy import Policy, PolicyError
@@ -87,12 +89,19 @@ def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cut
     """Resources that eligible evidence ties to the subject, with the linking observations.
 
     Links come from exact identity tokens on the record (or its log trace), explicit
-    catalog links, and explicit resource references (e.g. source_resource_id).
+    catalog links, and explicit resource references (e.g. source_resource_id). A record
+    whose own eligible state evidence names another known person is never attributed to
+    the subject (identity conflict), however it was reached: a lookup that names the
+    subject cannot claim a record that other evidence ties to someone else.
     """
     linked: dict[tuple[str, str], list[Observation]] = {}
     conflicts: dict[tuple[str, str], list[str]] = {}
     own = set(subject.user_ids)
     seen = set()
+
+    def foreign(observations):
+        return {t for o in observations if o.kind == STATE for t in o.tokens
+                if index.owner.get(t, set()) - own and t not in subject.tokens}
     # Experiment only: ownership links from sources available after the cutoff.
     link_cutoff = datetime.max.replace(tzinfo=timezone.utc) if corpus.config.post_cutoff_ownership_links else cutoff
     for token in subject.tokens:
@@ -107,10 +116,20 @@ def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cut
                 if others and other not in subject.tokens:
                     conflicts.setdefault(key, []).append(
                         f'IDENTITY_CONFLICT: {obs.obs_id} also names {other[0]} of {sorted(others)}')
+    for key in linked:
+        names = foreign(o for o in corpus.resource_observations(key[1], cutoff) if o.system_id == key[0])
+        if names and not conflicts.get(key):
+            conflicts[key] = [f'IDENTITY_CONFLICT: other evidence for {key[1]} names {sorted(k for k, _ in names)} '
+                              'of another person']
     # Multi-hop traversal over explicit relationships (source_resource_id references and
     # source -> destination rows), both directions, from directly linked records.
     # Guards: eligible evidence only, depth limit, visited set (cycles), and no traversal
     # into a record whose own evidence names a different known person (no cross-person merge).
+    # References carry bare IDs, so an ID used by more than one system is never traversed.
+    def systems_of(known):
+        return {o.system_id for o in known if o.system_id and o.kind in (STATE, LINK)} or \
+            {o.system_id for o in known if o.system_id}   # claims only when nothing better exists
+
     edges = {}
     for obs in corpus.observations:
         if obs.resource_id and obs.refs and obs.available_at <= cutoff and obs.observed_at <= cutoff:
@@ -121,21 +140,18 @@ def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cut
     visited = {rid for (_, rid) in linked}
     while frontier:
         rid, depth = frontier.pop(0)
-        if depth >= max_hops:
+        if depth >= max_hops or len(systems_of(corpus.resource_observations(rid, cutoff))) > 1:
             continue
         for other, via in sorted(edges.get(rid, ()), key=lambda e: (e[0], e[1].obs_id)):
             if other in visited:
                 continue
             visited.add(other)
             known = corpus.resource_observations(other, cutoff)
-            foreign = {t for o in known if o.kind == STATE for t in o.tokens
-                       if index.owner.get(t, set()) - own and t not in subject.tokens}
-            if foreign:
+            if foreign(known):
                 conflicts.setdefault(('?', other), []).append(
                     f'IDENTITY_CONFLICT: {other} reached via {via.obs_id} but its records name another person')
                 continue
-            systems = {o.system_id for o in known if o.system_id and o.kind in (STATE, LINK)} or \
-                {o.system_id for o in known if o.system_id}   # claims only when nothing better exists
+            systems = systems_of(known)
             if len(systems) != 1:
                 continue
             linked.setdefault((systems.pop(), other), []).append(via)
@@ -215,9 +231,11 @@ def obligation(state: ResourceState, policy: Policy, audit_at) -> Obligation:
 def profile_obligation(subject, corpus, cutoff) -> Obligation:
     """Primary-profile obligation when no profile resource ID is grounded for the subject.
 
-    Satisfied only by exhaustive profile listings (latest per location) that contain no
-    row carrying the subject's identifiers. It can never produce an output step,
-    because the contract needs a resource_id that the evidence does not supply.
+    Satisfied only by exhaustive profile listings (latest per location) in which every
+    row carries an identifier and none is the subject's: a row with no identifier at all
+    could be the subject's anonymized or unlinked account. This is subject-level evidence
+    only; it can never produce an output step, because the contract needs a resource_id
+    that the evidence does not supply.
     """
     ob = Obligation('account_service', None, 'USER_PROFILE', 'DELETE', 'rule_01')
     latest = {}
@@ -235,8 +253,15 @@ def profile_obligation(subject, corpus, cutoff) -> Obligation:
     if any(s.member_tokens & subject.tokens for s in latest.values()):
         ob.issues.append('CONTRADICTORY_STATE: a profile listing carries the subject but no resource was linked')
         return ob
+    blank = sorted({o.resource_id for s in latest.values() for o in corpus.by_source[s.source_id]
+                    if o.resource_id in s.members and o.observed_at == s.observed_at and o.location == s.location
+                    and o.category == 'USER_PROFILE' and not o.tokens})
+    if blank:
+        ob.issues.append(f'UNPROVEN_ABSENCE: profile listing rows {blank[:5]} carry no identifier; any could be '
+                         "the subject's")
+        return ob
     ob.result = SATISFIED
-    ob.issues.append('NOTE: subject absent from the latest exhaustive profile listings '
+    ob.issues.append('SUBJECT_LEVEL_ABSENCE: subject absent from the latest exhaustive profile listings '
                      f'{sorted(s.source_id for s in latest.values())}; profile resource ID not grounded, so no step')
     return ob
 
@@ -252,6 +277,10 @@ def plan_case(request: Request, corpus: Corpus, policy: Policy, index: IdentityI
         return plan
     if plan.intent.decision != DELETE:
         return _fallback(plan, f'INTENT_UNRESOLVED: {plan.intent.reason}')
+    item = plan.intent.scope == ITEM
+    if not (plan.intent.scope == ACCOUNT or (item and plan.intent.target)):
+        return _fallback(plan, f'INTENT_UNRESOLVED: deletion scope {plan.intent.scope}/{plan.intent.target} '
+                               'not established')
 
     cutoff = request.audit_at
     plan.subject = resolve_subject(request.email, cutoff, index, corpus)
@@ -260,15 +289,24 @@ def plan_case(request: Request, corpus: Corpus, policy: Policy, index: IdentityI
         return _fallback(plan, 'IDENTITY_UNRESOLVED: ' + '; '.join(plan.subject.issues))
 
     linked, conflicts = discover(plan.subject, corpus, index, cutoff)
+    outside = 0
     for (system_id, resource_id), links in sorted(linked.items()):
         state = reconstruct(corpus, system_id, resource_id, cutoff, plan.subject.tokens)
+        if item and plan.intent.target not in state.categories:
+            outside += 1
+            continue
         ob = obligation(state, policy, cutoff)
         ob.links = links
         if conflicts.get((system_id, resource_id)):
             ob.issues += conflicts[(system_id, resource_id)]
             ob.result, ob.verify_op, ob.finding_op, ob.remedy_op = UNRESOLVED, None, None, None
         plan.obligations.append(ob)
-    if not any(o.category == 'USER_PROFILE' for o in plan.obligations):
+    if item:
+        plan.issues.append(f'SCOPE: only {plan.intent.target} records requested; {outside} other linked '
+                           'record(s) not assessed')
+        if not plan.obligations:
+            return _fallback(plan, f'SCOPE_TARGET_UNGROUNDED: no linked {plan.intent.target} record')
+    elif not any(o.category == 'USER_PROFILE' for o in plan.obligations):
         plan.obligations.append(profile_obligation(plan.subject, corpus, cutoff))
     return _derive(plan)
 

@@ -10,6 +10,10 @@ Causes, checked in order for every expected step the prediction lacks:
   RETENTION_CONDITION_UNPROVEN  linked retained record, but no supplied retention period (strict policy)
   STATE_UNPROVEN          linked, but its current state could not be established
   STATE_OR_POLICY         linked with a decided state/treatment that differs from the label
+
+The corpus is rebuilt exactly as the audited run built it (its engine configuration, and
+media interpreted from the run's cached model responses only); the rebuilt evidence must
+match the run's source status and media extractions, or the analysis refuses to run.
 """
 from __future__ import annotations
 
@@ -17,18 +21,33 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from ghostaudit.config import EngineConfig
 from ghostaudit.corpus import build_corpus
 from ghostaudit.identity import IdentityIndex, resolve_subject
 from ghostaudit.inputs import load_context, load_requests
 from ghostaudit.output import read_output
 from ghostaudit.planner import discover
+from ghostaudit.providers import Gateway, ProviderConfig
 
 FIELDS = ('phase', 'system_id', 'resource_id', 'operation', 'state')
 
 
+def run_corpus(context, run_dir: Path):
+    """The audited run's evidence universe: same config, media from cached responses only (no calls)."""
+    manifest = json.loads((Path(run_dir) / 'run_manifest.json').read_text(encoding='utf-8'))
+    used_gateway = manifest['inference_modes']['gateway_mode'] is not None
+    gateway = Gateway(ProviderConfig(max_calls=0)) if used_gateway else None
+    corpus = build_corpus(context, EngineConfig(**manifest['engine_config']), gateway)
+    extractions = json.loads(json.dumps(getattr(corpus, 'media_extractions', {}), default=str))
+    recorded = json.loads((Path(run_dir) / 'media_extractions.json').read_text(encoding='utf-8'))
+    if dict(Counter(r.status for r in corpus.reports)) != manifest['source_status'] or extractions != recorded:
+        raise ValueError('rebuilt evidence differs from the audited run (source status or media extractions)')
+    return corpus
+
+
 def analyze(dataset: Path, requests_path: Path, predictions: Path, expected: Path, run_dir: Path) -> dict:
     context = load_context(dataset)
-    corpus = build_corpus(context)
+    corpus = run_corpus(context, run_dir)
     index = IdentityIndex(context)
     requests = {r.case_id: r for r in load_requests(requests_path)}
     plans = {json.loads(line)['case_id']: json.loads(line)
@@ -82,11 +101,11 @@ def render(result: dict) -> str:
     return '\n'.join(lines) + '\n'
 
 
-def ownership_details(dataset: Path, requests_path: Path, gaps: dict, corpus=None) -> list[dict]:
+def ownership_details(dataset: Path, requests_path: Path, gaps: dict, run_dir: Path) -> list[dict]:
     """For each missed step whose resource is unlinked, list every source mentioning that
     resource and classify the relationship it offers (evaluation-only diagnosis)."""
     context = load_context(dataset)
-    corpus = corpus or build_corpus(context)
+    corpus = run_corpus(context, run_dir)
     index = IdentityIndex(context)
     requests = {r.case_id: r for r in load_requests(requests_path)}
     out, seen = [], set()

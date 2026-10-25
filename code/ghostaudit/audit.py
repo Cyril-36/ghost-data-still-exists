@@ -26,7 +26,7 @@ from .planner import VIOLATED, CasePlan, plan_case
 from .policy import Policy
 from .providers import Gateway
 
-ENGINE_VERSION = 'phase3-staged-1'
+ENGINE_VERSION = 'phase3-hardened-1'
 
 
 def _sha256(path: Path) -> str:
@@ -40,7 +40,7 @@ def _plan_record(p: CasePlan, stage: str = '') -> dict:
         'fallback': p.fallback,
         'fallback_reason': p.fallback_reason,
         'intent': {'decision': p.intent.decision, 'reason': p.intent.reason, 'spans': list(p.intent.spans),
-                   'method': p.intent.method, 'stage': stage,
+                   'method': p.intent.method, 'stage': stage, 'scope': p.intent.scope, 'target': p.intent.target,
                    'signals': [list(x) for x in p.intent.signals]},
         'subject': None if p.subject is None else {
             'user_ids': p.subject.user_ids,
