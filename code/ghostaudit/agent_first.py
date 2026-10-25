@@ -8,14 +8,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 from .casefile import CaseFile, fact_observations
 from .contracts import ContractError, OPERATION_TABLE
 from .corpus import eligible
 from .identity import resolve_subject
-from .intent import ACCOUNT, DELETE, ITEM, NON_DELETION, UNRESOLVED, Intent, classify
+from .intent import ACCOUNT, DELETE, ITEM, NON_DELETION, UNRESOLVED, Intent, classify, hypothetical_deletion
 from .investigator import Investigator
 from .output import check_row, parse_steps_json
 from .planner import CasePlan
@@ -53,14 +54,28 @@ def offline_gateway(gateway):
         isinstance(gateway, ReplayGateway) or gateway.config.max_calls == 0)
 
 
+def allowed_agent_gateway(gateway, allow_live=False):
+    if offline_gateway(gateway):
+        return True
+    return bool(allow_live and gateway is not None and gateway.mode == 'live'
+                and math.isfinite(gateway.config.max_cost_paise) and gateway.config.max_cost_paise > 0
+                and gateway.config.max_calls > 0 and gateway.config.max_retries == 0
+                and gateway.config.max_rate_limit_retries == 0)
+
+
 class ProposalVerifier:
     """Validate an authored answer. Never generate, fill in, reorder or replace its steps."""
 
     def __init__(self, verifier, policy):
         self.verifier, self.policy = verifier, policy
+        self.last_authorization_review = None
+
+    def review_authorization(self, text):
+        return self.authorization_review(text) if getattr(self, 'authorization_review', None) else None
 
     def verify(self, request, subject, proposal, case):
         findings = []
+        self.last_authorization_review = None
 
         def reject(code, message):
             findings.append(Finding(code, 'BLOCKING', message))
@@ -74,7 +89,7 @@ class ProposalVerifier:
         if decision == UNRESOLVED:
             reject('AUTHORIZATION_UNRESOLVED', 'Unresolved authorization requires a disclosed fallback.')
         if decision == DELETE:
-            if re.search(r'\b(if i|if my|suppose|hypothetical|what would|can i|could i|should i)\b', request.request_text, re.I):
+            if hypothetical_deletion(request.request_text):
                 reject('AUTHORIZATION_UNSUPPORTED', 'A hypothetical or capability question does not authorize deletion.')
             if not subject.resolved or scope not in (ACCOUNT, ITEM):
                 reject('AUTHORIZATION_UNSUPPORTED', 'Deletion needs one resolved subject and an explicit scope.')
@@ -93,7 +108,13 @@ class ProposalVerifier:
         else:
             if proposal['deletion_status'] != 'NOT_APPLICABLE' or scope != 'NONE' or a['target']:
                 reject('STATUS_MISMATCH', 'Non-deletion requires NONE scope, no target and NOT_APPLICABLE.')
-            if det.decision != NON_DELETION:
+            review = self.review_authorization(request.request_text) if det.decision == UNRESOLVED else None
+            self.last_authorization_review = review
+            independent = isinstance(review, dict) and review.get('decision') == NON_DELETION \
+                and type(review.get('confidence')) in (int, float) and 0.9 <= review['confidence'] <= 1 \
+                and review.get('conflicting') is False and isinstance(review.get('quote'), str) \
+                and bool(review['quote'].strip()) and review['quote'] in request.request_text
+            if det.decision != NON_DELETION and not independent:
                 reject('AUTHORIZATION_UNSUPPORTED', 'Non-deletion could not be independently confirmed; disclose uncertainty.')
         intent = Intent(decision, a['reason'], (quote,), 'agent-first-v1', scope=scope if decision == DELETE else None,
                         target=a['target'] or None, whole_category=a['whole_category'])
@@ -104,22 +125,39 @@ class ProposalVerifier:
         except ContractError as exc:
             reject('INTEGRITY', str(exc))
         witnesses = {w['step_no']: w for w in proposal['witnesses']}
+        extra = fact_observations(case.facts)
+        owned = self.verifier._owned(subject, request.audit_at, extra)
+        grouped = {}
+        for s in plan.steps:
+            grouped.setdefault((s.system_id, s.resource_id), []).append(s)
+        parents = {key for key, steps in grouped.items() if self.verifier.parent_absence_source(
+            intent, *key, steps, self.verifier._observations(key[1], request.audit_at, extra),
+            request.audit_at, subject, extra, owned=owned) is not None}
         if len(witnesses) != len(proposal['witnesses']):
             reject('UNSHOWN_WITNESS', 'Witness step numbers must be unique.')
         for number, step in enumerate(plan.steps, 1):
             if step.resource_id not in case.handles:
                 reject('INVENTED_RESOURCE', f'{step.resource_id} was never retrieved.')
-            if not step.evidence_id:
+            parent = (step.system_id, step.resource_id) in parents
+            if not step.evidence_id and not parent:
                 continue
             w = witnesses.get(number)
             try:
-                if not w or w['source_id'] != step.evidence_id or not w['literal'].strip():
+                if not w or (step.evidence_id and w['source_id'] != step.evidence_id) or not w['literal'].strip():
                     raise ValueError('Each cited step needs its own matching source witness.')
+                proof_source = step.evidence_id or w['source_id']
+                if parent:
+                    check = replace(step, evidence_id=proof_source)
+                    obs = self.verifier._observations(step.resource_id, request.audit_at, extra)
+                    def add(code, severity, message, *rest):
+                        findings.append(Finding(code, severity, message))
+                    self.verifier._check_citation(check, obs, request.audit_at, add)
+                    self.verifier._check_copies(check, obs, request.audit_at, subject, add)
                 if not locator_lines(w['locator']) <= case.shown.get(w['source_id'], set()):
                     raise ValueError('The cited lines were never retrieved in full.')
                 span = self.verifier.texts.span(w['source_id'], w['locator'])
                 omission = step.operation == 'VERIFY_RECORD_ABSENT' and any(
-                    s.source_id == step.evidence_id for s in self.verifier._absence_scopes(
+                    s.source_id == proof_source for s in self.verifier._absence_scopes(
                         step, self.verifier._observations(step.resource_id, request.audit_at,
                             fact_observations(case.facts)), request.audit_at, case.subject_tokens))
                 named = re.search(rf'(?<![\w.@+-]){re.escape(step.resource_id)}(?![\w@+-])', w['literal'])
@@ -140,7 +178,7 @@ class ProposalVerifier:
             extra = fact_observations(case.facts)
             owned = self.verifier._owned(subject, request.audit_at, extra)
             if scope == ITEM:
-                selected = {(s.system_id, s.resource_id) for s in plan.steps}
+                selected = {(s.system_id, s.resource_id) for s in plan.steps} - parents
                 if not a['whole_category'] and len(selected) > 1:
                     reject('SCOPE_EXCEEDED', 'A single-item request cannot select several resources.')
                 candidates = {(s, r) for s, r in owned if a['target'] in self.verifier._categories(
@@ -170,17 +208,31 @@ class ProposalVerifier:
 
 
 class AgentFirst:
-    def __init__(self, gateway, config, corpus, index, policy, texts, verifier):
-        if not offline_gateway(gateway):
-            raise ContractError('agent-first currently requires an offline replay gateway; no live calls are enabled')
+    def __init__(self, gateway, config, corpus, index, policy, texts, verifier, *, allow_live=False,
+                 authorization_model=None):
+        if not allowed_agent_gateway(gateway, allow_live):
+            raise ContractError('agent-first needs replay or explicit bounded live opt-in with retries disabled')
+        if authorization_model == config.model:
+            raise ContractError('authorization review must use a distinct model from the primary agent')
         self.gateway, self.config, self.corpus, self.index = gateway, config, corpus, index
         self.policy, self.texts = policy, texts
         self.checker = ProposalVerifier(verifier, policy)
+        self.authorization_model = authorization_model
+        if authorization_model:
+            from .authorization_review import AuthorizationReview
+            self.checker.authorization_review = AuthorizationReview(gateway, authorization_model)
         self.executor = Investigator(gateway, config, corpus, index, policy, texts)
         from .intent_models import PROMPTS
         self.prompt = (PROMPTS / 'agent_first_v1.md').read_text(encoding='utf-8')
         self.version = 'agent-first-v1:' + hashlib.sha256(
             (self.prompt + json.dumps(AGENT_TOOLS, sort_keys=True)).encode()).hexdigest()[:16]
+
+    def _can_admit(self, start, model, body, output_limit):
+        tokens, paise = self.executor._case_usage(start)
+        bound = len(json.dumps(body, ensure_ascii=False).encode()) + output_limit
+        reserve = max(self.gateway.config.chat_cost_reserve_paise,
+                      self.gateway._worst_case(model, body, output_limit) or 0)
+        return tokens + bound <= self.config.max_case_tokens and paise + reserve <= self.config.max_case_paise
 
     def run(self, request):
         subject = resolve_subject(request.email, request.audit_at, self.index, self.corpus)
@@ -200,14 +252,13 @@ class AgentFirst:
         messages = [{'role': 'system', 'content': self.prompt},
                     {'role': 'user', 'content': json.dumps(brief, default=str, ensure_ascii=False)}]
         start, seen, attempts = len(self.gateway.usage), {}, []
+        if getattr(self.checker, 'authorization_review', None):
+            self.checker.authorization_review.admit = lambda model, messages, limit: self._can_admit(
+                start, model, {'model': model, 'messages': messages, 'max_completion_tokens': limit}, limit)
         for turn in range(self.config.max_rounds):
-            tokens, paise = self.executor._case_usage(start)
             body = {'model': self.config.model, 'messages': messages, 'tools': AGENT_TOOLS,
                     'tool_choice': 'required', 'max_completion_tokens': self.config.max_completion_tokens}
-            bound = len(json.dumps(body, ensure_ascii=False).encode()) + self.config.max_completion_tokens
-            reserve = max(self.gateway.config.chat_cost_reserve_paise,
-                          self.gateway._worst_case(self.config.model, body, self.config.max_completion_tokens) or 0)
-            if tokens + bound > self.config.max_case_tokens or paise + reserve > self.config.max_case_paise:
+            if not self._can_admit(start, self.config.model, body, self.config.max_completion_tokens):
                 case.stop_reason = 'CASE_BUDGET'
                 break
             if len(case.tool_calls) >= self.config.max_tool_calls:
@@ -235,6 +286,7 @@ class AgentFirst:
                     result = {'error': 'TOOL_LIMIT'}
                 elif call['function']['name'] == 'submit_audit':
                     proposal = strict_json(call['function']['arguments'])
+                    self.checker.last_authorization_review = None
                     try:
                         if call is not message['tool_calls'][-1]:
                             raise ContractError('submit_audit must be the final tool call of a turn')
@@ -245,7 +297,9 @@ class AgentFirst:
                     if blocking:
                         case.feedback_rounds += 1
                     attempts.append({'proposal': proposal, 'accepted': not blocking,
-                                     'findings': [f.record() for f in findings]})
+                                     'findings': [f.record() for f in findings],
+                                     'authorization_model': self.authorization_model,
+                                     'authorization_review': self.checker.last_authorization_review})
                     case.verifier_findings.append([f.record() for f in findings])
                     from .casefile import ToolCall
                     case.tool_calls.append(ToolCall(case.rounds, 'submit_audit', proposal, not blocking))

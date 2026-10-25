@@ -31,7 +31,7 @@ runs offline.
 ## Commands (from the repository root)
 
 ```sh
-# Agent-first prototype: cached responses only, no keys, pricing GETs or paid calls.
+# Agent-first default: cached responses only, no keys, pricing GETs or paid calls.
 # Historical investigator caches use a different protocol; missing responses yield disclosed fallbacks.
 python3 code/main.py audit --decision-mode agent-first --provider roar --agent-model claude-haiku-5-5 \
     --requests dataset/sample_deletion_requests.csv --output .runs/agent-first/predictions.csv \
@@ -42,7 +42,16 @@ Jev is optional here: `--intent jev` enables cached typed media interpretation, 
 request intent. `--media-cache` supplies earlier screenshot readings for agent tools. The primary
 model is chosen with `--agent-model` (Gemini, Claude or another native tool-calling model); its new
 proposal protocol still needs separately authorized live evaluation. `--agent-cache` is copied
-before use so invalid/missing entries cannot alter the original cache. Live gateways are refused.
+before use so invalid/missing entries cannot alter the original cache. `--agent-mode replay` remains
+the default. A separate live path now requires `--agent-mode live --allow-agent-live`, explicit
+`--agent-model`, positive `--agent-budget-paise` and `--agent-call-reserve-paise`, a bounded
+`--agent-max-calls`, and an already passed tool-call probe. There is no automatic probe, pricing
+request or transport retry. Media and optional `--authorization-model` share the same spending
+ledger. The authorization reviewer must be a distinct model; it sees only the request and can
+confirm an otherwise unresolved non-deletion proposal, never author the primary agent's answer.
+Used responses persist under the fresh run's `model_cache/` for replay. See
+[`AGENT_FIRST_REVIEW_FIXES.md`](evaluation/AGENT_FIRST_REVIEW_FIXES.md) for controls and limitations.
+This integration has been tested with mocks only; no new paid experiment has been authorized.
 
 ```sh
 # Offline: explicit English intent, narrowly recognized native PDF structures, screenshots unread

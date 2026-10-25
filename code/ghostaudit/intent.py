@@ -49,6 +49,31 @@ _EXPLICIT_ITEM = re.compile(
     r'(?P<target>search (?:result|listing)|data export(?: (?:link|file))?|export (?:link|file)|download (?:link|file))\b',
     re.I)
 _QUESTION_ONLY = re.compile(r'\b(?:if|whether|how|what|suppose|hypothetical|considering)\b|\b(?:can|could|should|may) i\b', re.I)
+_DIRECT_REQUEST = re.compile(
+    r'(?:^|,\s*)(?:please\s+|kindly\s+)?(?:delete|erase|remove|close|purge|wipe)\b'
+    r'|^(?:can|could|would) you (?:please )?(?:delete|erase|remove|close|purge|wipe)\b'
+    r'|^i (?:want|need|would like) (?:you )?to (?:delete|erase|remove|close|purge|wipe)\b', re.I)
+
+
+def hypothetical_deletion(text):
+    """Question/conditional words matter only when they govern deletion, not an incidental question."""
+    hypothetical = False
+    for clause in re.split(r'[.;!?]', text):
+        clause = clause.strip()
+        affirmative = _NEGATED.sub(' ', clause)
+        if not _DELETION.search(affirmative):
+            continue
+        counterfactual = re.search(r'\b(?:suppose|hypothetical|what if|if i (?:said|asked|were))\b', clause, re.I)
+        verification = re.match(r'(?:(?:please|kindly) |(?:can|could|would) you )?(?:verify|confirm|check)\b',
+                                affirmative, re.I) and _VERIFY_ACCOUNT.search(affirmative)
+        verification = verification or re.search(
+            r'\b(?:inspect|check|verify|confirm)\b[^.;!?]{0,90}\b(?:whether|that)\b'
+            r'[^.;!?]{0,80}\b(?:account|profile)\b[^.;!?]{0,65}'
+            r'\b(?:have|has) (?:already )?been (?:deleted|removed|erased)\b', affirmative, re.I)
+        if (_DIRECT_REQUEST.search(affirmative) or verification) and not counterfactual:
+            return False
+        hypothetical |= bool(_QUESTION_ONLY.search(clause))
+    return hypothetical
 _VERIFY_ACCOUNT = re.compile(
     r'\b(?:verify|confirm|check)\b[^.;!?]{0,45}\b(?:account|profile)\b[^.;!?]{0,25}'
     r'\b(?:was|is|has been) (?:deleted|removed|erased|gone)\b', re.I)
@@ -79,15 +104,17 @@ def classify(text: str) -> Intent:
     other = sum(w in _OTHER_LATIN for w in words)
     if not words or english == 0 or other >= english or _NON_LATIN.search(text):
         return Intent(UNRESOLVED, 'language not supported by the deterministic English classifier')
+    if hypothetical_deletion(text):
+        return Intent(UNRESOLVED, 'hypothetical deletion or capability question, not an instruction')
     keep = [m.group(0) for m in _PRESERVE.finditer(text)]
     affirmative = _NEGATED.sub(' ', text)
     deletion = [m.group(0) for m in _DELETION.finditer(affirmative)]
     explicit = list(_EXPLICIT_ITEM.finditer(affirmative))
     targets = {'SEARCH_INDEX_ENTRY' if m['target'].lower().startswith('search ') else 'USER_EXPORT'
                for m in explicit}
-    if explicit and (_QUESTION_ONLY.search(text) or _FOREIGN_ITEM.search(text) or len(targets) != 1):
+    if explicit and (_FOREIGN_ITEM.search(text) or len(targets) != 1):
         return Intent(UNRESOLVED, 'item request is hypothetical or has several targets')
-    if (deletion or explicit) and not _QUESTION_ONLY.search(text):
+    if deletion or explicit:
         if not keep and _VERIFY_ACCOUNT.search(affirmative):
             return Intent(DELETE, 'explicit verification of prior account deletion', tuple(deletion), scope=ACCOUNT)
         if len(targets) == 1 and not _ACCOUNT_REQUEST.search(_EXPLICIT_ITEM.sub(' ', affirmative)):

@@ -941,3 +941,21 @@ an architecture/control test, not real-model accuracy. Public historical caches 
 new-protocol proposals, so the public agent replay produces only disclosed fallbacks. No new paid
 campaign is opened. See `evaluation/AGENT_FIRST_ARCHITECTURE.md` for metrics, limitations and the
 separately authorized model experiment still needed before adopting this as a submission path.
+
+## D076 — Bounded live selection and independent authorization review
+
+Continue main from 8779251. Add separately opted-in live primary execution through the existing
+provider gateway; require explicit budget/reserve/call limits and a prior tool probe, disable
+transport retries and catalog requests, and keep replay as default. Share primary/media/reviewer
+spending, persist validated used response caches, and fail safely without planner replacement.
+
+Permit only independently owned and currently proven absent parent-profile verification in a
+search-item audit. Require retrieved proof even for blank future-verification CSV citations; never
+widen destructive scope. Scope hypothetical-question checks to operative deletion clauses and
+preserve incidental questions and prior-removal inspections. Optional distinct-model request-only
+review can confirm otherwise unresolved multilingual non-deletion, with strict fail-closed checks.
+
+Thirty new regression/mock integration tests; full discovery 358 and dedicated provider checks 40
+pass on Python 3.11 and 3.14, all 13 fixtures pass, Ruff passes, and zero-call replays preserve the
+starting baseline and root output. No paid calls or push. Live provider/model quality and billing
+remain unverified. See `evaluation/AGENT_FIRST_REVIEW_FIXES.md` for evidence and readiness limits.

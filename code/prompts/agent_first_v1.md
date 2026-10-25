@@ -14,6 +14,11 @@ For exhaustive absence, quote the inspected listing/schema instead of inventing 
 the absent record; its handle must already have been retrieved and the verifier must prove a
 category-matching exhaustive omission.
 DELETE needs ACCOUNT or ITEM scope; ITEM names one supplied category. Never widen item permission.
+For a search-item deletion, a non-destructive VERIFY_RECORD_ABSENT check of its already-deleted
+parent account is allowed only with independently grounded ownership and current category-matching
+absence proof for every relevant copy. Retrieve that proof and supply a witness for this check even
+when an INCOMPLETE row requires the CSV evidence_id to remain empty. This does not authorize any
+parent-account finding, remediation, or deletion, or any other out-of-category action.
 An uncertain request is UNRESOLVED and will be disclosed as a safe fallback.
 
 Output steps have exactly step_no, phase, system_id, resource_id, operation, state, evidence_id.

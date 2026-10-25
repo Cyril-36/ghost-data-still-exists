@@ -1,5 +1,9 @@
 # Agent-first architecture — offline implementation, 2026-10-25
 
+This records the original offline implementation. The follow-up
+[`AGENT_FIRST_REVIEW_FIXES.md`](AGENT_FIRST_REVIEW_FIXES.md) documents the separately selectable
+live integration and authorization corrections; its readiness notes supersede the offline-only limits below.
+
 Starting checkout: existing main at `7ac9b34`. The deterministic implementation stays the default
 baseline. No branches/worktrees, push, paid API calls, catalog calls or new model experiments were
 performed. The earlier paid campaign remains closed.

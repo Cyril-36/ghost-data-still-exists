@@ -23,7 +23,7 @@ investigation could address with more evidence.
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 from .casefile import fact_observations
 from .contracts import ContractError
@@ -205,7 +205,9 @@ class Verifier:
             if others:
                 add('CROSS_PERSON', 'BLOCKING', f'evidence for {rid} identifies {others}', system, rid)
             categories = self._categories(system, obs, cutoff)
-            if plan.intent.scope == 'ITEM' and plan.intent.target not in categories:
+            parent_check = self.parent_absence_source(plan.intent, system, rid, steps, obs, cutoff, subject,
+                                                      extra, owned=owned)
+            if plan.intent.scope == 'ITEM' and plan.intent.target not in categories and parent_check is None:
                 add('SCOPE_EXCEEDED', 'BLOCKING', f'{rid} is not in the authorized category {plan.intent.target}',
                     system, rid)
             for category in sorted(categories) or [None]:
@@ -222,6 +224,31 @@ class Verifier:
                         system, rid)
         self._check_coverage(plan, owned, steps_by_resource, extra, cutoff, case, add)
         return out
+
+    def parent_absence_source(self, intent, system, rid, steps, obs, cutoff, subject, extra=(), *, owned=None):
+        """A search-item audit may verify an already absent owned account, never modify it."""
+        if intent.scope != 'ITEM' or intent.target != 'SEARCH_INDEX_ENTRY' or system != 'account_service':
+            return None
+        if self._categories(system, obs, cutoff) != {'USER_PROFILE'} or not steps or any(
+                s.phase != 'VERIFICATION' or s.operation != 'VERIFY_RECORD_ABSENT' or s.state != ABSENT for s in steps):
+            return None
+        owned = self._owned(subject, cutoff, extra) if owned is None else owned
+        if owned.get((system, rid)) not in ('direct', 'reference'):
+            return None  # A not-found query input alone does not establish ownership.
+        sources = {s.evidence_id for s in steps if s.evidence_id}
+        if not sources:
+            sources = {o.source_id for o in obs if o.kind == STATE and o.system_id == system and o.presence == ABSENT}
+            sources |= {s.source_id for s in self._absence_scopes(steps[0], obs, cutoff, subject.tokens)}
+        for source in sorted(sources):
+            problems = []
+            def add(*args):
+                problems.append(args)
+            check = replace(steps[0], evidence_id=source)
+            self._check_citation(check, obs, cutoff, add)
+            self._check_copies(check, obs, cutoff, subject, add)
+            if not problems:
+                return source
+        return None
 
     def _absence_scopes(self, step, obs, cutoff, subject_tokens):
         categories = self._categories(step.system_id, [o for o in obs if eligible(o, cutoff)], cutoff)

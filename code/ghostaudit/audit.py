@@ -82,7 +82,8 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
               use_generative: bool = True, investigator: InvestigatorConfig | None = None,
               investigator_gateway: Gateway | None = None, media_cache: dict | None = None,
               decision_mode: str = 'baseline', agent_gateway: Gateway | None = None,
-              agent_config: InvestigatorConfig | None = None) -> dict:
+              agent_config: InvestigatorConfig | None = None, agent_live: bool = False,
+              authorization_model: str | None = None) -> dict:
     """gateway=None: offline intent (deterministic only). With a gateway: staged intent (Jev decisions,
     generative fallback for escalations). `investigator` + `investigator_gateway`: routed cases are
     investigated (sequentially). `media_cache`: earlier validated screenshot extractions that
@@ -113,9 +114,14 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
     if decision_mode == 'agent-first' and (not config.is_default or investigator is not None):
         raise ContractError('agent-first requires strict configuration and no baseline investigator')
     if decision_mode == 'agent-first':
-        from .agent_first import offline_gateway
-        if agent_config is None or not offline_gateway(agent_gateway) or (gateway is not None and not offline_gateway(gateway)):
-            raise ContractError('agent-first requires offline replay gateways before loading any evidence')
+        from .agent_first import allowed_agent_gateway
+        if agent_config is None or not allowed_agent_gateway(agent_gateway, agent_live) or (
+                gateway is not None and not allowed_agent_gateway(gateway, agent_live)):
+            raise ContractError('agent-first requires replay or explicit bounded live opt-in before loading evidence')
+        if authorization_model == agent_config.model:
+            raise ContractError('authorization review must use a distinct model')
+        if gateway is not None and gateway is not agent_gateway and gateway.mode == 'live':
+            gateway.share_budget(agent_gateway)
     context = load_context(dataset)
     requests = load_requests(requests_path)
     corpus = build_corpus(context, config, gateway)
@@ -140,7 +146,8 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
         from .agent_first import AgentFirst
         if agent_config is None:
             raise ContractError('agent-first needs an explicit agent model/configuration')
-        primary = AgentFirst(agent_gateway, agent_config, corpus, index, policy, texts, verifier)
+        primary = AgentFirst(agent_gateway, agent_config, corpus, index, policy, texts, verifier,
+                             allow_live=agent_live, authorization_model=authorization_model)
         for request in requests:
             p, case, attempts = primary.run(request)
             plans.append(p)
@@ -264,6 +271,8 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
         from .agent_first import proposal_metrics
         summary['artifact_status'] = 'Agent-first: verified agent-authored answers or explicitly disclosed fallbacks; no planner overwrite.'
         summary['agent_first'] = {**proposal_metrics(case_files), 'config': agent_config.describe(),
+                                  'execution_mode': agent_gateway.mode, 'live_opt_in': agent_live,
+                                  'authorization_model': authorization_model,
                                   'accepted_cases': len(plans) - len(fallbacks), 'fallback_cases': len(fallbacks),
                                   'network_calls': sum(u.mode == 'live' for u in usage),
                                   'rounds': sum(r['rounds'] for r in case_files),

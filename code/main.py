@@ -83,25 +83,48 @@ def inventory(dataset: Path) -> dict:
     }
 
 
-def run_agent_first_offline(args):
-    """Read cached responses through an isolated copy; never load secrets or contact a catalog."""
+def run_agent_first(args):
+    """Replay by default; live execution requires explicit opt-in, budget, reserve and a prior probe."""
+    import math
     import shutil
     import tempfile
     from ghostaudit.investigator import InvestigatorConfig
-    from ghostaudit.providers import Gateway, ProviderConfig
+    from ghostaudit.providers import Gateway, ProviderConfig, load_env_file
     if args.investigator != 'off':
         raise ContractError('agent-first is the primary agent; disable the baseline investigator')
     if args.agent_max_rounds < 1 or args.agent_max_tool_calls < 1 or args.agent_max_completion_tokens < 1:
         raise ContractError('agent round and tool limits must be positive')
+    live = args.agent_mode == 'live'
+    if live:
+        if not args.allow_agent_live or not args.agent_model:
+            raise ContractError('live agent requires --allow-agent-live and an explicit --agent-model')
+        for name in ('agent_budget_paise', 'agent_call_reserve_paise'):
+            value = getattr(args, name)
+            if value is None or not math.isfinite(value) or value <= 0:
+                raise ContractError(f'live agent requires an explicit positive --{name.replace("_", "-")}')
+        if args.agent_call_reserve_paise > args.agent_budget_paise or args.agent_max_calls < 1:
+            raise ContractError('live reserve must fit the budget and agent call limit must be positive')
+        if args.authorization_model == args.agent_model:
+            raise ContractError('authorization review needs a distinct model')
+        probes = json.loads(PROBES.read_text()) if PROBES.exists() else {}
+        if probes.get(f'{args.provider}:{args.agent_model}', {}).get('ok') is not True:
+            raise ContractError('live agent needs a previously passed tool-call probe; no automatic paid probe is run')
+        if args.env_file:
+            load_env_file(args.env_file)
+    elif args.allow_agent_live:
+        raise ContractError('--allow-agent-live requires --agent-mode live')
     with tempfile.TemporaryDirectory(prefix='ghost-agent-replay-') as temporary:
         cache = Path(temporary) / 'cache'
         if args.agent_cache.exists():
             shutil.copytree(args.agent_cache, cache)
         else:
             cache.mkdir()
-        g = Gateway(ProviderConfig(provider=args.provider, max_calls=0, max_cost_paise=0,
-                                   cache_dir=str(cache), jev_model=args.jev_model, vision_model=args.vision_model))
-        g.mode = 'replay'
+        g = Gateway(ProviderConfig(provider=args.provider, max_calls=args.agent_max_calls if live else 0,
+                                   max_cost_paise=args.agent_budget_paise if live else 0,
+                                   chat_cost_reserve_paise=args.agent_call_reserve_paise if live else None,
+                                   max_retries=0, max_rate_limit_retries=0, cache_dir=str(cache),
+                                   jev_model=args.jev_model, vision_model=args.vision_model))
+        g.mode = 'live' if live else 'replay'
         model = args.agent_model or g.config.investigator_model
         if not model:
             raise ContractError('agent-first needs --agent-model for this provider')
@@ -111,7 +134,8 @@ def run_agent_first_offline(args):
         media = json.loads(args.media_cache.read_text(encoding='utf-8')) if args.media_cache else None
         return run_audit(args.dataset, args.requests, args.output, args.run_dir,
                          gateway=g if args.intent != 'offline' else None, media_cache=media,
-                         decision_mode='agent-first', agent_gateway=g, agent_config=config)
+                         decision_mode='agent-first', agent_gateway=g, agent_config=config,
+                         agent_live=live, authorization_model=args.authorization_model)
 
 
 def main(argv=None) -> int:
@@ -126,7 +150,13 @@ def main(argv=None) -> int:
     aud.add_argument('--output', type=Path, required=True)
     aud.add_argument('--run-dir', type=Path, required=True, help='diagnostics directory bound to the output')
     aud.add_argument('--decision-mode', choices=['baseline', 'agent-first'], default='baseline')
-    aud.add_argument('--agent-model', help='general-purpose tool-calling model ID for agent-first cached replay')
+    aud.add_argument('--agent-model', help='general-purpose tool-calling model ID for agent-first replay or explicitly opted-in live mode')
+    aud.add_argument('--agent-mode', choices=['replay', 'live'], default='replay')
+    aud.add_argument('--allow-agent-live', action='store_true', help='explicit live execution opt-in')
+    aud.add_argument('--agent-budget-paise', type=float, help='explicit total live ceiling across agent/media/review')
+    aud.add_argument('--agent-call-reserve-paise', type=float, help='conservative reservation for each live chat attempt')
+    aud.add_argument('--agent-max-calls', type=int, default=20)
+    aud.add_argument('--authorization-model', help='distinct independent model for uncertain non-deletion confirmation')
     aud.add_argument('--agent-cache', type=Path, default=Path('.cache/ghostaudit'))
     aud.add_argument('--agent-max-rounds', type=int, default=8)
     aud.add_argument('--agent-max-tool-calls', type=int, default=40)
@@ -188,7 +218,7 @@ def main(argv=None) -> int:
             return 0 if result['ok'] else 2
         elif args.command == 'audit':
             if args.decision_mode == 'agent-first':
-                summary = run_agent_first_offline(args)
+                summary = run_agent_first(args)
                 print(json.dumps({k: v for k, v in summary.items() if k not in
                                   ('fallback_ids', 'model_usage', 'code_sha256')}, indent=2))
                 return 0
