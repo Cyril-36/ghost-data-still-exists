@@ -44,6 +44,15 @@ _ACCOUNT_REQUEST = re.compile(
     r"|\bclos\w*\b[^.;!?]{0,25}\baccount\b|\baccount (?:deletion|removal|closure)\b|\bforget me\b"
     r"|\b(?:account|profile)\b[^.;!?]{0,40}\bbe (?:delet\w*|eras\w*|remov\w*|clos\w*)\b", re.I)
 _ITEM = re.compile(r"\b(?:result|file|export|attachment|download|link|cop(?:y|ies)|entry|listing)s?\b", re.I)
+_EXPLICIT_ITEM = re.compile(
+    r'\b(?:delete|remove|erase)\s+(?:my|that|this|the)\s+(?:old\s+)?'
+    r'(?P<target>search (?:result|listing)|data export(?: (?:link|file))?|export (?:link|file)|download (?:link|file))\b',
+    re.I)
+_QUESTION_ONLY = re.compile(r'\b(?:if|whether|how|what|suppose|hypothetical|considering)\b|\b(?:can|could|should|may) i\b', re.I)
+_VERIFY_ACCOUNT = re.compile(
+    r'\b(?:verify|confirm|check)\b[^.;!?]{0,45}\b(?:account|profile)\b[^.;!?]{0,25}'
+    r'\b(?:was|is|has been) (?:deleted|removed|erased|gone)\b', re.I)
+_FOREIGN_ITEM = re.compile(r"\b(?:someone else|another person|my (?:friend|colleague))\b|\bbelongs to\b", re.I)
 _PRESERVE = re.compile(
     r"\bkeep (?:my|the) account\b|\bkeep the account as it is\b|\bleave (?:my|the) (?:profile|account)\b"
     r"|\bleave the account active\b|\bcontinue using\b|\bstill (?:need|want|use)\b"
@@ -73,6 +82,17 @@ def classify(text: str) -> Intent:
     keep = [m.group(0) for m in _PRESERVE.finditer(text)]
     affirmative = _NEGATED.sub(' ', text)
     deletion = [m.group(0) for m in _DELETION.finditer(affirmative)]
+    explicit = list(_EXPLICIT_ITEM.finditer(affirmative))
+    targets = {'SEARCH_INDEX_ENTRY' if m['target'].lower().startswith('search ') else 'USER_EXPORT'
+               for m in explicit}
+    if explicit and (_QUESTION_ONLY.search(text) or _FOREIGN_ITEM.search(text) or len(targets) != 1):
+        return Intent(UNRESOLVED, 'item request is hypothetical or has several targets')
+    if (deletion or explicit) and not _QUESTION_ONLY.search(text):
+        if not keep and _VERIFY_ACCOUNT.search(affirmative):
+            return Intent(DELETE, 'explicit verification of prior account deletion', tuple(deletion), scope=ACCOUNT)
+        if len(targets) == 1 and not _ACCOUNT_REQUEST.search(_EXPLICIT_ITEM.sub(' ', affirmative)):
+            return Intent(DELETE, 'explicit item removal with a literal target', tuple(m.group(0) for m in explicit),
+                          scope=ITEM, target=next(iter(targets)))
     if deletion and not keep:
         if _ITEM.search(affirmative) and not _ACCOUNT_REQUEST.search(affirmative):
             return Intent(UNRESOLVED, 'deletion of a specific item; its target cannot be grounded offline',

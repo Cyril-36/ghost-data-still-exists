@@ -175,7 +175,7 @@ class StateTests(unittest.TestCase):
 class IntentTests(unittest.TestCase):
     CASES = {
         'Please delete my account and its personal data.': DELETE,
-        'Can you remove that search result too?': UNRESOLVED,   # one item: target not grounded offline
+        'Can you remove that search result too?': DELETE,   # literal item target, never account-wide
         'Please confirm that the profile is gone.': DELETE,
         'I want to close this account permanently. Backups must not be able to restore my profile.': DELETE,
         'Stop promotional emails only. Keep my account and purchase history.': NON_DELETION,

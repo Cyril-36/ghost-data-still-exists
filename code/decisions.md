@@ -902,3 +902,23 @@ The full findings, regression evidence and current measurements are in
 replay doubles and local HTTP servers only. Historical experiment results, root output, datasets,
 credentials, caches and recovery stashes are preserved. No paid calls or push are authorized for
 this audit; fixes are committed locally for independent review.
+
+## D074 — Budgeted quality experiments and retained offline improvements
+
+Starting from local main 5cd8b54, compare fresh offline and both cached provider samples before
+changing inference. Roar cached baseline remains strongest here: 28/32 statuses, 141/193 correct
+steps, 1/32 exact rows. More Haiku rounds and a focused Luna investigator produce no sample gain;
+restore the experimental prompt and keep default models/round limits. Two TokenBazaar target
+calls return HTTP 503; do not treat those missing cache entries as language-classification quality.
+
+Retain literal English item-target recognition and explicit prior-account-deletion verification,
+with stricter safeguards against model scope/category widening; retain native PDF structures in
+offline mode and source-diverse paginated search. The independent verifier and all ownership,
+cutoff and retention requirements remain in force. Offline sample gains 10 correct steps, 1 status,
+and 6 correctly cited expected steps, with no new incorrect step; exact rows remain 1/32.
+
+The cumulative experiment ledger stops at 8,947.98576 paise conservatively accounted, including
+unknown failed-call reserves. Catalog estimate is 2,752.399012 paise; provider actual billing is
+unavailable. No further paid calls. See `evaluation/QUALITY_EXPERIMENTS.md` for comparisons,
+budget assumptions, tests, limitations and the unchanged best staged measurements. Preserve the
+original output and historical artifacts; commit locally without pushing.

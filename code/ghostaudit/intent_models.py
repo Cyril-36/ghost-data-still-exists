@@ -265,6 +265,8 @@ class IntentOutcome:
 
 
 def _agrees(det: Intent, other: Intent) -> bool:
+    if det.scope == ITEM and other.scope == ACCOUNT:
+        return False
     if det.reason == 'both deletion and preservation statements' and other.scope == ACCOUNT:
         return False  # a model may narrow to an item, never waive an explicit preservation instruction
     return det.decision == UNRESOLVED or det.decision == other.decision
@@ -350,6 +352,9 @@ def decide_intents(texts: dict, gateway: Gateway | None, use_generative: bool = 
     for k, o in outcomes.items():
         if o.intent.decision == DELETE and o.intent.scope == ITEM:
             o.intent = ground_target(gateway, texts[k], o.intent)
+            if o.deterministic.scope == ITEM and o.deterministic.target and o.intent.decision == DELETE \
+                    and o.intent.target != o.deterministic.target:
+                o.intent = Intent(UNRESOLVED, 'model target disagrees with the explicit item request', (), 'staged-v1')
             if o.intent.decision == UNRESOLVED:
                 o.stage = 'unresolved'
     return outcomes

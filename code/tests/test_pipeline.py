@@ -142,11 +142,13 @@ class DatasetRegressionTests(unittest.TestCase):
 
     def test_all_structured_sources_parse(self):
         status = {r.source_id: r.status for r in self.corpus.reports}
-        # Offline: PDFs yield native text (no state without a document-kind decision);
-        # screenshots stay unsupported because no vision reader is configured.
+        # Offline: explicit native document structures are interpreted; ambiguous kinds abstain.
+        # Screenshots stay unsupported because no vision reader is configured.
         from collections import Counter
         self.assertEqual(Counter(status.values()), Counter({'PARSED': 79, 'UNSUPPORTED_MEDIA': 11,
-                                                            'TEXT_EXTRACTED': 4}))
+                                                            'TEXT_EXTRACTED': 2, 'INTERPRETED': 2}))
+        self.assertEqual({source for source, value in status.items() if value == 'INTERPRETED'},
+                         {'evidence_55', 'evidence_58'})
         self.assertEqual(self.policy.issues, [])
 
     def test_tombstone_exposing_identifiers_is_discovered_from_inputs(self):

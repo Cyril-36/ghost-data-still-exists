@@ -28,7 +28,7 @@ runs offline.
 ## Commands (from the repository root)
 
 ```sh
-# Offline (no model calls): English-only deterministic intent, PDF text without state, screenshots unread
+# Offline: explicit English intent, narrowly recognized native PDF structures, screenshots unread
 python3 code/main.py audit --requests dataset/sample_deletion_requests.csv \
     --output .runs/sample/predictions.csv --run-dir .runs/sample
 
@@ -163,4 +163,12 @@ and accuracy limits remain; passing replay checks does not establish live improv
 **Pending:** independent review and the final submission run.
 
 See `evaluation/CODE_AUDIT_REPORT.md`, `evaluation/evaluation_report.md`,
-`evaluation/usage_report.md` and `decisions.md`.
+`evaluation/usage_report.md`, `evaluation/QUALITY_EXPERIMENTS.md` and `decisions.md`.
+
+The quality experiments improve the offline sample from 26/32 statuses and 126/193 correct steps
+to 27/32 and 136/193. Exact rows remain 1/32; the best measured staged sample remains 28/32 statuses,
+141/193 correct steps and 1/32 exact rows. Longer Haiku and Luna investigations did not improve
+these outputs, so the provider profiles and default round limits stay unchanged. Search now
+diversifies sources and supports `start_match`/`next_match` pagination. Offline native PDF handling
+abstains unless the document has an explicit security-journal or support-attachment structure;
+it does not invent ownership, dates or a system. Typed document decisions remain the staged path.

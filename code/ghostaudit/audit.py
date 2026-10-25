@@ -36,7 +36,7 @@ from .providers import Gateway
 from .tools import SourceText
 from .verifier import Verifier
 
-ENGINE_VERSION = 'phase4-2'
+ENGINE_VERSION = 'phase4-3'
 
 
 def _sha256(path: Path) -> str:

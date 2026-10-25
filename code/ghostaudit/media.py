@@ -1,8 +1,9 @@
 """PDF and screenshot interpretation -> validated observations.
 
 PDFs: native text extraction (deterministic, offline) -> literal harvest -> ONE bounded
-Jev choice for the document kind -> deterministic mapping. Without a gateway the text
-is extracted but no state is derived (kind unknown). Identifiers and retention dates
+Jev choice for the document kind -> deterministic mapping. Without a gateway, only explicit
+security-journal and support-attachment structures are mapped; all other kinds abstain.
+Identifiers and retention dates
 belong to the record whose mention precedes them on the same page; a section that
 names two people binds no identity at all.
 
@@ -115,6 +116,22 @@ def _identity(values, report, what):
         return frozenset()
     return tokens
 
+
+def _native_doc_kind(pages):
+    """Recognize only explicit document structures; uncertainty still needs the typed reader."""
+    text = '\n'.join('\n'.join(page) for page in pages)
+    if re.search(r'^\s*(?:example|sample|template)\b', text, re.I | re.M):
+        return None
+    heading = '\n'.join(pages[0][:6]) if pages else ''
+    security = bool(re.search(r'^\s*(?:security|compliance)\b[^\n]*\b(?:journal|audit|record)\b', heading, re.I | re.M)
+                    and re.search(r'\bevent reference\s+\w+', text, re.I)
+                    and re.search(r'\bsubject reference\s+\w+', text, re.I))
+    support = bool(re.search(r'\bsupport (?:reference|ticket)\b', text, re.I)
+                   and re.search(r'\b(?:attachment|uploaded|uploader)\b', text, re.I))
+    if security == support:
+        return None
+    return 'SECURITY_AUDIT_RECORD' if security else 'SUPPORT_ATTACHMENT'
+
 def _doc_kind(gateway, text):
     spec = json.loads((PROMPTS / 'document_kind_jev_v1.json').read_text(encoding='utf-8'))
     version = f'{spec["version"]}:{fingerprint(spec)[:12]}'
@@ -138,17 +155,22 @@ def interpret_pdf(entry, raw, corpus, gateway) -> tuple[list, SourceReport, dict
     text = '\n'.join('\n'.join(p) for p in pages)
     extraction = {'pages': len(pages), 'lines': sum(len(p) for p in pages), 'facts': {
         k: [str(v[0]) for v in vals] for k, vals in facts.items()}}
-    if gateway is None:
+    kind = _native_doc_kind(pages) if gateway is None else None
+    if gateway is None and kind is None:
         report.status = 'TEXT_EXTRACTED'
         report.issues.append('NOTE: text extracted; document kind not classified offline, so no state derived')
         return [], report, extraction
-    try:
-        kind, p, model = _doc_kind(gateway, text)
-    except ProviderError as exc:
-        report.status = 'TEXT_EXTRACTED'
-        report.issues.append(f'PROVIDER_FAILURE: document kind: {exc}')
-        return [], report, extraction
+    p, model = None, None
+    if gateway is not None:
+        try:
+            kind, p, model = _doc_kind(gateway, text)
+        except ProviderError as exc:
+            report.status = 'TEXT_EXTRACTED'
+            report.issues.append(f'PROVIDER_FAILURE: document kind: {exc}')
+            return [], report, extraction
     extraction['kind'] = {'choice': kind, 'p': p, 'model': model}
+    if gateway is None:
+        extraction['kind']['method'] = 'native-structure-v1'
     identity_facts = [*facts['emails'], *facts['phones'], *((v, loc) for v, loc in facts['resource_ids']
                                                             if classify_token(v))]
     record_ids = sorted({v for v, _ in facts['resource_ids'] if not classify_token(v)})
@@ -162,7 +184,7 @@ def interpret_pdf(entry, raw, corpus, gateway) -> tuple[list, SourceReport, dict
             system_id=system, resource_id=rid, category=category, presence=PRESENT, tokens=tokens,
             attributes=(('document_kind', kind), ('kind_p', p), ('model', model)), **kw))
 
-    if p < 0.6:
+    if p is not None and p < 0.6:
         report.issues.append(f'NOTE: document kind {kind} below probability threshold ({p:.2f}); no state derived')
     elif kind in DOC_KINDS:
         category = DOC_KINDS[kind]

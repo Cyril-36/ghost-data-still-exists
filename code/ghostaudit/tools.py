@@ -239,6 +239,9 @@ def _clip(result: dict) -> dict:
         result[key].pop()
         if key == 'items' and 'returned' in result:
             result['returned'] = len(result[key])
+        if key == 'matches' and 'start_match' in result:
+            result['next_match'] = result['start_match'] + len(result[key])
+            result['truncated'] = result['next_match'] < result['total_matches']
     return result
 
 
@@ -251,7 +254,8 @@ _STR, _INT = {'type': 'string'}, {'type': 'integer'}
 FACT_KINDS = ('OWNERSHIP', 'STATE', 'CATEGORY', 'RETENTION')
 TOOL_SCHEMAS = [
     _fn('search_identifiers', 'Exact search of eligible sources for identifiers of this subject or for '
-        'resource handles already returned to you.', {'values': {'type': 'array', 'items': _STR}}, ['values']),
+        'resource handles already returned to you. Continue truncated results using next_match as start_match.',
+        {'values': {'type': 'array', 'items': _STR}, 'start_match': _INT}, ['values']),
     _fn('inspect_source', 'Read numbered lines of one eligible source (file_id, activity_id or audit_id).',
         {'source_id': _STR, 'start_line': _INT, 'max_lines': _INT, 'page': _STR}, ['source_id']),
     _fn('inspect_media', 'Read a PDF page or the cached reader extraction of a screenshot, with recognized '
@@ -314,7 +318,9 @@ class InvestigationTools:
             self.case.handles.update(_ID_SHAPED.findall(text))
 
     # -- tools: each returns (result, displayed) -------------------------------------------------
-    def search_identifiers(self, values):
+    def search_identifiers(self, values, start_match=0):
+        if type(start_match) is not int or start_match < 0:
+            raise ToolError('start_match must be a nonnegative integer')
         values = [v for v in values if isinstance(v, str) and v.strip()][:5]
         rejected = [v for v in values if not self._allowed_value(v)]
         if rejected or not values:
@@ -329,9 +335,18 @@ class InvestigationTools:
                     hits.append((source_id, locator, line))
         activity = [a.activity_id for a in self.texts.activities.values() if a.event_time <= self.case.audit_at
                     and any(v == a.resource_id for v in values)]
-        shown = hits[:25]
+        # Interleave sources so repeated structured rows cannot bury a document hit.
+        grouped = {}
+        for hit in hits:
+            grouped.setdefault(hit[0], []).append(hit)
+        sources = sorted(grouped, key=lambda s: (self.texts.kind(s) not in ('pdf', 'image'), s))
+        hits = [grouped[s][n] for n in range(max(map(len, grouped.values()), default=0))
+                for s in sources if n < len(grouped[s])]
+        shown = hits[start_match:start_match + 25]
+        next_match = start_match + len(shown)
         return ({'matches': [{'source_id': s, 'locator': loc, 'text': line[:200]} for s, loc, line in shown],
-                 'total_matches': len(hits), 'truncated': len(hits) > 25,
+                 'total_matches': len(hits), 'truncated': next_match < len(hits), 'start_match': start_match,
+                 'next_match': next_match if next_match < len(hits) else None,
                  'activity_ids_naming_value': activity[:25], 'activity_truncated': len(activity) > 25},
                 [(s, loc, line[:200], len(line) <= 200) for s, loc, line in shown])
 
