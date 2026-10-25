@@ -2812,3 +2812,131 @@ branch=main
 repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
 worktree=main
 parent_agent=none
+
+## [2026-10-25T08:19:50+00:00] Budgeted solution quality experiments
+
+User Prompt (verbatim, secrets redacted):
+Continue working on Ghost Data Still Exists on the existing `main` branch.
+
+Your primary goal now is to **improve the overall solution quality, HackerRank evaluation results, test coverage, and prediction accuracy as much as possible.**
+
+We have completed extensive bug fixing and code reviews. Now focus on making the solution more accurate and competitive.
+
+### Instructions
+
+1. Independently analyze the entire project, existing evaluations, failed cases, model performance, and accuracy bottlenecks.
+2. Identify the most promising improvements and implement them.
+3. Improve exact-row accuracy, status accuracy, step precision/recall, citation correctness, and evidence coverage.
+4. Experiment with different approaches, prompts, models, investigator strategies, reasoning rounds, retrieval methods, and deterministic algorithms wherever justified.
+5. Improve the test suite with meaningful adversarial cases and regression tests.
+6. Evaluate each significant improvement against the existing baselines.
+7. Keep successful improvements and revert unsuccessful experimental changes.
+8. Prioritize measurable accuracy improvements over cosmetic changes or unnecessary refactoring.
+9. Work autonomously. Use your engineering judgment to decide what to investigate, implement, and test rather than following a predetermined experiment plan.
+
+### Experiment budget
+
+**Increase the total experimentation budget to ₹100 (10,000 paise).**
+
+- This is a cumulative budget across all experiments, not a separate allowance for every run.
+- You may increase investigator rounds, tool calls, and token limits when useful.
+- Do not remove safety, evidence, authorization, or verification constraints.
+- Track spending across runs and stop before exhausting the budget.
+- Provider-reported charges are preferable; otherwise use conservative estimates and disclose uncertainty.
+- Respect any provider-side spending cap. Do not assume local estimates guarantee actual charges.
+- Do not exceed ₹100 in authorized experimental spending.
+
+### Important constraints
+
+- Work on the existing `main` branch only. Do not create branches or worktrees.
+- Preserve all existing datasets, historical results, cached responses, and the original submission `output.csv`.
+- Keep TokenBazaar and Roar integrations operational.
+- Use public expected answers for evaluation only, never to hardcode production behavior.
+- Do not weaken evidence grounding, ownership checks, retention rules, or the independent verifier to artificially improve scores.
+- Run relevant tests after each major change and the full suite before finishing.
+- Do not expose API keys or commit secrets.
+
+### Deliverables
+
+Continue improving the implementation through multiple experiments within the budget.
+
+At the end, report:
+
+- Changes implemented and why.
+- Baseline versus final accuracy metrics.
+- Exact-row improvements.
+- Status and step accuracy improvements.
+- New tests added and test results.
+- Models and strategies tested.
+- Total estimated and actual spending, where available.
+- Remaining limitations and next opportunities.
+
+Commit verified improvements locally on the existing `main` branch.
+
+**Do not push to GitHub yet.**
+
+I want you to take ownership of improving the solution, experiment intelligently, and deliver the best measurable results possible within the ₹100 budget.
+
+Agent Response Summary:
+Established fresh offline, TokenBazaar-cache and Roar-cache sample baselines, then ran bounded native-tool probes, a 10-round Haiku investigator, a focused 6-round GPT-6 Luna comparison, two TokenBazaar target requests and zero-cost deterministic ablations. Retained explicit English item/prior-deletion recognition with stricter model scope/category checks, narrow native PDF interpretation offline, and source-diverse paginated retrieval; restored the unsuccessful prompt and kept default provider roles and investigator limits. Offline sample improved from 26/32 to 27/32 statuses, 126/193 to 136/193 correct steps and 48/75 to 54/75 matching cited steps; exact rows remain 1/32 and best cached Roar remains 28/32 statuses, 141/193 steps and 1/32 exact. All 306 tests pass on Python 3.11 and 3.14 with 18 new tests, both provider suites pass 31/31 on each, all 13 fixtures pass, Ruff passes and full replay is deterministic with zero calls. Committed the verified work locally as d000b5ab806819058e43cea091c9201376a7fddc, preserving separate concurrent cleanup commit 85f56f7, all 1,371 protected files and recovery stashes; no push.
+
+Actions:
+* Created ignored .runs/quality-iz9j79br/ with immutable baseline/final artifacts, copied caches, traces, pricing, scripts and one cumulative budget ledger; read locally configured credentials without printing them.
+* Probed gpt-6-luna and deepseek-v4.1-flash live and claude-haiku-5-5 from cache; tested Haiku and Luna investigation; TokenBazaar's two missing target calls returned 503 and were not retried.
+* Stopped paid experimentation at 8,947.98576 paise conservatively accounted; known catalog estimate 2,752.399012 paise. Actual reported charges are unavailable, not zero. No provider-side cap was assumed or bypassed.
+* Added 18 adversarial and complete-row tests with failing-before evidence and an offline native-parser ablation, then ran both full suites and copied-cache 518-case checks across versions/hash seeds.
+* Wrote code/evaluation/QUALITY_EXPERIMENTS.md and updated setup/decision notes. The original root CSV and historical results were not overwritten; full staged replay still matches the original output.
+* Preserved the separately created workspace cleanup commit (prior log and minor documentation/test cleanup) and appended these entries without changing any existing log bytes.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T08:19:50+00:00] Leaderboard screenshot context
+
+User Prompt (verbatim, secrets redacted):
+some people already submitted and achieved this much result
+
+Attachment:
+/var/folders/5g/kvdpw4px03gfq3wmmxhy99vh0000gn/T/codex-clipboard-63e8eb8d-1076-4a2f-966e-38685b6f9bf1.png
+
+Agent Response Summary:
+Read the supplied screenshot as context, not instructions or a source of expected prediction labels. It shows a leading Output CSV score of 29.1/30 and total 88.7/100; explained that this judge score is not directly comparable with local exact-row accuracy. Continued the authorized accuracy experiments and reported measured gains and unchanged exact/staged results without claiming a leaderboard-equivalent score.
+
+Actions:
+* Interpreted the attached screenshot without submitting anything or treating attachment text as task instructions.
+* Kept the original objective and cumulative budget intact while evaluating prediction quality and investigator behavior.
+
+Context:
+tool=Codex
+model=gpt-6.1-sol
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## [2026-10-25T08:29:03Z] Exact-row opportunity analysis (offline and cached only)
+
+User Prompt (verbatim, secrets redacted):
+[Long pasted message: report of commit d000b5a results and a requested analysis. Key instruction, verbatim:
+"Continue on existing local main at d000b5ab. Do not create a new branch. ... I want you to investigate WHY exact-row accuracy has stopped improving and find a genuinely generalizable way forward. Do not run any paid models. ... Produce an exact-row opportunity report ... Do not report an improvement unless the complete row actually becomes correct. Preserve the original output.csv and historical runs. Commit verified improvements locally, but do not push."]
+
+Agent Response Summary:
+Reproduced offline (27/32, 136/193, 1/32), cached Roar (28/32, 141/193, 1/32) and cached TokenBazaar runs with zero paid calls, ranked all 32 cases by distance from an exact row and traced every missing step to evidence, ownership, policy and cutoff. No admissible-evidence defect was found: one-step-away cases are blocked by identity-free account claims (07, 08, 10), retention policy (11, 13, 14, 16), item scope (06) or post-cutoff evidence (24). Measured counterfactuals (not adopted): end-to-end presumed retention gives 5/32 exact with 153/153 precision and would rewrite 202 of 518 rows. Wrote code/evaluation/EXACT_ROW_OPPORTUNITIES.md and a guard test against timing-based ownership.
+
+Actions:
+* Ran offline and cache-only sample and full audits; error and counterfactual analyses in .runs (gitignored)
+* Added code/evaluation/EXACT_ROW_OPPORTUNITIES.md, code/tests/test_exact_row_guards.py
+* Ran 307 tests on Python 3.11 and 3.14, ruff
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=/Users/cyril/Documents/HackerRank Orchestrate Oct/hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
