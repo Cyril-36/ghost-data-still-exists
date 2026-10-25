@@ -84,7 +84,7 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
               decision_mode: str = 'baseline', agent_gateway: Gateway | None = None,
               agent_config: InvestigatorConfig | None = None, agent_live: bool = False,
               authorization_model: str | None = None, agent_finalize_on_pressure: bool = False,
-              agent_request_first: bool = False) -> dict:
+              agent_request_first: bool = False, recorded=None) -> dict:
     """gateway=None: offline intent (deterministic only). With a gateway: staged intent (Jev decisions,
     generative fallback for escalations). `investigator` + `investigator_gateway`: routed cases are
     investigated (sequentially). `media_cache`: earlier validated screenshot extractions that
@@ -125,12 +125,15 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
             gateway.share_budget(agent_gateway)
     context = load_context(dataset)
     requests = load_requests(requests_path)
-    corpus = build_corpus(context, config, gateway)
+    if recorded is not None and (gateway is not None or decision_mode != 'baseline'):
+        raise ContractError('recorded decisions replace the intent/media gateway in baseline mode only')
+    corpus = build_corpus(context, config, gateway, recorded.media_for(context) if recorded else None)
     policy = Policy(context.rules, presume_retention=config.presume_retention)
     index = IdentityIndex(context)
     # Case IDs are only in-process keys here: Jev sees the request text alone and the
     # generative fallback sees opaque handles.
-    intents = decide_intents({r.case_id: r.request_text for r in requests}, gateway, use_generative) \
+    intents = (recorded.intent_outcomes(requests) if recorded else
+               decide_intents({r.case_id: r.request_text for r in requests}, gateway, use_generative)) \
         if decision_mode == 'baseline' else {}
     plans = [plan_case(r, corpus, policy, index, intents[r.case_id].intent) for r in requests] \
         if decision_mode == 'baseline' else []
@@ -244,14 +247,17 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
         'fallback_ids': sorted(fallback_ids),
         'fallback_reasons': dict(Counter(p.fallback_reason.split(':')[0] for p in fallbacks)),
         'inference_modes': {
-            'intent': 'staged (deterministic check -> Jev decisions -> generative fallback)' if gateway and
+            'intent': 'recorded Jev decisions, re-reconciled with the deterministic check' if recorded else
+                      'staged (deterministic check -> Jev decisions -> generative fallback)' if gateway and
                       use_generative else 'jev + deterministic check' if gateway else 'deterministic offline',
             'gateway_mode': getattr(gateway, 'mode', None),
             'providers': {role: {k: getattr(g.config, k) for k in ('provider', 'jev_model', 'intent_fallback_model',
                                                                     'vision_model', 'investigator_model')}
                           for role, g in (('intent', gateway), ('investigator', investigator_gateway)) if g},
-            'media': ('PDF native text + Jev document kind; screenshots via blind vision reader'
+            'media': ('PDF native text + recorded Jev document kinds; recorded screenshot readings' if recorded
+                      else 'PDF native text + Jev document kind; screenshots via blind vision reader'
                       if gateway and config.use_media else 'PDF text only (no state); screenshots not read')},
+        'recorded_decisions': recorded.describe() if recorded else None,
         'source_status': dict(Counter(r.status for r in corpus.reports)),
         'intent_stages': dict(Counter(o.stage for o in intents.values())),
         'model_calls': sum(1 for u in usage if u.mode != 'cache'),

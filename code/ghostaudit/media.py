@@ -143,7 +143,7 @@ def _doc_kind(gateway, text):
     return a['choice'], float(a['probabilities'][a['choice']]), payload.get('model')
 
 
-def interpret_pdf(entry, raw, corpus, gateway) -> tuple[list, SourceReport, dict]:
+def interpret_pdf(entry, raw, corpus, gateway, recorded=None) -> tuple[list, SourceReport, dict]:
     report = SourceReport(entry.file_id, entry.file_path, 'pdf')
     try:
         pages = extract_pdf_text(raw)
@@ -155,13 +155,16 @@ def interpret_pdf(entry, raw, corpus, gateway) -> tuple[list, SourceReport, dict
     text = '\n'.join('\n'.join(p) for p in pages)
     extraction = {'pages': len(pages), 'lines': sum(len(p) for p in pages), 'facts': {
         k: [str(v[0]) for v in vals] for k, vals in facts.items()}}
-    kind = _native_doc_kind(pages) if gateway is None else None
-    if gateway is None and kind is None:
+    model_backed = gateway is not None or recorded is not None
+    kind = _native_doc_kind(pages) if not model_backed else None
+    if not model_backed and kind is None:
         report.status = 'TEXT_EXTRACTED'
         report.issues.append('NOTE: text extracted; document kind not classified offline, so no state derived')
         return [], report, extraction
     p, model = None, None
-    if gateway is not None:
+    if recorded is not None:                     # a recorded Jev answer for these exact bytes (recorded.py)
+        kind, p, model = (recorded['document_kind'][k] for k in ('choice', 'p', 'model'))
+    elif gateway is not None:
         try:
             kind, p, model = _doc_kind(gateway, text)
         except ProviderError as exc:
@@ -169,7 +172,7 @@ def interpret_pdf(entry, raw, corpus, gateway) -> tuple[list, SourceReport, dict
             report.issues.append(f'PROVIDER_FAILURE: document kind: {exc}')
             return [], report, extraction
     extraction['kind'] = {'choice': kind, 'p': p, 'model': model}
-    if gateway is None:
+    if not model_backed:
         extraction['kind']['method'] = 'native-structure-v1'
     identity_facts = [*facts['emails'], *facts['phones'], *((v, loc) for v, loc in facts['resource_ids']
                                                             if classify_token(v))]
@@ -260,8 +263,15 @@ def extract_screenshot(gateway, raw: bytes) -> dict:
     raise last
 
 
-def interpret_screenshot(entry, raw, corpus, gateway) -> tuple[list, SourceReport, dict]:
+def interpret_screenshot(entry, raw, corpus, gateway, recorded=None) -> tuple[list, SourceReport, dict]:
     report = SourceReport(entry.file_id, entry.file_path, 'image')
+    if recorded is not None:                     # a recorded reading of these exact bytes (recorded.py)
+        r = recorded['screenshot']
+        data = {'page_kind': r['page_kind'], 'page_title': r.get('page_title'), 'unreadable': r.get('unreadable'),
+                '_model': r.get('model'), 'entities': [{'resource_id': rid, 'fields': fields}
+                                                       for rid, fields in r['entities'].items()]
+                + [{'resource_id': bad} for bad in r.get('rejected_ids') or []]}
+        return _screenshot_observations(entry, data, corpus, report)
     if gateway is None:
         report.status = 'UNSUPPORTED_MEDIA'
         report.issues.append('UNREADABLE_MEDIA: vision reader not configured (offline run)')
@@ -276,6 +286,10 @@ def interpret_screenshot(entry, raw, corpus, gateway) -> tuple[list, SourceRepor
         report.status = 'FAILED'
         report.issues.append(f'PROVIDER_FAILURE: vision extraction: {exc}')
         return [], report, {}
+    return _screenshot_observations(entry, data, corpus, report)
+
+
+def _screenshot_observations(entry, data, corpus, report):
     page_system, page_category = PAGE_KINDS[data['page_kind']]
     merged, rejected = {}, []
     for e in data['entities']:
@@ -345,15 +359,20 @@ def interpret_screenshot(entry, raw, corpus, gateway) -> tuple[list, SourceRepor
                                   'model': data.get('_model')}
 
 
-def interpret_media(context, corpus, gateway: Gateway | None) -> MediaResult:
+def interpret_media(context, corpus, gateway: Gateway | None, recorded: dict | None = None) -> MediaResult:
+    """`recorded`: {file_id: reading} replayed instead of asking a model (recorded.py checks the bytes)."""
     result = MediaResult()
+    recorded = recorded or {}
     for entry in context.manifest:
         raw = (context.root / entry.file_path).read_bytes()
         kind = sniff(raw)
+        reading = recorded.get(entry.file_id)
+        if reading is not None and ('document_kind' in reading) != (kind == 'pdf'):
+            raise ValueError(f'{entry.file_id}: recorded reading does not match its {kind} content')
         if kind == 'pdf':
-            obs, report, extraction = interpret_pdf(entry, raw, corpus, gateway)
+            obs, report, extraction = interpret_pdf(entry, raw, corpus, gateway, reading)
         elif kind == 'image':
-            obs, report, extraction = interpret_screenshot(entry, raw, corpus, gateway)
+            obs, report, extraction = interpret_screenshot(entry, raw, corpus, gateway, reading)
         else:
             continue
         result.observations += obs

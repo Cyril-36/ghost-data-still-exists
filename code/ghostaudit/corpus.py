@@ -81,7 +81,7 @@ class Corpus:
         return {k: sorted(v) for k, v in sorted(status.items())}
 
 
-def build_corpus(context: Context, config: EngineConfig = STRICT, gateway=None) -> Corpus:
+def build_corpus(context: Context, config: EngineConfig = STRICT, gateway=None, recorded_media=None) -> Corpus:
     """Structured sources first; then (optionally) media, which needs the structured corpus to
     resolve systems and catalog labels. Media reports replace the structured parser's
     UNSUPPORTED_MEDIA entries for the same files."""
@@ -97,7 +97,7 @@ def build_corpus(context: Context, config: EngineConfig = STRICT, gateway=None) 
     if not config.use_media:
         return corpus
     from .media import interpret_media
-    media = interpret_media(context, corpus, gateway)
+    media = interpret_media(context, corpus, gateway, recorded_media)
     reports = [media.reports.get(r.source_id, r) for r in reports]
     corpus = Corpus(context, observations + media.observations, scopes, reports, config=config)
     corpus.media_extractions = media.extractions

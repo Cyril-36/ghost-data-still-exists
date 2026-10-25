@@ -30,6 +30,7 @@ from ghostaudit.output import read_output, validate_output
 from ghostaudit.providers import ProviderError
 
 DEFAULT_DATASET = Path(__file__).resolve().parent.parent / 'dataset'
+RECORDED_DECISIONS = Path(__file__).resolve().parent / 'recorded_decisions.json'
 PROBES = Path('.cache/ghostaudit/tool_probes.json')     # gitignored; written only by probe-tools
 
 
@@ -172,7 +173,9 @@ def main(argv=None) -> int:
                      help='per-case ceiling on charged agent exposure (unpriced calls count their full reserve)')
     aud.add_argument('--agent-max-tool-calls', type=int, default=40)
     aud.add_argument('--agent-max-completion-tokens', type=int, default=6000)
-    aud.add_argument('--intent', choices=['offline', 'jev', 'staged'], default='offline',
+    aud.add_argument('--recorded-decisions', type=Path, default=RECORDED_DECISIONS,
+                     help='with --intent recorded: the recorded Jev/media decision artifact to replay')
+    aud.add_argument('--intent', choices=['offline', 'jev', 'staged', 'recorded'], default='offline',
                      help='offline: deterministic English only; jev: Jev + deterministic check; staged: + generative')
     aud.add_argument('--env-file', type=Path, help='explicitly load credentials from a local .env')
     aud.add_argument('--budget-paise', type=float, default=1500.0, help='hard ceiling on model spend for this run')
@@ -199,6 +202,11 @@ def main(argv=None) -> int:
     prb.add_argument('--proxy-auth', action='store_true')
     prb.add_argument('--env-file', type=Path)
     prb.add_argument('--budget-paise', type=float, default=150.0)
+    exp = sub.add_parser('export-decisions', help='write the recorded-decision artifact of an existing run')
+    exp.add_argument('--run-dir', type=Path, required=True)
+    exp.add_argument('--dataset', type=Path, default=DEFAULT_DATASET)
+    exp.add_argument('--requests', type=Path, required=True)
+    exp.add_argument('--out', type=Path, required=True)
     val = sub.add_parser('validate', help='validate a predictions CSV (structure and citations only)')
     val.add_argument('--dataset', type=Path, default=DEFAULT_DATASET)
     val.add_argument('--requests', type=Path, required=True)
@@ -227,7 +235,21 @@ def main(argv=None) -> int:
             PROBES.write_text(json.dumps(records, indent=2) + '\n', encoding='utf-8')
             print(json.dumps(records[f'{args.provider}:{args.model}'], indent=2))
             return 0 if result['ok'] else 2
+        elif args.command == 'export-decisions':
+            from ghostaudit.recorded import export_run
+            print(json.dumps(export_run(args.run_dir, args.dataset, args.requests, args.out), indent=2))
         elif args.command == 'audit':
+            if args.intent == 'recorded':
+                from ghostaudit.recorded import RecordedDecisions
+                if args.decision_mode != 'baseline' or args.investigator != 'off':
+                    raise ContractError('--intent recorded replays the baseline pipeline only (no agent or investigator)')
+                if args.output.resolve() == (args.dataset / 'sample_output.csv').resolve():
+                    raise ContractError('refusing to overwrite supplied labels')
+                summary = run_audit(args.dataset, args.requests, args.output, args.run_dir,
+                                    recorded=RecordedDecisions.load(args.recorded_decisions))
+                print(json.dumps({k: v for k, v in summary.items() if k not in
+                                  ('fallback_ids', 'model_usage', 'code_sha256', 'recorded_decisions')}, indent=2))
+                return 0
             if args.decision_mode == 'agent-first':
                 summary = run_agent_first(args)
                 print(json.dumps({k: v for k, v in summary.items() if k not in
