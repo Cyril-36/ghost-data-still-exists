@@ -48,7 +48,7 @@ python3 code/evaluation/main.py errors ...          # case-by-case differences g
 python3 code/evaluation/main.py fixtures --out .runs/fixtures
 python3 code/evaluation/main.py intent-benchmark --env-file .env --out .runs/intent   # live, bounded
 
-python3 -m unittest discover -s code/tests      # 205 tests, offline (replay doubles, loopback servers)
+python3 -m unittest discover -s code/tests      # 211 tests, offline (replay doubles, loopback servers)
 ```
 
 Phase 4 (decisions D065-D068):

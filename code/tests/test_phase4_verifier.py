@@ -159,7 +159,7 @@ class MutationsAreCaught(unittest.TestCase):
 
 
 class FeedbackLoop(unittest.TestCase):
-    def verified_run(self, tmp, *turns, world_kw=None):
+    def verified_run(self, tmp, *turns, world_kw=None, **kw):
         holder = {}
 
         def verifier(plan, case):
@@ -167,7 +167,7 @@ class FeedbackLoop(unittest.TestCase):
         root = world(tmp, **(world_kw or {}))
         context = load_context(root)
         holder['v'] = Verifier(build_corpus(context), IdentityIndex(context), context, SourceText(context))
-        return investigate(tmp, *turns, world_kw=world_kw, verifier=verifier)
+        return investigate(tmp, *turns, world_kw=world_kw, verifier=verifier, **kw)
 
     def test_6_verifier_feedback_recovers_an_omitted_resource(self):
         early_stop = [('submit_case_file', {'resolution': 'NO_SUPPORTED_ACTION'})]

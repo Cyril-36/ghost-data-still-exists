@@ -4,9 +4,12 @@ facts; code validates every call and fact; the deterministic engine re-plans fro
 Loop per routed case (sequential, one case at a time):
   brief -> [model turn: tool calls -> tool results]* -> submit_case_file -> verifier
         -> feedback (at most `max_feedback_rounds`) -> ... -> stop
-Limits: `max_rounds` model turns that reach the tools, `max_schema_repairs` re-asks after a
-malformed response, `max_tool_calls`, and per-case token and paise caps under the gateway's run
-ceiling. An identical tool call is refused unless new evidence arrived since it was made.
+Limits: `max_rounds` evidence-routing turns; then at most `max_feedback_rounds` feedback rounds of
+at most `max_feedback_turns` turns each (so at most max_rounds + rounds x turns model turns);
+`max_schema_repairs` re-asks after a malformed response; `max_tool_calls`; per-case token and
+paise caps under the gateway's run ceiling. An identical tool call is refused unless new evidence
+arrived since it was made. Only a successfully submitted case file that the verifier accepts is
+published; every other stop (limits, budget, model error, rejection) keeps the input plan.
 
 The model never sets a status, writes steps, or executes anything: tool calls are validated by
 `tool_call_problem` (in the gateway) and run by `InvestigationTools`, which are read-only.
@@ -32,6 +35,7 @@ class InvestigatorConfig:
     model: str
     max_rounds: int = 4
     max_feedback_rounds: int = 2
+    max_feedback_turns: int = 2          # model turns each feedback round may use, outside max_rounds
     max_schema_repairs: int = 1
     max_tool_calls: int = 16
     max_case_tokens: int = 60000
@@ -168,10 +172,14 @@ class Investigator:
         messages = [{'role': 'system', 'content': (PROMPTS / PROMPT).read_text(encoding='utf-8')},
                     {'role': 'user', 'content': self._brief(case)}]
         start, seen, sent, candidate = len(self.gateway.usage), {}, set(), plan
+        feedback_left = None                 # turns left in the current feedback round; None: routing
         while not case.stop_reason:
             tokens, paise = self._case_usage(start)
-            if case.rounds >= self.config.max_rounds:
+            if feedback_left is None and case.rounds >= self.config.max_rounds:
                 case.stop_reason = 'ROUND_LIMIT'
+                break
+            if feedback_left == 0:
+                case.stop_reason = 'FEEDBACK_TURN_LIMIT'
                 break
             if tokens >= self.config.max_case_tokens or \
                     paise + self.gateway.config.chat_cost_reserve_paise > self.config.max_case_paise:
@@ -192,14 +200,18 @@ class Investigator:
                     continue
                 case.stop_reason = f'MODEL_ERROR: {str(exc)[:200]}'
                 break
-            case.rounds += 1
+            if feedback_left is None:
+                case.rounds += 1
+            else:
+                feedback_left -= 1
+                case.feedback_turns += 1
             message = payload['choices'][0]['message']
             calls = message['tool_calls']
             messages.append({'role': 'assistant', 'content': message.get('content'), 'tool_calls': calls})
             submitted = None
             for call in calls:
                 result = self._execute(case, itools, call, seen)
-                if call['function']['name'] == 'submit_case_file':
+                if call['function']['name'] == 'submit_case_file' and result.get('received'):
                     submitted = strict_json(call['function']['arguments'])
                 messages.append({'role': 'tool', 'tool_call_id': call['id'],
                                  'content': json.dumps(result, ensure_ascii=False, default=str)})
@@ -212,6 +224,7 @@ class Investigator:
             new = [f for f in findings if (f.blocking or f.routes) and f not in sent]
             if new and case.feedback_rounds < self.config.max_feedback_rounds:
                 case.feedback_rounds += 1
+                feedback_left = self.config.max_feedback_turns
                 sent.update(new)
                 messages.append({'role': 'user', 'content': json.dumps(
                     {'verifier_feedback': [f.record() for f in new],
@@ -223,11 +236,6 @@ class Investigator:
         if case.stop_reason.startswith('SUBMITTED') and case.facts:
             case.outcome = 'ACCEPTED'
             return candidate, case
-        if case.facts and self.verifier:
-            final = self._replan(plan, case.facts)
-            if not any(f.blocking for f in self.verifier(final, case)):
-                case.outcome = 'ACCEPTED'
-                return final, case
-        case.outcome = 'PHASE3_KEPT'
+        case.outcome = 'PHASE3_KEPT'          # unsubmitted or unverified facts are never published
         return plan, case
 

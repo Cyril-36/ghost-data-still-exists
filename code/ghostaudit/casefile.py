@@ -90,6 +90,7 @@ class CaseFile:
     verifier_findings: list = field(default_factory=list)   # per verification pass: [finding dicts]
     rounds: int = 0
     feedback_rounds: int = 0
+    feedback_turns: int = 0
     schema_repairs: int = 0
     stop_reason: str = ''
     outcome: str = ''                  # ACCEPTED | PHASE3_KEPT | FALLBACK

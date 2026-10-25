@@ -785,3 +785,16 @@ investigator model has passed a tool-call probe. Results, comparing each mode wi
 
 Pending live: the tool-call probe, the investigator on the 13 routed samples and the 184 routed full
 cases, and the staged comparison against the 28/32, 142/193, 2/32 baseline.
+
+## D069 — Investigator outcomes follow the safe-fallback contract (review of e98dcea)
+
+Tests: `tests/test_review_e98dcea.py` (4 tests, 7 failing subtests on e98dcea).
+- A `submit_case_file` counts only when `_execute` accepted it. A submission refused by the tool limit
+  is not a submission.
+- Only a successfully submitted case file that the verifier accepts is published. ROUND_LIMIT,
+  FEEDBACK_TURN_LIMIT, CASE_BUDGET, RUN_BUDGET and MODEL_ERROR keep the Phase 3 plan, even when valid
+  facts were already accepted. The case file still records them.
+- Feedback has its own allowance. Evidence routing keeps `max_rounds` (4). Each of at most
+  `max_feedback_rounds` (2) feedback rounds may use `max_feedback_turns` (2) model turns. So a case
+  makes at most 4 + 2 × 2 = 8 model turns, plus one schema repair, all under the per-case token and
+  paise caps and the run ceiling.
