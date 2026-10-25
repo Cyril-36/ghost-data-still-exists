@@ -3473,3 +3473,26 @@ branch=main
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T12:37:19Z] Push, case-by-case agent fixes, D081 retention, cleanup, ₹50 live cohort
+
+User Prompt (verbatim, secrets redacted):
+push and continue fix case by case reiterate untill you get the upmost submission quality i need a good winnable agent and remove unwanted code and others
+
+Agent Response Summary:
+Pushed f50812b and tightened policy_undecided (no uncategorized or lookup-only records). Asked four decisions: owner chose to retain undated security audit logs (D081), keep account links evidence-only, allow Roar live calls up to ₹50, and remove experiment modules only. D081 lifts cached-intent samples from 1/32 to 5/32 exact rows (153/153 precision). Ran 13 bounded single-case Haiku runs (4,700 paise conservative, no cost headers), fixing each interface failure generally (D083); cases 11 and 13 now verify as exact rows live, case 14 on offline ordered replay, and case 16 still fails on a model policy error. Root output.csv was not regenerated.
+
+Actions:
+* Edited code/ghostaudit/{policy,verifier,agent_first,agent_protocol,output,providers,tools}.py, code/main.py, code/prompts/agent_first_v1.md, code/evaluation/fixtures.py
+* Removed code/evaluation/{agent_comparison,scripted_transcript_demo,vision_benchmark}.py (D082)
+* Added code/tests/test_agent_budget_anchor.py, test_tool_argument_decoding.py; extended disclosure, root-cause and verifier tests
+* Live Roar claude-haiku-5-5 runs from a scratchpad working directory with a copied cache; repository cache untouched
+* Updated code/decisions.md (D081-D083), code/evaluation/evaluation_report.md, usage_report.md
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none
