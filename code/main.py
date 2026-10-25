@@ -129,7 +129,7 @@ def run_agent_first(args):
         if not model:
             raise ContractError('agent-first needs --agent-model for this provider')
         config = InvestigatorConfig(model, max_rounds=args.agent_max_rounds,
-                                    max_tool_calls=args.agent_max_tool_calls, max_case_tokens=120000,
+                                    max_tool_calls=args.agent_max_tool_calls, max_case_tokens=args.agent_max_case_tokens,
                                     max_case_paise=args.agent_max_case_paise,
                                     max_completion_tokens=args.agent_max_completion_tokens)
         media = json.loads(args.media_cache.read_text(encoding='utf-8')) if args.media_cache else None
@@ -166,6 +166,8 @@ def main(argv=None) -> int:
     aud.add_argument('--authorization-model', help='distinct independent model for uncertain non-deletion confirmation')
     aud.add_argument('--agent-cache', type=Path, default=Path('.cache/ghostaudit'))
     aud.add_argument('--agent-max-rounds', type=int, default=8)
+    aud.add_argument('--agent-max-case-tokens', type=int, default=120000,
+                     help='per-case ceiling on processed agent tokens')
     aud.add_argument('--agent-max-case-paise', type=float, default=400.0,
                      help='per-case ceiling on charged agent exposure (unpriced calls count their full reserve)')
     aud.add_argument('--agent-max-tool-calls', type=int, default=40)

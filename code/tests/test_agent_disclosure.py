@@ -147,7 +147,9 @@ class PolicyTreatmentAffordances(unittest.TestCase):
             [self.actor.inspect('fx_file_L'), [scripted.call('submit_audit', p)]], root=root)
         policy = json.loads(received[0]['messages'][1]['content'])['policy']
         brief = [r['verifier_treatment'] for r in policy['rules']] + [policy['flows']]
-        self.assertIn('SECURITY_AUDIT_LOG (RETAIN): VERIFY_RECORD_PRESENT only, never a finding or remediation', brief)
+        security = next(c for c in brief if c.startswith('SECURITY_AUDIT_LOG'))
+        self.assertTrue(security.startswith('SECURITY_AUDIT_LOG (RETAIN): VERIFY_RECORD_PRESENT only, never a finding'))
+        self.assertIn('without a supplied retention period', security)
         self.assertIn('USER_PROFILE (DELETE): REPORT_REMAINING_RECORD -> DELETE_RECORD -> VERIFY_RECORD_ABSENT', brief)
         self.assertTrue(any(c.startswith('LEGAL_HOLD_RECORD: undecidable') for c in brief))
         trace = json.loads((self.actor.base / 'agent/case_files.jsonl').read_text())

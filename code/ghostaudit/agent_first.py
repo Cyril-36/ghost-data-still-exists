@@ -23,7 +23,7 @@ from .intent import ACCOUNT, DELETE, ITEM, NON_DELETION, UNRESOLVED, Intent, cla
 from .investigator import Investigator
 from .output import parse_steps_json, row_problems
 from .planner import OPERATIONS, CasePlan, Obligation
-from .policy import PolicyError
+from .policy import UNDATED_RETAINED, PolicyError
 from .providers import ProviderError, ReplayGateway, strict_json
 from .tools import EVIDENCE_TOOLS, TOOL_SCHEMAS, InvestigationTools, locator_lines
 from .verifier import Finding
@@ -41,7 +41,9 @@ PROPOSAL_SCHEMA = {'type': 'object', 'additionalProperties': False, 'properties'
             'For ITEM, use exactly one supplied data category. Resource IDs belong in steps, not here.'},
         'whole_category': {'type': 'boolean', 'description': 'Must be false for ACCOUNT or NONE. '
             'For ITEM only, true means the customer requested every record of that one category.'},
-        'request_quote': STR, 'reason': STR},
+        'request_quote': STR, 'reason': STR,
+        'notes': {'type': 'string', 'description': 'Optional free-text commentary. Not verified and not '
+                  'published; put any other explanation here instead of adding new fields.'}},
         'required': ['decision', 'scope', 'target', 'whole_category', 'request_quote', 'reason']},
     'deletion_status': {'type': 'string', 'enum': ['COMPLETE', 'INCOMPLETE', 'NOT_APPLICABLE']},
     'steps': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False,
@@ -91,7 +93,10 @@ def treatment_chain(policy, category, cutoff):
     except PolicyError as exc:
         return f'{category}: undecidable without supplied evidence ({exc})'
     ops = [op for op in OPERATIONS[action] if op]
-    return f'{category} ({action}): ' + ' -> '.join(ops) + ('' if len(ops) > 1 else ' only, never a finding or remediation')
+    chain = f'{category} ({action}): ' + ' -> '.join(ops) + ('' if len(ops) > 1 else ' only, never a finding or remediation')
+    if category in UNDATED_RETAINED:
+        chain += '; applies without a supplied retention period (owner decision), never policy_undecided'
+    return chain
 
 
 def policy_treatments(policy, rules, cutoff):
