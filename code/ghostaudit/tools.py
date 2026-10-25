@@ -242,6 +242,10 @@ def _clip(result: dict) -> dict:
         if key == 'matches' and 'start_match' in result:
             result['next_match'] = result['start_match'] + len(result[key])
             result['truncated'] = result['next_match'] < result['total_matches']
+        if key == 'lines' and 'next_start_line' in result:
+            last = re.search(r'L(\d+)$', result['lines'][-1]['locator']) if result['lines'] else None
+            result['next_start_line'] = int(last.group(1)) + 1 if last else result.get('start_line')
+            result['note'] = 'Result clipped to its size limit; continue at next_start_line.'
     return result
 
 
@@ -372,6 +376,8 @@ class InvestigationTools:
                             'text_complete': visible_text[n] == lines[n - 1]} for n in numbers],
                  'total_lines': len(lines), 'truncated': start + count - 1 < len(lines)
                  or any(visible_text[n] != lines[n - 1] for n in numbers),
+                 'start_line': start,
+                 'next_start_line': numbers[-1] + 1 if numbers and numbers[-1] < len(lines) else None,
                  'parsed_observations': len(parsed)},
                 [(source_id, f'{prefix}L{n}', visible_text[n], visible_text[n] == lines[n - 1]) for n in numbers])
 

@@ -87,5 +87,25 @@ class SystemMismatch(unittest.TestCase):
         self.assertEqual((summary['fallback_count'], row.steps), (1, ()))
 
 
+class ClippedInspectionResumes(unittest.TestCase):
+    def test_a_size_clipped_window_says_where_to_continue_and_registers_only_what_was_shown(self):
+        import tempfile
+        from phase4_world import T_CAPTURE
+        from test_phase4_casefile import setup_case
+        lines = '\n'.join(f'row {n:02d} ' + 'x' * 400 for n in range(1, 41)).encode()
+        with tempfile.TemporaryDirectory() as tmp:
+            s = setup_case(tmp, files={'evidence/logs/long.log': ('fx_file_LONG', T_CAPTURE, 'fixture', lines)})
+            first = s['tools'].call('inspect_source', {'source_id': 'fx_file_LONG', 'max_lines': 60})
+            shown = len(first['lines'])
+            self.assertLess(shown, 40)
+            self.assertEqual(first['next_start_line'], shown + 1)
+            self.assertEqual(s['case'].shown['fx_file_LONG'], {f'L{n}' for n in range(1, shown + 1)})
+            second = s['tools'].call('inspect_source', {'source_id': 'fx_file_LONG',
+                                                        'start_line': first['next_start_line'], 'max_lines': 60})
+            self.assertEqual(second['lines'][0]['locator'], f'L{shown + 1}')
+            last = s['tools'].call('inspect_source', {'source_id': 'fx_file_LONG', 'start_line': 39, 'max_lines': 5})
+            self.assertIsNone(last['next_start_line'])
+
+
 if __name__ == '__main__':
     unittest.main()
