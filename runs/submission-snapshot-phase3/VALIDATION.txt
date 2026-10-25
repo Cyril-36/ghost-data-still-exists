@@ -1,1 +1,0 @@
-VALID: 518 rows, statuses {'COMPLETE': 95, 'INCOMPLETE': 413, 'NOT_APPLICABLE': 10}, 61 disclosed fallbacks. Checked: exact case set, order, step contract, citation existence and audit_at eligibility. NOT checked: whether citations semantically support each step.
