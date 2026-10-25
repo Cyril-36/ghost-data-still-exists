@@ -4,7 +4,7 @@
 
 The implementation keeps model authority bounded and final decisions deterministic. The audit
 reproduced and repaired 27 groups of execution/correctness defects, plus stale documentation (F28).
-It adds 37 regression tests. All 282 tests pass on Python 3.11.13 and 3.14.7; both provider suites,
+It adds 37 regression tests. All 282 tests passed on Python 3.11.13 and 3.14.7 at the time of this audit (288 after the destination-scope follow-up, 5cd8b54); both provider suites,
 all 13 fixtures, fresh offline and cache-only 518-case runs also pass. No tests were skipped or
 deleted to obtain these results. Ruff passes. This is an engineering audit, not proof that every
 possible bug has been found or that the submission matches the hidden answers.

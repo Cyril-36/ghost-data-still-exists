@@ -16,7 +16,7 @@ probe passes and a bounded live run is made.
 **Hardening pass:** the hardened code regenerated the same `output.csv`, byte-identical, into
 `runs/phase3-hardened/`. It made 0 network calls and 533 validated cache hits, and every cache entry
 was re-validated on read. Its acquisition cost is the one below. The pass spent **0 paise**: every live
-attempts, made while the gateway was returning HTTP 503, failed and none was billed. The new item-scope
+attempt, made while the gateway was returning HTTP 503, failed and none was billed. The new item-scope
 target question (`intent_target_jev_v2`) has not yet been answered live. The follow-up patch also
 spent 0 paise (one uncached Jev probe returned HTTP 503).
 

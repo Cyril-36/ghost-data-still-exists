@@ -1,6 +1,8 @@
 """Regressions for the second independent review (e858907): ceiling, grounding, planner, verifier,
 evaluation and provider findings. Each test reproduces one claimed defect."""
+import contextlib
 import http.server
+import io
 import json
 import shutil
 import tempfile
@@ -71,7 +73,8 @@ class CombinedCeiling(unittest.TestCase):
             probes.write_text(json.dumps({'roar:gpt-oss-20b': {'ok': True}}))
             with unittest.mock.patch.object(cli, 'PROBES', probes), \
                     unittest.mock.patch.object(cli, 'run_audit', lambda *a, **k: captured.update(k) or {}), \
-                    unittest.mock.patch('ghostaudit.providers.Gateway.load_pricing', lambda self: {}):
+                    unittest.mock.patch('ghostaudit.providers.Gateway.load_pricing', lambda self: {}), \
+                    contextlib.redirect_stdout(io.StringIO()):
                 cli.main(['audit', '--dataset', str(root), '--requests', str(root / 'deletion_requests.csv'),
                           '--output', str(Path(tmp) / 'o.csv'), '--run-dir', str(Path(tmp) / 'r'), '--intent', 'jev',
                           '--intent-provider', 'tokenbazaar', '--investigator-provider', 'roar',
