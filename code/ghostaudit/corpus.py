@@ -64,6 +64,12 @@ class Corpus:
             return False
         return scope.covers(subject_tokens)
 
+    def extended(self, extra: list[Observation]) -> 'Corpus':
+        """A copy with `extra` observations (accepted investigation facts) indexed like any other."""
+        corpus = Corpus(self.context, self.observations + list(extra), self.scopes, self.reports, config=self.config)
+        corpus.media_extractions = getattr(self, 'media_extractions', {})
+        return corpus
+
     def coverage(self) -> dict:
         status = defaultdict(list)
         for r in self.reports:

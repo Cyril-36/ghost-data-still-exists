@@ -1,4 +1,4 @@
-"""Read-only discovery operations for the future investigator (plan section 14.2).
+"""Read-only discovery operations and the investigator's evidence tools (plan section 14.2).
 
 Every operation:
 - takes registry handles (file_id, resource_id, identifier strings), never paths or SQL;
@@ -8,11 +8,15 @@ Nothing here writes to the dataset or decides a deletion status.
 """
 from __future__ import annotations
 
+import json
+import re
 from datetime import datetime
 
 from .corpus import Corpus, eligible
 from .identity import IdentityIndex, resolve_subject
-from .observations import Observation, classify_token
+from .observations import EMAIL_IN_TEXT, STATE, Observation, classify_token
+from .parsers import sniff
+from .parsers.pdfsrc import PdfError, extract_pdf_text
 from .parsers.sqlsrc import load_snapshot, rows, tables
 from .policy import Policy, PolicyError
 from .state import reconstruct
@@ -122,3 +126,263 @@ class Tools:
         except PolicyError as exc:
             result['policy_issue'] = str(exc)
         return result
+
+
+# --- Phase 4: line-addressable source text and the investigator's tool surface ----------------------
+
+MAX_RANGE_LINES = 12          # longest literal span a fact may cite
+MAX_RESULT_CHARS = 6000       # bound on one serialized tool result
+_LOCATOR = re.compile(r'^(?:(p\d+):)?L(\d+)(?:-L?(\d+))?$')
+_ID_SHAPED = re.compile(r'(?<![\w.@-])[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+(?![\w@-])')   # resource-handle shape
+
+
+class SourceText:
+    """Every citable source as numbered lines. Locators are `L<n>`, `L<a>-L<b>` or, for PDFs,
+    `p<page>:L<n>` (ranges stay on one page). File text is verbatim; activity and identity-audit rows
+    are one line each; screenshots are their cached reader extraction, one field per line."""
+
+    def __init__(self, context, media_extractions=None):
+        self.context = context
+        self.media = media_extractions or {}
+        self.refs = context.evidence                   # source_id -> EvidenceRef (availability)
+        self.manifest = {m.file_id: m for m in context.manifest}
+        self.activities = {a.activity_id: a for a in context.activities}
+        self.audits = {a.audit_id: a for a in context.audit_log}
+        self._cache = {}
+
+    def kind(self, source_id) -> str:
+        if source_id in self.activities:
+            return 'activity'
+        if source_id in self.audits:
+            return 'identity_audit'
+        entry = self.manifest.get(source_id)
+        if entry is None:
+            raise ToolError(f'unknown source handle {source_id!r}')
+        return sniff((self.context.root / entry.file_path).read_bytes()[:4096])
+
+    def pages(self, source_id) -> dict[str, list[str]]:
+        """{page prefix ('' for unpaged): lines}."""
+        if source_id in self._cache:
+            return self._cache[source_id]
+        kind = self.kind(source_id)
+        if kind == 'activity':
+            a = self.activities[source_id]
+            out = {'': [f'{a.event_time.isoformat()} {a.event_type} {a.source_system} -> {a.target_system} '
+                        f'{a.resource_id} result={a.reported_result} details: {a.details}']}
+        elif kind == 'identity_audit':
+            a = self.audits[source_id]
+            out = {'': [f'{a.event_time.isoformat()} {a.user_id} {a.field_name}: {a.old_value} -> {a.new_value}']}
+        else:
+            raw = (self.context.root / self.manifest[source_id].file_path).read_bytes()
+            if kind == 'pdf':
+                try:
+                    out = {f'p{i}': lines for i, lines in enumerate(extract_pdf_text(raw), start=1)}
+                except (PdfError, ValueError, KeyError):
+                    out = {}
+            elif kind == 'image':
+                ext = self.media.get(source_id) or {}
+                out = {'': [f'{rid} | {field}: {value}' for rid, fields in sorted((ext.get('entities') or {}).items())
+                            for field, value in fields.items()]} if ext.get('entities') else {}
+            else:
+                out = {'': raw.decode('utf-8', 'replace').splitlines()}
+        self._cache[source_id] = out
+        return out
+
+    def available(self, source_id, cutoff) -> bool:
+        ref = self.refs.get(source_id)
+        if ref is None:
+            raise ToolError(f'unknown source handle {source_id!r}')
+        return ref.available_at <= cutoff
+
+    def span(self, source_id, locator) -> str:
+        """The verbatim text at `locator` (lines joined by newlines)."""
+        m = _LOCATOR.match(locator or '')
+        if not m:
+            raise ToolError(f'malformed locator {locator!r}')
+        page, a, b = m.group(1) or '', int(m.group(2)), int(m.group(3) or m.group(2))
+        lines = self.pages(source_id).get(page)
+        if lines is None or not 1 <= a <= b <= len(lines) or b - a + 1 > MAX_RANGE_LINES:
+            raise ToolError(f'locator {locator!r} outside {source_id} or longer than {MAX_RANGE_LINES} lines')
+        return '\n'.join(lines[a - 1:b])
+
+    def lines(self, source_id):
+        for page, lines in self.pages(source_id).items():
+            for n, line in enumerate(lines, start=1):
+                yield (f'{page}:L{n}' if page else f'L{n}'), line
+
+
+def _clip(result: dict) -> dict:
+    text = json.dumps(result, ensure_ascii=False, default=str)
+    if len(text) <= MAX_RESULT_CHARS:
+        return result
+    return {'truncated': True, 'note': f'result exceeded {MAX_RESULT_CHARS} characters; narrow the request',
+            'preview': text[:MAX_RESULT_CHARS]}
+
+
+def _fn(name, description, properties, required):
+    return {'type': 'function', 'function': {'name': name, 'description': description, 'parameters': {
+        'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}}}
+
+
+_STR, _INT = {'type': 'string'}, {'type': 'integer'}
+FACT_KINDS = ('OWNERSHIP', 'STATE', 'CATEGORY', 'RETENTION')
+TOOL_SCHEMAS = [
+    _fn('search_identifiers', 'Exact search of eligible sources for identifiers of this subject or for '
+        'resource handles already returned to you.', {'values': {'type': 'array', 'items': _STR}}, ['values']),
+    _fn('inspect_source', 'Read numbered lines of one eligible source (file_id, activity_id or audit_id).',
+        {'source_id': _STR, 'start_line': _INT, 'max_lines': _INT, 'page': _STR}, ['source_id']),
+    _fn('inspect_media', 'Read a PDF page or the cached reader extraction of a screenshot, with recognized '
+        'identifiers and unreadable fields.', {'file_id': _STR, 'page': _STR}, ['file_id']),
+    _fn('activity_timeline', 'Eligible observations and workflow claims for one resource handle, oldest first.',
+        {'resource_id': _STR}, ['resource_id']),
+    _fn('query_sql_snapshot', 'Rows of one table of an eligible SQL snapshot whose column equals a value '
+        '(an identifier of this subject or a returned resource handle).',
+        {'file_id': _STR, 'table': _STR, 'column': _STR, 'value': _STR}, ['file_id', 'table', 'column', 'value']),
+    _fn('propose_fact', 'Propose one evidence-backed fact. `literal` must be copied verbatim from the cited '
+        'source lines at `locator`.', {
+            'kind': {'type': 'string', 'enum': list(FACT_KINDS)}, 'system_id': _STR, 'resource_id': _STR,
+            'source_id': _STR, 'locator': _STR, 'literal': _STR, 'value': _STR}, [
+            'kind', 'system_id', 'resource_id', 'source_id', 'locator', 'literal', 'value']),
+    _fn('submit_case_file', 'Submit the case file for independent verification.', {
+        'resolution': {'type': 'string', 'enum': ['RESOLVED', 'NO_SUPPORTED_ACTION']}, 'notes': _STR},
+        ['resolution']),
+]
+EVIDENCE_TOOLS = ('search_identifiers', 'inspect_source', 'inspect_media', 'activity_timeline', 'query_sql_snapshot')
+
+
+class InvestigationTools:
+    """The five read-only evidence tools, bound to one case file (cutoff, subject, scope, handles).
+    Arguments arrive already schema-checked (`tool_call_problem`); handles are checked here."""
+
+    def __init__(self, tools: Tools, texts: SourceText, casefile):
+        self.tools, self.texts, self.case = tools, texts, casefile
+
+    # -- scope ---------------------------------------------------------------------------------
+    def _allowed_value(self, value):
+        return value in self.case.identifier_values or value in self.case.handles
+
+    def _eligible_source(self, source_id):
+        if not self.texts.available(source_id, self.case.audit_at):
+            raise ToolError(f'{source_id} became available after audit_at; it cannot be used for this case')
+
+    def _note_handles(self, sources=(), text=''):
+        """Sources shown to the model may be cited; resource IDs appearing verbatim in what it was
+        shown become handles it may query further. Nothing else is ever a valid handle."""
+        self.case.inspected.update(sources)
+        self.case.handles.update(_ID_SHAPED.findall(text))
+
+    # -- tools ---------------------------------------------------------------------------------
+    def search_identifiers(self, values):
+        values = [v for v in values if isinstance(v, str) and v.strip()][:5]
+        rejected = [v for v in values if not self._allowed_value(v)]
+        if rejected or not values:
+            raise ToolError(f'not identifiers of this subject or returned handles: {rejected or values}')
+        hits = []
+        for source_id in sorted(self.texts.refs):
+            if not self.texts.available(source_id, self.case.audit_at) or source_id in self.texts.activities \
+                    or source_id in self.texts.audits:
+                continue
+            for locator, line in self.texts.lines(source_id):
+                if any(re.search(rf'(?<![\w.@+-]){re.escape(v)}(?![\w@-])', line, re.IGNORECASE) for v in values):
+                    hits.append({'source_id': source_id, 'locator': locator, 'text': line[:200]})
+        activity = [a.activity_id for a in self.texts.activities.values() if a.event_time <= self.case.audit_at
+                    and any(v == a.resource_id for v in values)]
+        shown = hits[:25]
+        self._note_handles({h['source_id'] for h in shown} | set(activity[:25]), '\n'.join(h['text'] for h in shown))
+        return {'matches': shown, 'total_matches': len(hits), 'truncated': len(hits) > 25,
+                'activity_ids_naming_value': activity[:25], 'activity_truncated': len(activity) > 25}
+
+    def inspect_source(self, source_id, start_line=1, max_lines=40, page=''):
+        self._eligible_source(source_id)
+        pages = self.texts.pages(source_id)
+        page = page or next(iter(pages), '')
+        if page not in pages:
+            raise ToolError(f'{source_id} has no page {page!r}; pages: {sorted(pages)}')
+        lines, start = pages[page], max(1, start_line)
+        count = max(1, min(max_lines, 60))
+        prefix = f'{page}:' if page else ''
+        shown = [{'locator': f'{prefix}L{n}', 'text': lines[n - 1][:300]}
+                 for n in range(start, min(len(lines), start + count - 1) + 1)]
+        entry = self.texts.manifest.get(source_id)
+        parsed = [o for o in self.tools.corpus.by_source.get(source_id, ()) if eligible(o, self.case.audit_at)]
+        self._note_handles({source_id}, '\n'.join(s['text'] for s in shown))
+        return {'source_id': source_id, 'origin': entry.origin if entry else self.texts.kind(source_id),
+                'available_at': self.texts.refs[source_id].available_at.isoformat(), 'page': page,
+                'lines': shown, 'total_lines': len(lines), 'truncated': start + count - 1 < len(lines),
+                'parsed_observations': len(parsed)}
+
+    def inspect_media(self, file_id, page=''):
+        self._eligible_source(file_id)
+        kind = self.texts.kind(file_id)
+        if kind not in ('pdf', 'image'):
+            raise ToolError(f'{file_id} is not a PDF or screenshot')
+        result = {'file_id': file_id, 'media': kind}
+        if kind == 'image':
+            ext = self.texts.media.get(file_id) or {}
+            if not ext.get('entities'):
+                return {**result, 'interpreted': False,
+                        'uncertainty': 'no cached reader extraction for this screenshot; nothing can be cited'}
+            text = '\n'.join(self.texts.pages(file_id)[''])
+            self._note_handles({file_id}, text)
+            return _clip({**result, 'interpreted': True, 'reader_model': ext.get('model'),
+                          'page_kind': ext.get('page_kind'), 'unreadable': ext.get('unreadable', []),
+                          'rejected_ids': ext.get('rejected_ids', []),
+                          'lines': [{'locator': loc, 'text': t} for loc, t in self.texts.lines(file_id)][:60]})
+        pages = self.texts.pages(file_id)
+        if not pages:
+            return {**result, 'interpreted': False, 'uncertainty': 'native text extraction failed'}
+        page = page or 'p1'
+        if page not in pages:
+            raise ToolError(f'{file_id} has no page {page!r}; pages: {sorted(pages)}')
+        lines = [{'locator': f'{page}:L{n}', 'text': t} for n, t in enumerate(pages[page], start=1)]
+        text = '\n'.join(x['text'] for x in lines)
+        self._note_handles({file_id}, text)
+        return _clip({**result, 'interpreted': True, 'page': page, 'pages': sorted(pages), 'lines': lines[:60],
+                      'identifiers': sorted(set(EMAIL_IN_TEXT.findall(text)) | set(_ID_SHAPED.findall(text))),
+                      'note': 'native text; the document kind is not asserted by this tool'})
+
+    def activity_timeline(self, resource_id):
+        if resource_id not in self.case.handles:
+            raise ToolError(f'{resource_id!r} is not a candidate or returned resource handle')
+        events = sorted(self.tools.corpus.resource_observations(resource_id, self.case.audit_at),
+                        key=lambda o: (o.observed_at, o.obs_id))
+        items = [{'source_id': o.source_id, 'locator': o.locator, 'kind': o.kind, 'proves_state': o.kind == STATE,
+                  'system_id': o.system_id, 'location': o.location, 'presence': o.presence,
+                  'observed_at': o.observed_at.isoformat(), 'excerpt': o.excerpt[:160]} for o in events]
+        self._note_handles({o.source_id for o in events[:30]})
+        return {'resource_id': resource_id, 'note': 'CLAIM entries report work, never the resulting state',
+                **_bounded(items, 30)}
+
+    def query_sql_snapshot(self, file_id, table, column, value):
+        self._eligible_source(file_id)
+        if not self._allowed_value(value):
+            raise ToolError(f'{value!r} is not an identifier of this subject or a returned handle')
+        raw = (self.texts.context.root / self.texts.manifest[file_id].file_path).read_text(encoding='utf-8') \
+            if file_id in self.texts.manifest else ''
+        if 'CREATE TABLE' not in raw:
+            raise ToolError(f'{file_id} is not a SQL snapshot')
+        con = load_snapshot(raw)
+        try:
+            schema = tables(con)
+            if table not in schema:
+                raise ToolError(f'unknown table {table!r}; tables: {sorted(schema)}')
+            if column not in schema[table]:
+                raise ToolError(f'unknown column {column!r} in {table}; columns: {schema[table]}')
+            found = [r for r in rows(con, table) if str(r.get(column)) == value]
+        finally:
+            con.close()
+        lines = raw.splitlines()
+        for r in found:
+            key = str(r.get('resource_id') or value)
+            insert = re.compile(rf'INSERT INTO "?{re.escape(table)}"?[ (]')
+            r['locator'] = next((f'L{n}' for n, line in enumerate(lines, start=1)
+                                 if insert.match(line) and key in line), None)
+            r.pop('rowid', None)
+        self._note_handles({file_id}, json.dumps(found, default=str))
+        return _clip({'file_id': file_id, 'table': table, 'filter': {column: value},
+                      'note': 'complete for this table at the snapshot time', **_bounded(found, 20)})
+
+    def call(self, name, arguments):
+        if name not in EVIDENCE_TOOLS:
+            raise ToolError(f'unknown tool {name!r}')
+        return _clip(getattr(self, name)(**arguments))
