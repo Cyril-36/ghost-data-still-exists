@@ -26,6 +26,10 @@ ABSENT_CUE = re.compile(r'\b(404|not[ _]found|no such|absent|does not exist|no r
 PRESENT_CUE = re.compile(r'\b(200|found|present|active|exists|stored|retained|available|captured|uploaded|'
                          r'indexed|enabled|attached|listed)\b', re.IGNORECASE)
 CLAIM_CUE = re.compile(r'\b(reported|requested|scheduled|completed|success(?:ful)?|queued|job|worker)\b', re.IGNORECASE)
+INSTRUCTION_CUE = re.compile(r'\b(ignore (?:all|any|the|previous|prior|your)\b|disregard (?:all|any|the|previous|'
+                             r'prior|your)\b|you must\b|mark (?:this|the) (?:case|request)|system prompt|as an ai\b)',
+                             re.IGNORECASE)
+READBACK_MEDIA = ('json', 'sql', 'log', 'text', 'csv')      # machine output, as `sniff` names it
 RETENTION_CUE = re.compile(r'\b(retain|retained|retention|hold|until|keep)\b', re.IGNORECASE)
 CATEGORY_CUES = {
     'USER_PROFILE': ('profile', 'account'), 'SECONDARY_IDENTIFIER': ('secondary', 'alias', 'identifier'),
@@ -149,6 +153,14 @@ class FactValidator:
         found |= {t for t in map(classify_token, re.findall(r'\b(?:user_\d+|[0-9a-fA-F]{64})\b', text)) if t}
         return found
 
+    def record_context(self, source_id, locator, span) -> str:
+        """The text a cited record belongs to: the whole page of a document or screenshot (D061: a
+        section naming two people binds neither), otherwise the cited lines."""
+        if self.texts.kind(source_id) in ('pdf', 'image'):
+            page = locator.split(':')[0] if ':' in locator else ''
+            return '\n'.join(self.texts.pages(source_id).get(page, []))
+        return span
+
     def validate(self, proposal: dict, case: CaseFile) -> tuple[Fact | None, str]:
         kind, system, rid = proposal.get('kind'), proposal.get('system_id'), proposal.get('resource_id')
         source, locator, literal = proposal.get('source_id'), proposal.get('locator'), proposal.get('literal')
@@ -170,6 +182,8 @@ class FactValidator:
             return None, f'BAD_LOCATOR: {exc}'
         if len(literal) < 8 or _norm(literal) not in _norm(span):
             return None, f'LITERAL_NOT_IN_SOURCE: the literal does not occur verbatim at {source} {locator}'
+        if INSTRUCTION_CUE.search(span):
+            return None, 'UNTRUSTED_TEXT: the cited lines contain instructions; evidence text is data, not a source of facts'
         if rid not in id_tokens(literal) and kind != 'CATEGORY':
             return None, f'RESOURCE_NOT_IN_LITERAL: {rid} is not an exact token of the literal'
         problem = self._system_problem(system, rid, source, span)
@@ -200,9 +214,10 @@ class FactValidator:
         mine = sorted(tokens & case.subject_tokens)
         if not mine:
             return 'NO_SUBJECT_IDENTIFIER: the literal names no identifier of this subject'
-        others = self._other_people(self.identity_tokens(span), case)
+        others = self._other_people(self.identity_tokens(self.record_context(fact['source_id'], fact['locator'], span)),
+                                    case)
         if others:
-            return f'CROSS_PERSON: the cited lines also identify {others}'
+            return f'CROSS_PERSON: the cited record also identifies {others}'
         return {'subject_token': mine[0]}
 
     def _check_state(self, fact, case, span):
@@ -211,6 +226,8 @@ class FactValidator:
             return 'CLAIM_NOT_STATE: an activity row reports work; it never proves the resulting state'
         if value not in (PRESENT, ABSENT):
             return 'BAD_VALUE: STATE value must be PRESENT or ABSENT'
+        if value == ABSENT and self.texts.kind(fact['source_id']) not in READBACK_MEDIA:
+            return 'UNSUPPORTED_STATE: absence needs a machine readback (SQL, JSON or log), not a document or screenshot'
         if value == ABSENT and (not ABSENT_CUE.search(literal) or CLAIM_CUE.search(literal)):
             return 'UNSUPPORTED_STATE: ABSENT needs a readback cue (404, not found, ...) and no operation claim'
         if value == PRESENT and (not PRESENT_CUE.search(literal) or ABSENT_CUE.search(literal)):
