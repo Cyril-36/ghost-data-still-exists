@@ -69,9 +69,10 @@ PROFILES = {
                            False, 'typesafe/jev-latest', 'google/gemini-2.5-flash', 'google/gemini-2.5-flash', None,
                            25.0, 120.0),
     # Roar: jev and gpt-oss-20b native tool calls passed live smoke tests; gpt-oss-20b as intent fallback is a
-    # candidate pending contract and multilingual validation; no vision model is chosen until one is validated.
+    # candidate pending contract and multilingual validation; claude-haiku-5-5 reads screenshots (D071:
+    # 21/23 IDs, 17/18 identifiers, no false values, 11/11 page kinds on the manual ground truth).
     'roar': Profile('roar', 'https://api.roar-ai.com/v1', 'ROAR_API_KEY', 'evaluate', None, True,
-                    'jev', 'gpt-oss-20b', None, 'gpt-oss-20b', 5.0, 50.0),
+                    'jev', 'gpt-oss-20b', 'claude-haiku-5-5', 'gpt-oss-20b', 5.0, 50.0),
 }
 ROLE_MODELS = ('jev_model', 'intent_fallback_model', 'vision_model', 'investigator_model')
 USD_PAISE = 8800.0      # estimate conversion (1 USD ~ Rs 88) for providers that bill in USD; estimates only

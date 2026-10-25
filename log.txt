@@ -2071,3 +2071,23 @@ branch=claude/gracious-archimedes-1rba87
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T05:49:51Z] Cheaper screenshot reader: claude-haiku-5-5 benchmarked and adopted for Roar (D071)
+
+User Prompt (verbatim, secrets redacted):
+how about we try a cheaper vision model but it should be sufficient for the work
+[then, after interrupting the gpt-6-luna benchmark] go with haiku
+
+Agent Response Summary:
+Benchmarked claude-haiku-5-5 live on the 11 screenshots against the manual ground truth: 21/23 resource IDs and 17/18 identifiers, with no false values, 11/11 page kinds matching Phase 3, and all responses valid. The cost was about 91 paise estimated, against 529 paise billed for the Phase 3 Gemini reader. The gpt-6-luna benchmark was cancelled by the user. Set it as the Roar profile vision_model. A 32-sample rerun with screenshots (all responses cached, 0 calls) was identical to A, because the screenshots hold no evidence for the sample subjects.
+
+Actions:
+* Live vision benchmark (11 calls); edited ghostaudit/providers.py, tests/test_providers_dual.py, decisions.md (D071); run A2; runs/phase4-roar-32
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=claude/gracious-archimedes-1rba87
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none

@@ -845,3 +845,23 @@ Live smoke tests, 2026-10-25 (synthetic inputs only):
 - `gpt-oss-20b` forced tool call: HTTP 200, valid; 130 and 34 tokens, 8 of them reasoning.
 
 No cost headers were returned. The catalog estimate for all calls together is about USD 0.00011.
+
+## D071 — Roar screenshot reader: `claude-haiku-5-5`
+
+It was benchmarked live on the 11 screenshots against the manual ground truth
+(`evaluation/vision_ground_truth.py`):
+
+| Model | Resource IDs | Identifiers | Page kinds vs Phase 3 | Estimated cost for 11 images |
+|---|---|---|---|---|
+| Phase 3 TokenBazaar reader (`gemini-2.5-flash`, served as `gemini-3.8-flash`) | 23/23 | 18/18 | – | 529 paise (billed) |
+| `claude-haiku-5-5` (Roar) | 21/23, no false IDs | 17/18, no false identifiers | 11/11 | 91 paise |
+
+Haiku missed `support_9538` (`evidence_04`), and `analytics_7438` with its email (`evidence_19`). A missed
+value yields no evidence rather than wrong evidence, so the reader can lose recall but cannot add
+false facts. All 11 responses passed the existing strict extraction validator. The user chose it
+over benchmarking `gpt-6-luna`. It is the Roar profile's `vision_model`, still overridable with
+`--vision-model`. PDFs still use native text and Jev.
+
+Measured on the 32 samples (Roar jev, investigator off), all 49 responses came from cache, with 0 calls:
+the predictions are identical to the run without screenshots. These screenshots carry no evidence for
+the sample subjects.

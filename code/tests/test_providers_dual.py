@@ -58,7 +58,7 @@ class ProfileTests(unittest.TestCase):
         c = Gateway(ROAR).config
         self.assertEqual((c.base_url, c.api_key_env, c.proxy_auth), ('https://api.roar-ai.com/v1', 'ROAR_API_KEY', True))
         self.assertEqual((c.jev_model, c.intent_fallback_model, c.vision_model, c.investigator_model),
-                         ('jev', 'gpt-oss-20b', None, 'gpt-oss-20b'))
+                         ('jev', 'gpt-oss-20b', 'claude-haiku-5-5', 'gpt-oss-20b'))
         self.assertEqual(Gateway(replace(ROAR, vision_model='some-vision')).config.vision_model, 'some-vision')
         with self.assertRaises(ProviderError):
             Gateway(ProviderConfig(provider='other'))
@@ -137,7 +137,7 @@ class RoarAdapters(unittest.TestCase):
                                                replace(ROAR, intent_fallback_model='')), [('h1', 'x')])
         self.assertIn('no intent fallback model', out['h1'])
         _, report, _ = interpret_screenshot(type('E', (), {'file_id': 'f', 'file_path': 'p'})(), b'', None,
-                                            ReplayGateway(lambda p, b: self.fail('called'), ROAR))
+                                            ReplayGateway(lambda p, b: self.fail('called'), replace(ROAR, vision_model='')))
         self.assertIn('no vision model configured', report.issues[0])
 
     def test_proxy_auth_sends_no_authorization_header(self):

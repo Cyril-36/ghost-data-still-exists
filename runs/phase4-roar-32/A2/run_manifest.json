@@ -1,0 +1,178 @@
+{
+  "artifact_status": "Phase 4 engine: every plan independently verified; investigator not run (no live or replayed model). Fallback rows are predictions, not evidence that data remains.",
+  "engine_version": "phase4-1",
+  "code_sha256": {
+    "__init__.py": "30f829c6dd77d1235e28c4078750da4848c6a89fc2d93d760fc1de748503fe89",
+    "audit.py": "3a7326de42d6197ec8fbfd9aad701c4ac08bc9a0d3f301fe4c6f372e0b42c173",
+    "casefile.py": "d169d5e59710b5dc38adbf3dc1e9e7775241da2fc7f13b4eb7126be754e6f4c6",
+    "config.py": "054bceb1a3bb1dba72dbd5587ff2e0c25b0ccf4d13dbe53e9a5a1463d61755bd",
+    "contracts.py": "de0e076feca03ef93c9faa18231899b89a07ecd786e512324c6d5219565f8318",
+    "corpus.py": "f15f9f47e03e53a0452ad791564fce85e68c62edc64e0afafb0636ca116082b3",
+    "identity.py": "4a1a681d4b352ada45b718e4fe9efbd1e047898ac0cfa51ab6064cb791bd3093",
+    "inputs.py": "9e21e073fc228afc5785ffa4f6870f845ab7ae53782001fb9318d4f34c9eafad",
+    "intent.py": "05f3b0009bff546c1c8db7095f3a6dddc2f44f7c699467e265fb05fda3a72ac6",
+    "intent_models.py": "cab11dcfdfb9657e0c2ea1a01386220fdbbeabb87969dff622863bce1de3f192",
+    "investigator.py": "2ca74dda70784be159fae171dfb123c9fe3202c450e6a28b200eecda2193a631",
+    "media.py": "f20228c0868d5abc7e535cb2a0ebfd417938b20baf80d922bdfd66f474fca4c2",
+    "observations.py": "0094f564026e164d0d31175d2b914a05b87008a5cdbc6a6493d55d0e6cb0aec2",
+    "output.py": "e2348254d21a20ca9c69c72be997bb0773df1bc460a13c882eff5b4ee0baf588",
+    "parsers/__init__.py": "7b2707d8d43a2978e3faf8a8334484ee42068400ce6b4c3ece88fb0c1075d744",
+    "parsers/activity.py": "e274258f07c616e1ea78714d7230473ec74ca58ec16564bb72a33e94d85ab6a7",
+    "parsers/jsonsrc.py": "b16698ea9db8f473b1c2896fc10c854da68b88ae06f8e57fdf703a3db28accfe",
+    "parsers/logsrc.py": "a8cc1dc5f864b7a8e179adba64a11c88efef87d9b565ca7eecc42a52f60d5b3b",
+    "parsers/pdfsrc.py": "0d852e47cc09a025af8bfc5cecdb2aa657a3f1d84b92d283047e1d3a74b373da",
+    "parsers/records.py": "3b102f08bbebb8931926132c9f1aae669a38c6b56ddf3bb3dd9ebb916decad91",
+    "parsers/sqlsrc.py": "ce725de397e3843cff6ff9fc10e3dc7fd0f5bc68450143d366421f282a8f9cc6",
+    "parsers/textsrc.py": "6652d6be6e659844872d41d2e2916ea91134613a42be38630cac5a7551106282",
+    "planner.py": "7612355b86d8f22d25f5858da03b19bad5c4d1bb324cca8e45647fc064301361",
+    "policy.py": "6235891ecc1582ebfd6461ddbf96a652af2d13d8a18c63f26500804ba0c52e4b",
+    "providers.py": "f2f9a2e86f62ac9fce2530df0828283c06cfe1ca14328558f9663cf95eecb079",
+    "state.py": "eacea1e03c9f54de600f485910578c1f658c46ed7f795cd6e83701c8324bcf53",
+    "tools.py": "3dece618f568e71d2c90549a938fead717a344a7a47cba40f222e12e90262152",
+    "verifier.py": "861819b33a8d0aac7b2a1c92c01ff9f575bf59ce408f9d6a3fcffefee2e8b533"
+  },
+  "prompt_sha256": {
+    "document_kind_jev_v1.json": "8a9fbddfbeca533fd5dc6a996e354071175e46c1338ee74a0a450d8bcf1312b5",
+    "intent_generative_v1.md": "862af2cc5034152403054ff361746d3233e0d13819cc033e0c75795956e90c9c",
+    "intent_jev_v1.json": "f7002e1f3454f228f53c6f8e87ac5c97738964791273a075b29cb0790cfdeac0",
+    "intent_target_jev_v2.json": "7c50938e6316b3a80391f289fcb813ca6203f74c300ecb8992ad9f9cc32e454e",
+    "investigator_v1.md": "8547029b34592bb4e6f8b78f17d23706bc22e04a895d03a475ea6617f51576c8",
+    "vision_extract_v1.md": "5fd0ff362b97650ace7f9c21e352322f44eee8d8dd98f24bf36662c1e9548e07"
+  },
+  "engine_config": {
+    "subject_scoped_omission": false,
+    "presume_retention": false,
+    "post_cutoff_ownership_links": false,
+    "use_media": true
+  },
+  "experimental": false,
+  "requests_file": "dataset/sample_deletion_requests.csv",
+  "requests_sha256": "fe08461a78fc04f1aadb076c54010ebe2b35bd599a09df2fd014683cc8914c22",
+  "dataset_files_sha256": {
+    "deletion_rules.csv": "e12d47ca4cbecc4a3c924b52705d9c5b1ebcfa71d6a28f58d988571eeccb32f7",
+    "evidence_files.csv": "f16ef6424f020fd43c9d3a788261a33d96692cbca50d0239fccb9d3e696ee212",
+    "system_activity.csv": "abc30a185563435905626bbb45519ffaeeaf0ca7d16edde3949ff7596283c20c",
+    "user_audit_log.csv": "de04cb620328bad1212f5b1cb0aa05689b5986d5c7cef38ea84e9aebb7b3ca0f",
+    "user_identities.csv": "63940e0fdc74a85e44463de3a6f18e3b27ff144f08e9981c732dfcfdadece9e6"
+  },
+  "output_file": "/tmp/claude-0/-home-user-ghost-data-still-exists/480f5704-1198-5c7d-9598-6d8182874f50/scratchpad/eval/A2/predictions.csv",
+  "output_sha256": "ffba9a285fd6119d12bb7a8bce882dd311231672d318434f735080933ddbcb33",
+  "cases": 32,
+  "statuses": {
+    "INCOMPLETE": 26,
+    "COMPLETE": 6
+  },
+  "fallback_count": 4,
+  "fallback_ids": [
+    "case_01",
+    "case_02",
+    "case_04",
+    "case_31"
+  ],
+  "fallback_reasons": {
+    "NO_REPRESENTABLE_OBLIGATION": 3,
+    "UNRESOLVED_OBLIGATIONS": 1
+  },
+  "inference_modes": {
+    "intent": "jev + deterministic check",
+    "gateway_mode": "live",
+    "providers": {
+      "intent": {
+        "provider": "roar",
+        "jev_model": "jev",
+        "intent_fallback_model": "gpt-oss-20b",
+        "vision_model": "claude-haiku-5-5",
+        "investigator_model": "gpt-oss-20b"
+      }
+    },
+    "media": "PDF native text + Jev document kind; screenshots via blind vision reader"
+  },
+  "source_status": {
+    "PARSED": 79,
+    "PARTIAL": 4,
+    "INTERPRETED": 11
+  },
+  "intent_stages": {
+    "jev": 32
+  },
+  "model_calls": 0,
+  "model_cache_hits": 49,
+  "model_usage": {
+    "vision_reader|claude-haiku-5-5->claude-haiku-5-5|cache|ok": {
+      "calls": 11,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_input_tokens": 0,
+      "cost_paise_header": 0.0,
+      "cost_estimate_paise": 0.0,
+      "unpriced_live_calls": 0,
+      "latency_s": 0.0,
+      "retries": 0
+    },
+    "document_kind|jev->None|cache|ok": {
+      "calls": 4,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_input_tokens": 0,
+      "cost_paise_header": 0.0,
+      "cost_estimate_paise": 0.0,
+      "unpriced_live_calls": 0,
+      "latency_s": 0.0,
+      "retries": 0
+    },
+    "intent|jev->None|cache|ok": {
+      "calls": 32,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_input_tokens": 0,
+      "cost_paise_header": 0.0,
+      "cost_estimate_paise": 0.0,
+      "unpriced_live_calls": 0,
+      "latency_s": 0.0,
+      "retries": 0
+    },
+    "intent_target|jev->None|cache|ok": {
+      "calls": 2,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "reasoning_tokens": 0,
+      "cached_input_tokens": 0,
+      "cost_paise_header": 0.0,
+      "cost_estimate_paise": 0.0,
+      "unpriced_live_calls": 0,
+      "latency_s": 0.0,
+      "retries": 0
+    }
+  },
+  "model_spent_paise_header": 0.0,
+  "model_cost_paise": {
+    "actual_reported": 0,
+    "estimated": 0,
+    "unpriced_live_calls": 0,
+    "run_ceiling": 50.0
+  },
+  "phase4": {
+    "investigator": null,
+    "investigator_mode": null,
+    "routed": 15,
+    "investigated": 0,
+    "accepted": 0,
+    "phase3_kept": 0,
+    "stop_reasons": {},
+    "rounds": 0,
+    "tool_calls": 0,
+    "feedback_rounds": 0,
+    "facts_accepted": 0,
+    "facts_rejected": 0,
+    "cases_with_verifier_rejections": 0,
+    "withheld_by_verifier": 0,
+    "final_verifier_findings": {
+      "PARTIAL_PLAN": 11,
+      "UNINSPECTED_MENTION": 1
+    }
+  },
+  "run_quality": "best_effort_with_unresolved"
+}

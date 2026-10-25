@@ -66,3 +66,11 @@ A 10 + B 348 + crashed B2 attempt ≈ 85 + B2 276 + B3 706 ≈ **1,425 paise (�
 The estimate overshot the 700-paise ceiling by 5.6 paise, because the flat 50-paise chat reserve was below
 the real cost of a Gemini turn. Fixed: a priced call now reserves its worst case (request bytes / 3 as
 input tokens, plus the full output limit, at catalog price).
+
+## A2: A + `claude-haiku-5-5` screenshot reader (D071)
+
+All 11 screenshots were interpreted; the run made 0 calls (all 49 responses cached from the benchmark and
+from A). The predictions are byte-identical to A: 28/32, 1/32 exact, 141/142, 141/193. The screenshots carry
+no evidence for the 32 sample subjects, so reference C's extra exact row likely came from its generative
+intent fallback, not its screenshot reader. The vision benchmark costs about 91 paise estimated; the experiment
+total is about ₹15.2.
