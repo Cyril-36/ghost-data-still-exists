@@ -1,4 +1,21 @@
-# Usage report — PROVISIONAL run (Phase 3)
+# Usage report — final submission (D084)
+
+**Final run (`runs/final-d081/`, produced `output.csv` SHA-256 `626e88d1…41a9d0`): 0 model calls, 0 tokens,
+₹0.** It replays `code/recorded_decisions.json`: 518 Jev intent answers, 4 Jev PDF document kinds and 11
+vision screenshot readings, all recorded by the original full run documented below. That run's
+acquisition cost is the cost behind every model decision in the final output; the replay adds nothing.
+
+| Model decision | Provider / model | Calls behind the final output |
+|---|---|---|
+| Request intent | TokenBazaar `typesafe/jev-latest` → `typesafe/jev-1.13-20260917` | 518 |
+| PDF document kind | TokenBazaar `typesafe/jev-latest` → `typesafe/jev-1.13-20260917` | 4 |
+| Screenshot reading | TokenBazaar `google/gemini-2.5-flash` → `google/gemini-3.8-flash` | 11 |
+| **Total** | | **533** (≈1.03 per request) |
+
+Tokens and costs for these calls are in the acquisition table below (unchanged). Agent-first experiments,
+including the 2026-10-25 live cohort at the end of this file, are separate and did not produce `output.csv`.
+
+## Original run (Phase 3)
 
 **Roar AI smoke tests (D070):** 4 live requests, all synthetic:
 - `jev` evaluate: HTTP 400 schema rejection, then HTTP 200 (412/55 tokens);

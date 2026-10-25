@@ -1,6 +1,66 @@
-# Evaluation report — INTERIM (Phase 4 built offline; Phase 3 output still current)
+# Evaluation report — final submission (D084)
 
-## Update 2026-10-25: retention decision D081 and a live agent-first cohort
+## Final configuration and output
+
+| Item | Value |
+|---|---|
+| Pipeline | deterministic baseline: identity resolution, state at `audit_at`, supplied policy with owner decision D081, obligations, planner, independent verifier |
+| Model decisions | recorded Jev intent answers for all 518 requests; recorded Jev document kinds (4 PDFs) and vision readings (11 screenshots), from the original full run `runs/phase3-provisional/`, replayed from `code/recorded_decisions.json` |
+| Reproduction | `python3 code/main.py audit --requests dataset/deletion_requests.csv --output output.csv --run-dir .runs/reproduce --intent recorded` (no API key, no cache, 0 model calls) |
+| `output.csv` | 518 rows, SHA-256 `626e88d160b674e0614adf009d404b55298af83e620b9d41d64f4a116e41a9d0`; `VALID` |
+| Statuses | 146 `COMPLETE`, 362 `INCOMPLETE`, 10 `NOT_APPLICABLE`; 10 disclosed fallbacks |
+| Independent verifier | 0 blocking findings on all 518 plans (2 advisory), nothing withheld |
+| Previous output | `runs/submission-backup-phase3/output.csv`, SHA-256 `968454758d71…89982f` |
+
+**Replay faithfulness.** The recorded intents re-reconcile with today's rules and deterministic agreement
+check to the same 508 account deletions and 10 non-deletions. Replayed through the code just before D081,
+the artifact reproduces the previous output byte for byte. An intents-only replay differed on 8 rows; all 8
+depended on the recorded media readings (evidence_04, 09, 18, 19, 23, 28, 37/55, 60). Two clean rebuilds of
+the final output are byte-identical.
+
+**What changed against the previous output (202 rows, all additive).** Every change is a security-audit-log
+retention check under D081:
+- 151 `INCOMPLETE` rows gain a future `VERIFY_RECORD_PRESENT` step;
+- 51 rows go `INCOMPLETE` → `COMPLETE`. All 51 were disclosed fallbacks whose only unsettled obligation was
+  the unproven retention of an owned audit log. Their checks now cite evidence.
+
+No `COMPLETE` row was lost, no finding was removed, no fallback was added, and the 10 `NOT_APPLICABLE` rows are
+unchanged. Disclosed fallbacks fall from 61 to 10:
+- 5 with no linked or exhaustively listed profile;
+- 2 with an unproven data-flow or restore link;
+- 1 tombstone with unproven remaining identifiers;
+- 1 record of unknown category;
+- 1 legal hold with no supplied hold.
+
+**Sample measurement (32 public requests; labels read only by the scorer).** The submission artifact covers
+only the 518 graded requests, so the samples use the cached Roar Jev intents and the same current pipeline
+(0 network calls, 49 cache hits):
+
+| Metric | Result |
+|---|---|
+| Case status accuracy | 29/32 (0.906) |
+| Step precision / recall / F1 | 153/153, 153/193, 0.884 |
+| Field accuracy (positional) | 736/1158 (0.636) |
+| Sequence accuracy | 5/32 |
+| Exact rows | 5/32 (05, 11, 13, 14, 16) |
+
+All 40 missed steps need evidence that the files do not contain:
+- 26 account profiles linked only by a numeric suffix or timing (forbidden, D032);
+- 7 analytics records with no identifier;
+- 5 security logs known only from sources captured after `audit_at`;
+- 2 security logs present in no participant file.
+
+**Remaining limitations.**
+- The replay fixes the model decisions at those of the original run; a fresh live run may answer
+  differently.
+- The generative intent fallback is not replayed (it was not used: all 518 resolved at the Jev stage).
+- The agent-first mode is not used for the submission. Its live cohort below is a targeted iteration
+  cohort, not a held-out estimate.
+- D081 is an owner interpretation of rule_12: no source supplies a retention period for any security
+  audit log.
+
+
+## Earlier update 2026-10-25: retention decision D081 and a live agent-first cohort
 
 **Deterministic pipeline, 32 public samples, cached Roar staged intents (0 network calls, 49 cache hits).**
 

@@ -1077,3 +1077,16 @@ None of these chooses a resource, operation, status or authorization for the age
 unchanged apart from the D081 policy. `--agent-max-case-paise` and `--agent-max-case-tokens` expose the
 per-case limits; their defaults are unchanged. Result: cases 11 and 13 verify as exact rows live, and case 14
 verifies exactly on offline ordered replay. Case 16 remains a model policy error.
+
+## D084 — Final output rebuilt from recorded decisions with D081; reproducible offline
+
+The owner authorized replacing root `output.csv` only after full validation. The 518 Jev intents and 15
+media readings recorded by `runs/phase3-provisional/` were exported to `code/recorded_decisions.json`,
+each bound by SHA-256 to its request text or evidence file, and are replayed by `--intent recorded`.
+Intents are re-reconciled with the current rules and deterministic agreement check, and all 518 match the
+recorded decisions. Faithfulness: replayed through the code just before D081, the artifact reproduces the
+previous `output.csv` byte for byte (`968454758d71…`). With the current code (D081) the output is
+`626e88d160b6…41a9d0`. It is valid and has 0 blocking verifier findings. It changes 202 rows, all by adding
+security-log retention checks: 51 disclosed fallbacks become `COMPLETE`, and fallbacks fall from 61 to 10.
+Nothing was removed or downgraded. The previous output is kept in `runs/submission-backup-phase3/`, and the
+final run diagnostics in `runs/final-d081/`.

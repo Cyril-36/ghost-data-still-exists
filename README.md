@@ -31,7 +31,18 @@ Your solution must:
 - Generate one prediction row for every request in `dataset/deletion_requests.csv`
 - Write the final predictions to `output.csv` in the repository root
 
-Run an offline check using a fresh output directory (no model calls):
+Reproduce the submitted `output.csv` exactly. This needs no API key or model cache: it replays the recorded
+model decisions in `code/recorded_decisions.json`. Python 3.11+, standard library only; `--run-dir` must be new or empty.
+
+```bash
+python3 code/main.py audit --requests dataset/deletion_requests.csv \
+    --output output.csv --run-dir .runs/reproduce --intent recorded
+sha256sum output.csv   # 626e88d160b674e0614adf009d404b55298af83e620b9d41d64f4a116e41a9d0
+python3 code/main.py validate --requests dataset/deletion_requests.csv --predictions output.csv \
+    --run-dir .runs/reproduce
+```
+
+A fully offline run without the recorded decisions handles English intent only and leaves screenshots unread:
 
 ```bash
 python3 code/main.py audit --requests dataset/deletion_requests.csv \

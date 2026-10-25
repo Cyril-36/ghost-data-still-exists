@@ -3515,3 +3515,24 @@ branch=main
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T12:52:21Z] Final output rebuild (D081), recorded-decision replay, submission docs
+
+User Prompt (verbatim, secrets redacted):
+want to continue using the API to improve the submission, not abandon agent-first. First, complete the deterministic output rebuild and reproducibility checks. Then prepare a targeted agent-first evaluation on the remaining fallback cases. [...] Proceed immediately with priorities 1, 2 and 3. I authorize replacing root output.csv ONLY after the rebuilt candidate passes all validation checks. [Priority 1 rebuild with backup, provenance, 8 discrepancies, D081, validation, change explanation; Priority 2 replay-recorded-intents mode, minimal artifact, byte-for-byte clean run; Priority 3 evaluation_report, usage_report, README, artifacts.] Do not begin new live agent experiments, switch models, remove more modules or spend additional API credits. [...] Run final tests. Commit and push only the verified submission changes to origin/main through a normal fast-forward push, preserving my existing commit identity. Report the final output hash, exact reproduction command, test results, remaining risks and whether the submission is ready.
+
+Agent Response Summary:
+Exported the original run's 518 Jev intents and 15 media readings to code/recorded_decisions.json (hash-bound) and added --intent recorded. Applied to pre-D081 code it reproduces the old output byte for byte; the 8 discrepancies were the media readings. The D081 rebuild (626e88d1...41a9d0) is valid with 0 blocking verifier findings. It changes 202 rows additively (51 fallbacks become COMPLETE; fallbacks 61 -> 10) and replaced root output.csv after backing up the old one. A clean unzip of code.zip with no keys or cache reproduces it; 409 tests pass. No API calls were made.
+
+Actions:
+* Added code/ghostaudit/recorded.py, code/recorded_decisions.json, code/tests/test_recorded_decisions.py; edited media.py, corpus.py, audit.py, main.py
+* Backed up old output to runs/submission-backup-phase3/; final run diagnostics in runs/final-d081/; replaced root output.csv
+* Updated README.md, code/README.md, evaluation_report.md, usage_report.md, decisions.md (D084)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none
