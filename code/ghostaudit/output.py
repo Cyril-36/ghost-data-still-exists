@@ -88,50 +88,55 @@ def parse_steps_json(text: str) -> tuple[Step, ...]:
 def check_row(row: OutputRow, request: Request, evidence: Mapping[str, EvidenceRef] | None = None,
               disclosed_fallback: bool = False):
     """Validate one row against its request; raise ContractError with the case ID."""
-    try:
-        _check_row(row, request, evidence, disclosed_fallback)
-    except ContractError as exc:
-        raise ContractError(f'{row.case_id}: {exc}') from exc
+    first = next(iter(row_problems(row, request, evidence, disclosed_fallback)), None)
+    if first is not None:
+        raise ContractError(first)
 
 
-def _check_row(row, request, evidence, disclosed_fallback=False):
+def row_problems(row: OutputRow, request: Request, evidence: Mapping[str, EvidenceRef] | None = None,
+                 disclosed_fallback: bool = False) -> list[str]:
+    """Every contract problem of one row, in check_row order, each prefixed with the case ID."""
+    return [f'{row.case_id}: {problem}' for problem in _row_problems(row, request, evidence, disclosed_fallback)]
+
+
+def _row_problems(row, request, evidence, disclosed_fallback=False):
     status, steps = row.deletion_status, row.steps
     if status not in STATUSES:
-        raise ContractError(f'unknown deletion_status {status!r}')
+        yield f'unknown deletion_status {status!r}'
     if tuple(steps) != canonical_steps(steps):
-        raise ContractError('steps are duplicated or not in canonical order')
+        yield 'steps are duplicated or not in canonical order'
     phases = {s.phase for s in steps}
 
     if status == 'NOT_APPLICABLE' and steps:
-        raise ContractError('NOT_APPLICABLE must have an empty step array')
+        yield 'NOT_APPLICABLE must have an empty step array'
     if status == 'COMPLETE' and phases != {'VERIFICATION'}:
-        raise ContractError('COMPLETE needs one or more VERIFICATION steps and nothing else')
+        yield 'COMPLETE needs one or more VERIFICATION steps and nothing else'
     if status == 'INCOMPLETE':
         if 'FINDING' not in phases:
             # Only a run-disclosed best-effort fallback (plan section 17) may lack findings,
             # and then it can only list final-state checks, never remediation.
             if not disclosed_fallback:
-                raise ContractError('INCOMPLETE needs at least one FINDING (or a disclosed fallback)')
-            if phases - {'VERIFICATION'}:
-                raise ContractError('a fallback row without findings may contain only VERIFICATION steps')
-        _check_plan_chain(steps)
+                yield 'INCOMPLETE needs at least one FINDING (or a disclosed fallback)'
+            elif phases - {'VERIFICATION'}:
+                yield 'a fallback row without findings may contain only VERIFICATION steps'
+        yield from _plan_chain_problems(steps)
 
     for step in steps:
         must_cite = status == 'COMPLETE' or step.phase == 'FINDING'
         if must_cite and not step.evidence_id:
-            raise ContractError(f'{step.operation} {step.resource_id} must cite evidence')
+            yield f'{step.operation} {step.resource_id} must cite evidence'
         if not must_cite and step.evidence_id:
-            raise ContractError(f'proposed {step.operation} {step.resource_id} must have empty evidence_id')
-        if must_cite and evidence is not None:
+            yield f'proposed {step.operation} {step.resource_id} must have empty evidence_id'
+        if must_cite and step.evidence_id and evidence is not None:
             ref = evidence.get(step.evidence_id)
             if ref is None:
-                raise ContractError(f'unknown evidence_id {step.evidence_id!r}')
-            if ref.available_at > request.audit_at:
-                raise ContractError(f'evidence_id {step.evidence_id!r} available at '
-                                    f'{ref.available_at.isoformat()} is after audit_at')
+                yield f'unknown evidence_id {step.evidence_id!r}'
+            elif ref.available_at > request.audit_at:
+                yield (f'evidence_id {step.evidence_id!r} available at '
+                       f'{ref.available_at.isoformat()} is after audit_at')
 
 
-def _check_plan_chain(steps):
+def _plan_chain_problems(steps):
     """Each finding gets its remediation; each remediation its matching final check."""
     by_resource: dict[tuple[str, str, str], dict[str, str]] = {}
     for s in steps:
@@ -140,11 +145,11 @@ def _check_plan_chain(steps):
         name = f'{system_id}/{resource_id} ({facet})'
         finding, remedy, check = ops.get('FINDING'), ops.get('REMEDIATION'), ops.get('VERIFICATION')
         if finding and remedy not in FINDING_REMEDIATIONS[finding]:
-            raise ContractError(f'{name}: {finding} needs one of {FINDING_REMEDIATIONS[finding]}, got {remedy}')
-        if remedy and not finding:
-            raise ContractError(f'{name}: {remedy} has no supporting finding')
-        if remedy and check != REMEDIATION_VERIFICATION[remedy]:
-            raise ContractError(f'{name}: {remedy} must be verified by {REMEDIATION_VERIFICATION[remedy]}, got {check}')
+            yield f'{name}: {finding} needs one of {FINDING_REMEDIATIONS[finding]}, got {remedy}'
+        elif remedy and not finding:
+            yield f'{name}: {remedy} has no supporting finding'
+        elif remedy and check != REMEDIATION_VERIFICATION[remedy]:
+            yield f'{name}: {remedy} must be verified by {REMEDIATION_VERIFICATION[remedy]}, got {check}'
 
 
 def validate_output(rows: Sequence[OutputRow], requests: Sequence[Request],

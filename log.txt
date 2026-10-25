@@ -3432,3 +3432,25 @@ branch=main
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T11:58:26Z] Continue agent-first accuracy work offline: policy deadlock, contract feedback
+
+User Prompt (verbatim, secrets redacted):
+Continue development of Ghost Data Still Exists from the latest GitHub main branch: https://github.com/Cyril-36/ghost-data-still-exists. Read AGENTS.md and code/evaluation/CLOUD_HANDOFF.md completely before making changes. Review the 32-case agent-first evaluation, the failure analysis, the latest feedback-deadlock fixes and existing regression tests. Continue improving actual verified-agent accuracy, prioritizing generalizable fixes for the remaining failure modes. Keep the agent responsible for final semantic decisions and preserve independent evidence verification. Do not repeat already completed experiments, make paid API calls, overwrite existing output.csv or invent evidence. Use existing offline fixtures and sanitized traces. Report the baseline before claiming improvements. Work on the existing main branch, and do not push further changes without my approval.
+
+Agent Response Summary:
+Baseline on main a56878d: 382 offline tests pass, 196 pre-existing ruff findings, offline baseline outputs recorded. Found that account-scope agent proposals could never verify when an owned record's supplied policy is undecidable (rule_12 logs without retention; 11/31 sample and 202/508 evaluation account candidates). Added a verifier-checked policy_undecided disclosure that never permits COMPLETE or presumes retention, listed all contract problems per round, fixed a verifier KeyError on cited remediation, and echoed the agent's own recorded interpretation on AUTHORIZATION_UNRESOLVED rejections without applying it. 390 tests pass, baseline outputs are byte-identical, no API calls, output.csv untouched; committed locally on main, not pushed.
+
+Actions:
+* Edited code/ghostaudit/agent_first.py, output.py, verifier.py, code/prompts/agent_first_v1.md
+* Added code/tests/test_agent_disclosure.py; extended code/tests/test_agent_request_first.py; mutation-checked each new test
+* Offline probes in scratchpad: first-turn payload size on 32 samples, undecidable-policy case counts, before/after baseline output comparison
+* Updated code/evaluation/CLOUD_HANDOFF.md (Cloud follow-up) and code/decisions.md (D080)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none

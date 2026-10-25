@@ -20,8 +20,8 @@ from .corpus import eligible
 from .identity import resolve_subject
 from .intent import ACCOUNT, DELETE, ITEM, NON_DELETION, UNRESOLVED, Intent, classify, hypothetical_deletion
 from .investigator import Investigator
-from .output import check_row, parse_steps_json
-from .planner import CasePlan
+from .output import parse_steps_json, row_problems
+from .planner import CasePlan, Obligation
 from .policy import PolicyError
 from .providers import ProviderError, ReplayGateway, strict_json
 from .tools import EVIDENCE_TOOLS, TOOL_SCHEMAS, InvestigationTools, locator_lines
@@ -52,7 +52,13 @@ PROPOSAL_SCHEMA = {'type': 'object', 'additionalProperties': False, 'properties'
         'required': ['step_no', 'phase', 'system_id', 'resource_id', 'operation', 'state', 'evidence_id']}},
     'witnesses': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False,
         'properties': {'step_no': {'type': 'integer'}, 'source_id': STR, 'locator': STR, 'literal': STR},
-        'required': ['step_no', 'source_id', 'locator']}}},
+        'required': ['step_no', 'source_id', 'locator']}},
+    'policy_undecided': {'type': 'array', 'description': 'Optional. Owned records you deliberately leave out of the '
+        'steps because the supplied policy cannot decide their treatment (for example a retention condition '
+        'with no supplied period). Each is independently re-checked; the status must stay INCOMPLETE.',
+        'items': {'type': 'object', 'additionalProperties': False,
+                  'properties': {'system_id': STR, 'resource_id': STR, 'reason': STR},
+                  'required': ['system_id', 'resource_id', 'reason']}}},
     'required': ['authorization', 'deletion_status', 'steps', 'witnesses']}
 AGENT_TOOLS = [t for t in TOOL_SCHEMAS if t['function']['name'] in (*EVIDENCE_TOOLS, 'propose_fact')] + [{
     'type': 'function', 'function': {'name': 'submit_audit', 'description':
@@ -154,13 +160,12 @@ class ProposalVerifier:
                         target=a['target'] or None, whole_category=a['whole_category'])
         plan = CasePlan(request, intent, subject, status=proposal['deletion_status'],
                         steps=parse_steps_json(json.dumps(proposal['steps'])))
-        try:
-            check_row(plan.row, request, self.verifier.context.evidence)
-        except ContractError as exc:
-            reject('INTEGRITY', str(exc))
+        for problem in row_problems(plan.row, request, self.verifier.context.evidence):
+            reject('INTEGRITY', problem)  # every contract problem at once, not one per round
         witnesses = {w['step_no']: w for w in proposal['witnesses']}
         extra = fact_observations(case.facts)
         owned = self.verifier._owned(subject, request.audit_at, extra)
+        disclosed = self._disclosures(proposal, plan, subject, owned, extra, case, reject)
         grouped = {}
         for s in plan.steps:
             grouped.setdefault((s.system_id, s.resource_id), []).append(s)
@@ -228,23 +233,70 @@ class ProposalVerifier:
                     reject('SCOPE_TARGET_UNGROUNDED', 'Several eligible items exist; the request must identify which one.')
             else:
                 selected = set(owned)
-            for system, rid in selected:
-                obs = self.verifier._observations(rid, request.audit_at, extra)
-                for category in self.verifier._categories(system, obs, request.audit_at):
-                    try:
-                        self.policy.treatment(category, audit_at=request.audit_at,
-                                              retention_until=max((o.retention_until for o in obs
-                                                  if o.system_id == system and o.retention_until), default=None))
-                    except PolicyError as exc:
-                        reject('UNPROVEN_POLICY', f'{system}/{rid}: {exc}')
+            for system, rid in sorted(selected - set(disclosed)):
+                for problem in self._policy_problems(system, rid, request.audit_at, extra)[1]:
+                    reject('UNPROVEN_POLICY', f'{system}/{rid}: {problem}. Do not invent a treatment; if you '
+                           'agree the supplied policy cannot decide it, leave it out of the steps and list it '
+                           'under policy_undecided (the status then stays INCOMPLETE).')
             if plan.status == 'COMPLETE' and scope == ACCOUNT:
                 profiles = [(s, r) for s, r in owned if 'USER_PROFILE' in self.verifier._categories(
                     s, self.verifier._observations(r, request.audit_at, extra), request.audit_at)]
                 if not profiles:
                     reject('PROFILE_COVERAGE_UNPROVEN', 'No owned profile ID is grounded; cannot certify complete account deletion.')
+        plan.obligations = [Obligation(system, rid, None, None, issues=[f'AGENT_DISCLOSED_UNRESOLVED: {why}'])
+                            for (system, rid), why in sorted(disclosed.items())]
         findings += self.verifier.verify(plan, case)
         unique = {(f.code, f.severity, f.message, f.system_id, f.resource_id, f.source_id): f for f in findings}
         return plan, list(unique.values())
+
+
+    def _policy_problems(self, system, rid, cutoff, extra):
+        """(categories, problems): why the supplied policy cannot decide this record, if it cannot."""
+        obs = self.verifier._observations(rid, cutoff, extra)
+        categories = self.verifier._categories(system, obs, cutoff)
+        until = max((o.retention_until for o in obs if o.system_id == system and o.retention_until), default=None)
+        problems = []
+        for category in sorted(categories):
+            try:
+                self.policy.treatment(category, audit_at=cutoff, retention_until=until)
+            except PolicyError as exc:
+                problems.append(str(exc))
+        return categories, problems
+
+    def _disclosures(self, proposal, plan, subject, owned, extra, case, reject):
+        """Records the agent leaves unresolved; accepted only where the verifier cannot decide them either."""
+        items = proposal.get('policy_undecided') or []
+        if not items:
+            return {}
+        if plan.intent.decision != DELETE or plan.intent.scope != ACCOUNT or plan.status != 'INCOMPLETE':
+            reject('DISCLOSURE_UNSUPPORTED', 'Unresolved records may be listed only by an INCOMPLETE '
+                   'account-scope deletion; they never support COMPLETE.')
+            return {}
+        stepped = {(s.system_id, s.resource_id) for s in plan.steps}
+        disclosed = {}
+        for item in items:
+            key, why = (item['system_id'], item['resource_id']), item['reason']
+            if key in disclosed or not why.strip():
+                reject('DISCLOSURE_UNSUPPORTED', 'List each unresolved record once, with a reason.')
+                continue
+            if key[1] not in case.handles:
+                reject('INVENTED_RESOURCE', f'{key[1]} was never retrieved.')
+                continue
+            if key in stepped:
+                reject('DISCLOSURE_UNSUPPORTED', f'{key[0]}/{key[1]} has steps; a record is either planned '
+                       'or left unresolved, not both.')
+                continue
+            if not subject.resolved or key not in owned:
+                reject('DISCLOSURE_UNSUPPORTED', f'No eligible evidence ties {key[1]} to the subject in '
+                       f'{key[0]}; an unrelated record needs no disclosure.')
+                continue
+            categories, problems = self._policy_problems(*key, plan.request.audit_at, extra)
+            if categories and not problems:
+                reject('DISCLOSURE_UNSUPPORTED', f'The supplied policy decides {key[0]}/{key[1]} '
+                       f'({", ".join(sorted(categories))}); plan its steps instead.')
+                continue
+            disclosed[key] = why.strip()
+        return disclosed
 
 
 class AgentFirst:
@@ -315,6 +367,7 @@ class AgentFirst:
         start, seen, attempts = len(self.gateway.usage), {}, []
         processed_tokens = 0  # Payload usage survives cache replay; billed gateway usage does not.
         request_interpreted = not self.request_first
+        recorded = None  # the agent's own validated interpret_request reading, echoed back, never applied
         evidence_repair_used = False
         if getattr(self.checker, 'authorization_review', None):
             self.checker.authorization_review.admit = lambda model, messages, limit: self._can_admit(
@@ -405,6 +458,8 @@ class AgentFirst:
                         'by code. Re-evaluate ambiguous wording if necessary; final authorization and all '
                         'evidence still require independent verification.'}
                     request_interpreted = valid
+                    if valid:
+                        recorded = interpretation
                 elif call['function']['name'] == 'submit_audit':
                     proposal = strict_json(call['function']['arguments'])
                     self.checker.last_authorization_review = None
@@ -431,6 +486,12 @@ class AgentFirst:
                     from .casefile import ToolCall
                     case.tool_calls.append(ToolCall(case.rounds, 'submit_audit', proposal, not blocking))
                     result = {'accepted': not blocking, 'verifier_feedback': [f.record() for f in findings]}
+                    if recorded and recorded.get('decision') != UNRESOLVED and any(
+                            f.code == 'AUTHORIZATION_UNRESOLVED' for f in blocking):
+                        result['your_recorded_interpretation'] = recorded
+                        result['interpretation_note'] = ('You recorded this reading of the request before '
+                            'investigating. Missing, partial or contradictory evidence is an audit outcome, '
+                            'not ambiguity in what the customer asked. Keep or revise it from the wording alone.')
                     if not blocking:
                         accepted = candidate
                 else:

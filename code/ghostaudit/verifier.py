@@ -186,7 +186,7 @@ class Verifier:
         for (system, rid), steps in sorted(steps_by_resource.items()):
             obs = self._observations(rid, cutoff, extra)
             for s in steps:
-                if s.evidence_id:
+                if s.evidence_id and s.operation in SUPPORTS:  # a cited remediation is already INTEGRITY
                     self._check_citation(s, obs, cutoff, add)
                 if plan.status == 'COMPLETE' and s.operation == 'VERIFY_RECORD_ABSENT':
                     self._check_copies(s, obs, cutoff, subject, add)

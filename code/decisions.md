@@ -1021,3 +1021,16 @@ is unavailable; prior 8,947.98576-paise campaign stays closed and untouched. All
 validate and replay byte-identically with zero network calls on Python 3.11/3.14. Preserve all 1,371
 protected hashes and root output. Commit evaluation evidence locally without pushing. See
 `evaluation/AGENT_FIRST_SAMPLE32.md` and `evaluation/agent_first_sample32_metrics.json`.
+
+## D080 — Disclosed policy-undecidable records; complete contract feedback (offline)
+
+An owned record whose supplied rule cannot decide its treatment (for example `rule_12` with no
+supplied retention period) made every account-scope agent proposal unverifiable: omission,
+retention and deletion were each rejected, while the baseline publishes the rest as `PARTIAL_PLAN`.
+The agent may now list such a record under `policy_undecided`. The independent verifier accepts it
+only when it also cannot decide the policy, the record is owned, retrieved and unstepped, the scope
+is account and the status is `INCOMPLETE`. It is never certified, `COMPLETE` stays impossible, and
+retention is never presumed. Contract feedback lists every row problem at once; a cited remediation
+no longer crashes the verifier; an `AUTHORIZATION_UNRESOLVED` rejection echoes the agent's own
+recorded interpretation without applying it. Offline only: the baseline outputs are byte-identical,
+and live accuracy is unmeasured. See `evaluation/CLOUD_HANDOFF.md` (Cloud follow-up).
