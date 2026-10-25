@@ -167,7 +167,7 @@ class Investigator:
         itools = InvestigationTools(self.tools, self.texts, case)
         messages = [{'role': 'system', 'content': (PROMPTS / PROMPT).read_text(encoding='utf-8')},
                     {'role': 'user', 'content': self._brief(case)}]
-        start, seen, candidate = len(self.gateway.usage), {}, plan
+        start, seen, sent, candidate = len(self.gateway.usage), {}, set(), plan
         while not case.stop_reason:
             tokens, paise = self._case_usage(start)
             if case.rounds >= self.config.max_rounds:
@@ -209,15 +209,17 @@ class Investigator:
             findings = self.verifier(candidate, case) if self.verifier else []
             case.verifier_findings.append([f.record() for f in findings])
             blocking = [f for f in findings if f.blocking]
-            if not blocking:
-                case.stop_reason = f'SUBMITTED: {submitted.get("resolution")}'
-            elif case.feedback_rounds < self.config.max_feedback_rounds:
+            new = [f for f in findings if (f.blocking or f.routes) and f not in sent]
+            if new and case.feedback_rounds < self.config.max_feedback_rounds:
                 case.feedback_rounds += 1
+                sent.update(new)
                 messages.append({'role': 'user', 'content': json.dumps(
-                    {'verifier_feedback': [f.record() for f in blocking],
+                    {'verifier_feedback': [f.record() for f in new],
                      'instruction': 'Address these findings with evidence, or submit NO_SUPPORTED_ACTION.'})})
-            else:
+            elif blocking:
                 case.stop_reason = 'VERIFIER_REJECTED'
+            else:
+                case.stop_reason = f'SUBMITTED: {submitted.get("resolution")}'
         if case.stop_reason.startswith('SUBMITTED') and case.facts:
             case.outcome = 'ACCEPTED'
             return candidate, case
