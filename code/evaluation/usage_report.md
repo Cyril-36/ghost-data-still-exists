@@ -80,3 +80,16 @@ before each call, and controlled concurrency (4).
 - **Model substitution:** the gateway serves `google/gemini-2.5-flash` as `google/gemini-3.8-flash`. The configuration keeps the requested ID, and every usage record stores both (decisions D036).
 - **Credentials:** read only from `TOKENBAZAAR_API_KEY`. No key value is logged or stored.
 - **Per-attempt records:** `runs/phase3-provisional/usage.jsonl` lists every attempt of the output run. All 533 records have `mode: cache`.
+
+## Agent-first live cohort, 2026-10-25 (separate from the run behind output.csv)
+
+| Role | Provider / model | Live calls | Invalid | Input tokens | Output tokens | Cost |
+|---|---|---|---|---|---|---|
+| primary_agent | Roar / `claude-haiku-5-5` | 94 | 5 (schema) | 1,219,255 | 41,927 | no cost header; 4,700 paise conservative exposure |
+| tool_probe | Roar / `claude-haiku-5-5` | 1 | 0 | 510 | 39 | no cost header |
+
+Across 13 single-case runs this is about 94k input tokens and 7 calls per case run. The conservative total is
+₹47.00 (plus the probe), within the owner's ₹50 ceiling. Scaling the earlier 32-case catalog estimate
+(₹24.69 for 2.17M input tokens) gives roughly ₹14 expected, but that is an estimate, not an invoice.
+No transport retries were made. The probe was recorded only in a scratch copy of the cache; the
+repository cache is unchanged.

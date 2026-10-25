@@ -1058,3 +1058,22 @@ Three one-off scripts that no code, test or CLI imports are removed: `evaluation
 (hand-written Phase 4 demonstration, never a submission) and `evaluation/vision_benchmark.py` (a one-time
 Roar vision model comparison). The intent benchmark and its cases stay because the CLI, tests and the
 required evaluation report use them. Historical reports that mention the removed files are left as records.
+
+## D083 — Agent protocol affordances from the live cohort
+
+Thirteen single-case Roar Haiku runs (₹47.00 conservative) each failed for a specific interface reason,
+fixed generally before the next run:
+- per-rule `verifier_treatment` chains in the brief;
+- chain feedback that names the missing remediation and verification;
+- a decidable-policy disclosure rejection that names the required treatment;
+- an optional `authorization.notes` field;
+- decoding of nested object/array tool arguments sent as JSON strings (exact schema type only, recorded);
+- `start_line`/`next_start_line` on size-clipped source windows;
+- `SYSTEM_MISMATCH` feedback when a table name is used as `system_id`;
+- token admission anchored to the previous call's reported `prompt_tokens` (bytes still bound new content);
+- clearing, and recording, citations the agent puts on future steps of an `INCOMPLETE` row.
+
+None of these chooses a resource, operation, status or authorization for the agent, and the verifier is
+unchanged apart from the D081 policy. `--agent-max-case-paise` and `--agent-max-case-tokens` expose the
+per-case limits; their defaults are unchanged. Result: cases 11 and 13 verify as exact rows live, and case 14
+verifies exactly on offline ordered replay. Case 16 remains a model policy error.

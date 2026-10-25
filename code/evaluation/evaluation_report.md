@@ -1,5 +1,38 @@
 # Evaluation report — INTERIM (Phase 4 built offline; Phase 3 output still current)
 
+## Update 2026-10-25: retention decision D081 and a live agent-first cohort
+
+**Deterministic pipeline, 32 public samples, cached Roar staged intents (0 network calls, 49 cache hits).**
+
+| Metric | Before D081 | After D081 |
+|---|---|---|
+| Exact rows | 1/32 | **5/32** (05, 11, 13, 14, 16) |
+| Status accuracy | 28/32 | 29/32 |
+| Step precision / recall | 141/142, 141/193 | **153/153**, 153/193 |
+| Sequence accuracy | 1/32 | 5/32 |
+
+Remaining 40 missed steps, by cause: 26 account-profile checks whose only link is a numeric suffix or
+timing (forbidden, D032); 7 anonymized analytics records with no identifier link; 5 security logs known
+only from sources captured after `audit_at`; 2 security logs present in no participant file. On the submission run's recorded intents, D081 changes 201 of 518 rows: 50 become
+`COMPLETE`, and disclosed fallbacks fall from 62 to 12. Root `output.csv` was not regenerated.
+
+**Agent-first, Roar `claude-haiku-5-5`, live, case by case (₹50 owner-approved ceiling).** 95 live calls
+(including one tool-call probe), 1,219,255 input and 41,927 output tokens, 4,700 paise of conservative
+exposure (every unpriced call is charged its full 50-paise reserve). Roar returned no cost header; actual
+billing is unavailable. Each failure was diagnosed from its trace and fixed generally before the next run:
+
+| Case | Old run (32-case batch) | Final live run | Fixes that changed the outcome |
+|---|---|---|---|
+| case_11 | fallback (12/14 before verifier) | **verified, exact 14/14** | per-rule treatment chains; prompt no longer calls an undated retention undecidable |
+| case_13 | fallback (7/8) | **verified, exact 8/8** | nested JSON-string tool arguments decoded; per-case cap exposed |
+| case_14 | fallback | final proposal 5/5, rejected only for a future-step citation; **verified exact** when its recorded outputs are replayed offline through the current protocol | future-step citations cleared in INCOMPLETE rows |
+| case_16 | fallback | fallback: last proposal mislabels the security log (`REPORT_REMAINING_RECORD`) | system_id mismatch feedback, resumable clipped windows, token anchor (all helped but did not finish) |
+
+The replay serves the recorded model outputs in their original order with no network, so it measures the
+current protocol on fixed model behaviour, not new model behaviour. This is a targeted cohort of
+previously failing cases used for iteration, not a held-out estimate. Generalization is unmeasured.
+
+
 ## Phase 4: investigator and independent verifier (D065–D068)
 
 Every comparison below uses the same evaluation mode on both sides. Offline and staged scores are never compared.
