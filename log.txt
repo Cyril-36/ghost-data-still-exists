@@ -3557,3 +3557,25 @@ branch=main
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T13:09:28Z] Evidence sweep of remaining sample misses; submission preserved
+
+User Prompt (verbatim, secrets redacted):
+improve more exact rows
+[mid-turn] Continue the current evidence investigation. Do not stop at the previously estimated sample ceiling, but do not assume every expected step is recoverable. Focus on the remaining 22 account checks and 7 anonymized analytics records, especially account_006, account_3960, account_4092 and evidence_92. [...] Preserve root output.csv until the candidate improves validated accuracy and passes all regression checks. [...] No paid API calls, no invented evidence and no sample-label-driven production rules. The goal is to exceed 8/32 exact rows while keeping precision high and protecting hidden-case generalization. Finish the investigation and report the strongest verified opportunities before modifying the final submission.
+
+Agent Response Summary:
+Swept every source for the 29 remaining missed resources at line, row, JSON-object and trace level, with cutoff and identity classification. Only account_006 (item-scope widening) and account_4092 (decoy pair separable only by timing) have admissible subject evidence; neither affects the 518, so both were rejected as sample-driven. Every other miss lacks admissible evidence. Withdrew an uncommitted case_39 screenshot-state change (D086 candidate) and restored root output.csv (71d7398e...). D085's 72 graded links show no decoy conflict. Report in code/evaluation/EVIDENCE_SWEEP.md. Samples stay at 8/32 with 157/157 precision; no API calls.
+
+Actions:
+* Evidence sweep scripts in the scratchpad; wrote code/evaluation/EVIDENCE_SWEEP.md
+* Reverted the uncommitted D086 change and kept its patch in the scratchpad; root output.csv unchanged
+* Ran the 32-case evaluation, the 518 replay (hash matches root) and the full tests (415 OK)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none
