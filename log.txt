@@ -3496,3 +3496,22 @@ branch=main
 repo_root=/home/user/ghost-data-still-exists
 worktree=main
 parent_agent=none
+
+## [2026-10-25T12:39:20Z] What can we improve: prioritized options
+
+User Prompt (verbatim, secrets redacted):
+what can we improve
+
+Agent Response Summary:
+Gave a ranked list of improvements grounded in this session's measurements: regenerate output.csv with D081 from recorded intents at no API cost, refresh the submission reports, make clean runs reproducible without the missing intent cache, and improve the agent on SQL-heavy cases and context growth. Explained that the remaining sample misses are evidence or policy limited. No code changes, API calls or pushes were made.
+
+Actions:
+* None beyond this log entry (local commit, not pushed)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=main
+repo_root=/home/user/ghost-data-still-exists
+worktree=main
+parent_agent=none
