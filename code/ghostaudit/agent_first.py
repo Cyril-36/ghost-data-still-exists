@@ -17,6 +17,7 @@ from .casefile import CaseFile, fact_observations
 from .agent_protocol import normalize_proposal
 from .contracts import ContractError, OPERATION_TABLE
 from .corpus import eligible
+from .observations import LINK, STATE
 from .identity import resolve_subject
 from .intent import ACCOUNT, DELETE, ITEM, NON_DELETION, UNRESOLVED, Intent, classify, hypothetical_deletion
 from .investigator import Investigator
@@ -202,6 +203,12 @@ class ProposalVerifier:
         for number, step in enumerate(plan.steps, 1):
             if step.resource_id not in case.handles:
                 reject('INVENTED_RESOURCE', f'{step.resource_id} was never retrieved.')
+            systems = {o.system_id for o in self.verifier._observations(step.resource_id, request.audit_at, extra)
+                       if o.system_id and o.kind in (STATE, LINK)}
+            if systems and step.system_id not in systems:
+                reject('SYSTEM_MISMATCH', f'{step.resource_id} is recorded under system_id {sorted(systems)}, '
+                       f'not {step.system_id!r}. system_id is the owning service named in the evidence, not a '
+                       'table, file or replica name.')
             parent = (step.system_id, step.resource_id) in parents
             if not step.evidence_id and not parent:
                 continue
@@ -351,9 +358,18 @@ class AgentFirst:
         self.version = 'agent-first-v1:' + hashlib.sha256(
             (self.prompt + json.dumps(AGENT_TOOLS, sort_keys=True)).encode()).hexdigest()[:16]
 
-    def _can_admit(self, start, model, body, output_limit):
+    @staticmethod
+    def _request_bound(body, output_limit, anchor=None):
+        """Upper bound on a request's tokens. Bytes bound tokens; with an anchor (messages sent,
+        model and tools, provider-reported prompt_tokens) only messages appended since are byte-counted."""
+        size = lambda value: len(json.dumps(value, ensure_ascii=False).encode())
+        if anchor and anchor[0] <= len(body['messages']) and anchor[1] == (body['model'], size(body.get('tools'))):
+            return anchor[2] + size(body['messages'][anchor[0]:]) + size(body.get('tool_choice')) + output_limit
+        return size(body) + output_limit
+
+    def _can_admit(self, start, model, body, output_limit, anchor=None):
         tokens, paise = self.executor._case_usage(start)
-        bound = len(json.dumps(body, ensure_ascii=False).encode()) + output_limit
+        bound = self._request_bound(body, output_limit, anchor)
         reserve = max(self.gateway.config.chat_cost_reserve_paise,
                       self.gateway._worst_case(model, body, output_limit) or 0)
         return tokens + bound <= self.config.max_case_tokens and paise + reserve <= self.config.max_case_paise
@@ -395,6 +411,7 @@ class AgentFirst:
         messages = [{'role': 'system', 'content': self.prompt},
                     {'role': 'user', 'content': json.dumps(opening, default=str, ensure_ascii=False)}]
         start, seen, attempts = len(self.gateway.usage), {}, []
+        anchor = None  # (messages sent, (model, tools size), reported prompt_tokens) of the last call
         processed_tokens = 0  # Payload usage survives cache replay; billed gateway usage does not.
         request_interpreted = not self.request_first
         recorded = None  # the agent's own validated interpret_request reading, echoed back, never applied
@@ -408,12 +425,13 @@ class AgentFirst:
             choice = {'type': 'function', 'function': {'name': 'interpret_request'}} if interpreting else 'required'
             body = {'model': self.config.model, 'messages': messages, 'tools': active_tools,
                     'tool_choice': choice, 'max_completion_tokens': self.config.max_completion_tokens}
-            request_bound = len(json.dumps(body, ensure_ascii=False).encode()) + self.config.max_completion_tokens
+            request_bound = self._request_bound(body, self.config.max_completion_tokens, anchor)
             remaining_rounds = self.config.max_rounds - turn
             remaining_tools = max(0, self.config.max_tool_calls - len(case.tool_calls))
             finalize = not interpreting and self.finalize_on_pressure and (remaining_rounds == 1 or remaining_tools <= 1
                 or processed_tokens + 2 * request_bound > self.config.max_case_tokens)
             evidence_codes = {'OMITTED_RESOURCE', 'UNSHOWN_WITNESS', 'INVENTED_RESOURCE', 'UNPROVEN_POLICY',
+                              'SYSTEM_MISMATCH',
                               'POLICY_UNDETERMINED', 'UNSUPPORTED_CITATION', 'UNSUPPORTED_ASSOCIATION',
                               'UNPROVEN_CONDITION', 'FACT_UNSUPPORTED'}
             repair = bool(not interpreting and not evidence_repair_used and attempts and not attempts[-1]['accepted']
@@ -433,12 +451,13 @@ class AgentFirst:
                 'next_request_token_bound_before_notice': request_bound,
                 'finalization_urgent': remaining_rounds <= 2 or remaining_tools <= 3
                     or processed_tokens + request_bound >= 0.65 * self.config.max_case_tokens}})})
-            if not self._can_admit(start, self.config.model, body, self.config.max_completion_tokens):
+            if not self._can_admit(start, self.config.model, body, self.config.max_completion_tokens, anchor):
                 case.stop_reason = 'CASE_BUDGET'
                 break
             if len(case.tool_calls) >= self.config.max_tool_calls:
                 case.stop_reason = 'TOOL_LIMIT'
                 break
+            sent = len(messages)
             try:
                 if repair:
                     evidence_repair_used = True
@@ -459,6 +478,9 @@ class AgentFirst:
             usage = payload.get('usage') or {}
             processed_tokens += sum(v for v in (usage.get('prompt_tokens'), usage.get('completion_tokens'))
                                     if type(v) is int and v >= 0)
+            prompt = usage.get('prompt_tokens')
+            anchor = (sent, (body['model'], len(json.dumps(active_tools, ensure_ascii=False).encode())), prompt) \
+                if type(prompt) is int and prompt > 0 else None
             message = payload['choices'][0]['message']
             if attempts and not attempts[-1]['accepted']:
                 case.feedback_turns += 1
