@@ -224,17 +224,19 @@ def parse_log(source_id, available_at, raw: bytes):
         single_target = bool(d.get('trace')) and len(trace_targets[key]) == 1
         earlier = set().union(*(t for at, t in trace_tokens[key] if at <= when)) if single_target else set()
         tokens = own | earlier
-        if facts.get('presence') == ABSENT and event != 'record_lookup':
-            # A query key is the lookup's input, not an attribute of a returned record:
-            # a not-found lookup cannot show that the target belongs to that person.
-            tokens = frozenset()
+        attributes = ()
+        if facts.get('presence') == ABSENT and event != 'record_lookup' and tokens:
+            # A query key is the lookup's input, not an attribute of a returned record. It is kept, marked,
+            # so the planner can use it for an absence check of the subject's sole profile candidate only
+            # (D060, D085); it never supports a finding, remediation or traversal.
+            attributes = (('identity_from', 'lookup_key'),)
         if when > available_at:
             issues.append(f'TEMPORAL_CONFLICT line {n}: event after source capture time')
         observations.append(Observation(
             source_id=source_id, available_at=available_at, observed_at=when, locator=f'line {n}',
             excerpt=line[:400], kind=STATE, proof='READBACK',
             system_id=system or SERVICE_ALIASES.get(service, service), resource_id=d['resource_id'],
-            category=category, tokens=frozenset(tokens), **facts))
+            category=category, tokens=frozenset(tokens), attributes=attributes, **facts))
     if unknown:
         issues.append(f'UNRECOGNIZED_EVENTS: {unknown} lines with unmapped events')
     return observations, [], issues

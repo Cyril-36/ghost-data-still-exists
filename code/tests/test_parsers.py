@@ -146,13 +146,15 @@ class LogTests(unittest.TestCase):
         self.assertEqual(o['fx_a'].locator, 'line 5')
         self.assertEqual(issues, [])
 
-    def test_not_found_lookup_does_not_link_its_query_key(self):
+    def test_not_found_lookup_marks_its_query_key_as_lookup_input_only(self):
         log = ('2026-03-01T08:00:00Z level=DEBUG service=account_service trace_id=t event=profile_lookup_started '
                'resource_id=fx_a lookup_key=a@example.test\n'
                '2026-03-01T08:00:01Z level=INFO service=account_service trace_id=t event=profile_lookup_completed '
                'resource_id=fx_a rows=0 http_status=404\n').encode()
         obs, _, _ = parse_log('fx_log', T, log)
-        self.assertEqual((obs[0].presence, obs[0].tokens), (ABSENT, frozenset()))
+        self.assertEqual(obs[0].presence, ABSENT)
+        self.assertTrue(obs[0].tokens)   # D085: kept, but marked as the lookup's input
+        self.assertEqual(dict(obs[0].attributes).get('identity_from'), 'lookup_key')
 
     def test_noise_and_marker_checks_are_not_state(self):
         log = ('2026-03-01T08:00:00Z level=WARN service=support_replica trace_id=t event=deletion_marker_check '

@@ -95,6 +95,12 @@ def lookup_only(links) -> bool:
     return all(o.kind == STATE and o.presence == ABSENT for o in links)
 
 
+def lookup_key_only(links) -> bool:
+    """Linked only through the key of not-found lookups (D085), not through any record attribute."""
+    return bool(links) and all(o.kind == STATE and o.presence == ABSENT
+                               and dict(o.attributes).get('identity_from') == 'lookup_key' for o in links)
+
+
 def discover(subject: SubjectIdentity, corpus: Corpus, index: IdentityIndex, cutoff, max_hops: int = 3):
     """Resources that eligible evidence ties to the subject, with the linking observations.
 
@@ -313,6 +319,15 @@ def plan_case(request: Request, corpus: Corpus, policy: Policy, index: IdentityI
 
     linked, conflicts = discover(plan.subject, corpus, index, cutoff)
     states = {key: reconstruct(corpus, *key, cutoff, plan.subject.tokens) for key in sorted(linked)}
+    # D085: a lookup key names the subject but does not show that the looked-up resource is theirs.
+    # Such a link is kept only for the subject's sole profile candidate with no conflicting evidence,
+    # and then supports only its absence check (D060); otherwise the resource stays unlinked.
+    keyed = {k for k in states if lookup_key_only(linked[k])}
+    profiles = [k for k in states if 'USER_PROFILE' in states[k].categories]
+    for k in sorted(keyed):
+        if not (profiles == [k] and not conflicts.get(k)):
+            del states[k]
+            plan.issues.append(f'LOOKUP_KEY_ONLY: {k[1]} not linked (named only as a not-found lookup key)')
     if item:
         candidates = [k for k, st in states.items() if plan.intent.target in st.categories]
         tokens = id_tokens(request.request_text)
