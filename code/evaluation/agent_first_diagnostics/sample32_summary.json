@@ -1,0 +1,2150 @@
+{
+  "source": "post-inference diagnostic extraction from preserved local run; no raw prompts or provider payloads",
+  "case_count": 32,
+  "cases": [
+    {
+      "case_id": "case_01",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 7,
+      "tool_calls": 7,
+      "live_calls": 7,
+      "cache_hits": 0,
+      "tokens_in": 83668,
+      "tokens_out": 1850,
+      "tool_usage": {
+        "interpret_request": 1,
+        "search_identifiers": 3,
+        "submit_audit": 3
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 0,
+        "fully_shown_source_line_count": 0,
+        "discovered_resource_handle_count": 1,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 2,
+          "expected_steps": 1,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "INVENTED_RESOURCE": 2,
+            "POLICY_UNDETERMINED": 1,
+            "UNSUPPORTED_ASSOCIATION": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "NOT_APPLICABLE",
+          "proposed_steps": 0,
+          "expected_steps": 1,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {},
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 1,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_UNDETERMINED": 1,
+            "UNSUPPORTED_ASSOCIATION": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_02",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 7,
+      "tool_calls": 7,
+      "live_calls": 7,
+      "cache_hits": 0,
+      "tokens_in": 84513,
+      "tokens_out": 2044,
+      "tool_usage": {
+        "interpret_request": 1,
+        "search_identifiers": 3,
+        "submit_audit": 3
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 0,
+        "fully_shown_source_line_count": 0,
+        "discovered_resource_handle_count": 1,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 2,
+          "expected_steps": 1,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 1,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_UNDETERMINED": 1,
+            "UNSUPPORTED_ASSOCIATION": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 0,
+          "expected_steps": 1,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {},
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_03",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 5,
+      "tool_calls": 5,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 68697,
+      "tokens_out": 1430,
+      "tool_usage": {
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 26,
+        "discovered_resource_handle_count": 68,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 0,
+          "expected_steps": 3,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {},
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 1,
+          "expected_steps": 3,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "OMITTED_RESOURCE": 1,
+            "UNSUPPORTED_ASSOCIATION": 1,
+            "UNSUPPORTED_CITATION": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_04",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 7,
+      "tool_calls": 7,
+      "live_calls": 7,
+      "cache_hits": 0,
+      "tokens_in": 85611,
+      "tokens_out": 1819,
+      "tool_usage": {
+        "interpret_request": 1,
+        "search_identifiers": 3,
+        "submit_audit": 3
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 0,
+        "fully_shown_source_line_count": 0,
+        "discovered_resource_handle_count": 1,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 0,
+          "expected_steps": 2,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {},
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 2,
+          "expected_steps": 2,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 2,
+          "expected_steps": 2,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_UNDETERMINED": 1,
+            "UNSUPPORTED_ASSOCIATION": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_05",
+      "final_outcome": "VERIFIED",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "VERIFIED_PROPOSAL",
+      "rounds": 5,
+      "tool_calls": 6,
+      "live_calls": 0,
+      "cache_hits": 5,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "query_sql_snapshot": 1,
+        "search_identifiers": 1,
+        "submit_audit": 1
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 3,
+        "fully_shown_source_line_count": 25,
+        "discovered_resource_handle_count": 18,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": true,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 3,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": true,
+          "sequence_exact_before_verifier": true,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {}
+        }
+      ]
+    },
+    {
+      "case_id": "case_06",
+      "final_outcome": "VERIFIED",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "VERIFIED_PROPOSAL",
+      "rounds": 5,
+      "tool_calls": 6,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 58710,
+      "tokens_out": 1464,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "propose_fact": 1,
+        "search_identifiers": 1,
+        "submit_audit": 1
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 2,
+        "fully_shown_source_line_count": 12,
+        "discovered_resource_handle_count": 14,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 1
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": true,
+          "authorization_decision": "DELETE",
+          "scope": "ITEM",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 4,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {}
+        }
+      ]
+    },
+    {
+      "case_id": "case_07",
+      "final_outcome": "VERIFIED",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "VERIFIED_PROPOSAL",
+      "rounds": 6,
+      "tool_calls": 7,
+      "live_calls": 0,
+      "cache_hits": 6,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_media": 1,
+        "interpret_request": 1,
+        "query_sql_snapshot": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 15,
+        "discovered_resource_handle_count": 3,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 2,
+          "expected_steps": 4,
+          "matching_steps_before_verifier": 2,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": true,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 4,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {}
+        }
+      ]
+    },
+    {
+      "case_id": "case_08",
+      "final_outcome": "VERIFIED",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "VERIFIED_PROPOSAL",
+      "rounds": 5,
+      "tool_calls": 6,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 59893,
+      "tokens_out": 1132,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 2,
+        "submit_audit": 1
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 3,
+        "fully_shown_source_line_count": 32,
+        "discovered_resource_handle_count": 18,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": true,
+          "authorization_decision": "DELETE",
+          "scope": "ITEM",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 4,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {}
+        }
+      ]
+    },
+    {
+      "case_id": "case_09",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 5,
+      "tool_calls": 6,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 67513,
+      "tokens_out": 2054,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 2,
+        "fully_shown_source_line_count": 33,
+        "discovered_resource_handle_count": 71,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 5,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 2,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "BLOCK_RESTORE": 1,
+            "DELETE_RECORD": 1,
+            "REPORT_RESTORE_RISK": 1,
+            "VERIFY_RECORD_ABSENT": 1,
+            "VERIFY_RESTORE_BLOCKED": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_MISMATCH": 1,
+            "UNSHOWN_WITNESS": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 2,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "BLOCK_RESTORE": 1,
+            "REPORT_RESTORE_RISK": 1,
+            "VERIFY_RESTORE_BLOCKED": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "UNSHOWN_WITNESS": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_10",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 6,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 79480,
+      "tokens_out": 1788,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 2,
+        "submit_audit": 1
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 10,
+        "discovered_resource_handle_count": 26,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 2,
+          "expected_steps": 4,
+          "matching_steps_before_verifier": 2,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_11",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 5,
+      "tool_calls": 6,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 72922,
+      "tokens_out": 4378,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 46,
+        "discovered_resource_handle_count": 69,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 12,
+          "expected_steps": 14,
+          "matching_steps_before_verifier": 12,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "ANONYMIZE_RECORD": 1,
+            "DELETE_RECORD": 1,
+            "DISABLE_DATA_FLOW": 1,
+            "REDACT_RECORD": 1,
+            "REPORT_ACTIVE_DATA_FLOW": 1,
+            "REPORT_EXPOSED_PII": 2,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_DATA_FLOW_DISABLED": 1,
+            "VERIFY_RECORD_ABSENT": 1,
+            "VERIFY_RECORD_ANONYMIZED": 1,
+            "VERIFY_RECORD_REDACTED": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "OMITTED_RESOURCE": 1,
+            "UNPROVEN_POLICY": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 13,
+          "expected_steps": 14,
+          "matching_steps_before_verifier": 12,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "ANONYMIZE_RECORD": 1,
+            "DELETE_RECORD": 1,
+            "DISABLE_DATA_FLOW": 1,
+            "REDACT_RECORD": 1,
+            "REPORT_ACTIVE_DATA_FLOW": 1,
+            "REPORT_EXPOSED_PII": 2,
+            "REPORT_REMAINING_RECORD": 2,
+            "VERIFY_DATA_FLOW_DISABLED": 1,
+            "VERIFY_RECORD_ABSENT": 1,
+            "VERIFY_RECORD_ANONYMIZED": 1,
+            "VERIFY_RECORD_REDACTED": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_MISMATCH": 1,
+            "UNPROVEN_POLICY": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_12",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 5,
+      "tool_calls": 8,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 72711,
+      "tokens_out": 1922,
+      "tool_usage": {
+        "inspect_source": 3,
+        "interpret_request": 1,
+        "search_identifiers": 2,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 5,
+        "fully_shown_source_line_count": 179,
+        "discovered_resource_handle_count": 68,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 1,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "OMITTED_RESOURCE": 2,
+            "POLICY_UNDETERMINED": 1,
+            "UNPROVEN_POLICY": 1,
+            "UNSUPPORTED_ASSOCIATION": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_13",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 5,
+      "tool_calls": 5,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 70114,
+      "tokens_out": 2802,
+      "tool_usage": {
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 41,
+        "discovered_resource_handle_count": 62,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 6,
+          "expected_steps": 8,
+          "matching_steps_before_verifier": 6,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 2,
+            "REPORT_REMAINING_RECORD": 2,
+            "VERIFY_RECORD_ABSENT": 2
+          },
+          "verifier_codes": {
+            "OMITTED_RESOURCE": 1,
+            "UNPROVEN_POLICY": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 8,
+          "expected_steps": 8,
+          "matching_steps_before_verifier": 7,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 2,
+            "REPORT_REMAINING_RECORD": 3,
+            "VERIFY_RECORD_ABSENT": 2,
+            "VERIFY_RECORD_PRESENT": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_MISMATCH": 1,
+            "UNPROVEN_CONDITION": 1,
+            "UNPROVEN_POLICY": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_14",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "MODEL_UNAVAILABLE: ProviderError",
+      "rounds": 3,
+      "tool_calls": 3,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 69556,
+      "tokens_out": 1939,
+      "tool_usage": {
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 45,
+        "discovered_resource_handle_count": 68,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": []
+    },
+    {
+      "case_id": "case_15",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 7,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 85276,
+      "tokens_out": 2759,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 3
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 23,
+        "discovered_resource_handle_count": 60,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DISABLE_DATA_FLOW": 1,
+            "REPORT_ACTIVE_DATA_FLOW": 1,
+            "VERIFY_DATA_FLOW_DISABLED": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DISABLE_DATA_FLOW": 1,
+            "REPORT_ACTIVE_DATA_FLOW": 1,
+            "VERIFY_DATA_FLOW_DISABLED": 1
+          },
+          "verifier_codes": {
+            "OMITTED_RESOURCE": 1,
+            "UNPROVEN_POLICY": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 4,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DISABLE_DATA_FLOW": 1,
+            "REPORT_ACTIVE_DATA_FLOW": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_DATA_FLOW_DISABLED": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "INVENTED_RESOURCE": 1,
+            "POLICY_MISMATCH": 1,
+            "UNPROVEN_POLICY": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_16",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 5,
+      "tool_calls": 6,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 69584,
+      "tokens_out": 2056,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 22,
+        "discovered_resource_handle_count": 58,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 0,
+          "expected_steps": 7,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {},
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 6,
+          "expected_steps": 7,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 2,
+            "REPORT_REMAINING_RECORD": 2,
+            "VERIFY_RECORD_ABSENT": 2
+          },
+          "verifier_codes": {
+            "OMITTED_RESOURCE": 3,
+            "POLICY_UNDETERMINED": 2,
+            "UNPROVEN_POLICY": 1,
+            "UNSHOWN_WITNESS": 2,
+            "UNSUPPORTED_ASSOCIATION": 2,
+            "UNSUPPORTED_CITATION": 2
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_17",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 7,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 84421,
+      "tokens_out": 2158,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 3
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 4,
+        "fully_shown_source_line_count": 62,
+        "discovered_resource_handle_count": 31,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 5,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "BLOCK_RESTORE": 1,
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1,
+            "VERIFY_RESTORE_BLOCKED": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "OMITTED_RESOURCE": 2,
+            "UNPROVEN_POLICY": 1,
+            "UNSHOWN_WITNESS": 1,
+            "UNSUPPORTED_ASSOCIATION": 2,
+            "UNSUPPORTED_CITATION": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 4,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 2,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "BLOCK_RESTORE": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "REPORT_RESTORE_RISK": 1,
+            "VERIFY_RESTORE_BLOCKED": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "INVENTED_RESOURCE": 3,
+            "POLICY_MISMATCH": 1,
+            "UNPROVEN_POLICY": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 0,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {},
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "OMITTED_RESOURCE": 2,
+            "UNPROVEN_POLICY": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_18",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 5,
+      "tool_calls": 6,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 75394,
+      "tokens_out": 1924,
+      "tool_usage": {
+        "inspect_source": 2,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 2,
+        "fully_shown_source_line_count": 51,
+        "discovered_resource_handle_count": 102,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 0,
+          "expected_steps": 14,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {},
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 4,
+          "expected_steps": 14,
+          "matching_steps_before_verifier": 2,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_ACTIVE_DATA_FLOW": 1,
+            "REPORT_REMAINING_RECORD": 3
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_MISMATCH": 2,
+            "UNSHOWN_WITNESS": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_19",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 7,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 83794,
+      "tokens_out": 2285,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "query_sql_snapshot": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 2,
+        "fully_shown_source_line_count": 26,
+        "discovered_resource_handle_count": 66,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 8,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REDACT_RECORD": 1,
+            "REPORT_EXPOSED_PII": 1,
+            "VERIFY_RECORD_REDACTED": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 8,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REDACT_RECORD": 1,
+            "REPORT_EXPOSED_PII": 1,
+            "VERIFY_RECORD_REDACTED": 1
+          },
+          "verifier_codes": {
+            "OMITTED_RESOURCE": 2,
+            "UNPROVEN_POLICY": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_20",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "MODEL_UNAVAILABLE: ProviderError",
+      "rounds": 2,
+      "tool_calls": 2,
+      "live_calls": 3,
+      "cache_hits": 0,
+      "tokens_in": 17091,
+      "tokens_out": 360,
+      "tool_usage": {
+        "interpret_request": 1,
+        "search_identifiers": 1
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 2,
+        "discovered_resource_handle_count": 15,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": []
+    },
+    {
+      "case_id": "case_21",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 7,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 82982,
+      "tokens_out": 2377,
+      "tool_usage": {
+        "inspect_source": 2,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 3
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 2,
+        "fully_shown_source_line_count": 69,
+        "discovered_resource_handle_count": 28,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 2,
+          "expected_steps": 3,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 3,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "POLICY_MISMATCH": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 1,
+          "expected_steps": 3,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_MISMATCH": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_22",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 5,
+      "tool_calls": 5,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 66699,
+      "tokens_out": 2475,
+      "tool_usage": {
+        "interpret_request": 1,
+        "search_identifiers": 2,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 0,
+        "discovered_resource_handle_count": 21,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 7,
+          "expected_steps": 8,
+          "matching_steps_before_verifier": 5,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "ANONYMIZE_RECORD": 1,
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 3,
+            "VERIFY_RECORD_ABSENT": 1,
+            "VERIFY_RECORD_ANONYMIZED": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_MISMATCH": 1,
+            "POLICY_UNDETERMINED": 1,
+            "UNPROVEN_POLICY": 1,
+            "UNSHOWN_WITNESS": 3,
+            "UNSUPPORTED_ASSOCIATION": 1,
+            "UNSUPPORTED_CITATION": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 8,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "OMITTED_RESOURCE": 2,
+            "UNPROVEN_POLICY": 1,
+            "UNSHOWN_WITNESS": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_23",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "MODEL_UNAVAILABLE: ProviderError",
+      "rounds": 2,
+      "tool_calls": 2,
+      "live_calls": 3,
+      "cache_hits": 0,
+      "tokens_in": 16387,
+      "tokens_out": 392,
+      "tool_usage": {
+        "interpret_request": 1,
+        "search_identifiers": 1
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 3,
+        "discovered_resource_handle_count": 2,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": []
+    },
+    {
+      "case_id": "case_24",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 7,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 82769,
+      "tokens_out": 2623,
+      "tool_usage": {
+        "inspect_source": 2,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 3
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 2,
+        "fully_shown_source_line_count": 71,
+        "discovered_resource_handle_count": 21,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 7,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "OMITTED_RESOURCE": 1,
+            "UNSHOWN_WITNESS": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 6,
+          "expected_steps": 7,
+          "matching_steps_before_verifier": 5,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 2,
+            "REPORT_REMAINING_RECORD": 2,
+            "VERIFY_RECORD_ABSENT": 2
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "INVENTED_RESOURCE": 3,
+            "UNSHOWN_WITNESS": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 7,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "OMITTED_RESOURCE": 1,
+            "UNSHOWN_WITNESS": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_25",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 7,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 80002,
+      "tokens_out": 1504,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "query_sql_snapshot": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 60,
+        "discovered_resource_handle_count": 28,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 0,
+          "expected_steps": 3,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {},
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 1,
+          "expected_steps": 3,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_MISMATCH": 1,
+            "UNSHOWN_WITNESS": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_26",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 11,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 80591,
+      "tokens_out": 2257,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "query_sql_snapshot": 6,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 60,
+        "discovered_resource_handle_count": 21,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 2,
+          "expected_steps": 6,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 1,
+          "expected_steps": 6,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "OMITTED_RESOURCE": 4,
+            "POLICY_UNDETERMINED": 1,
+            "UNSUPPORTED_ASSOCIATION": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_27",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 6,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 79843,
+      "tokens_out": 2092,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 63,
+        "discovered_resource_handle_count": 27,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 6,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "BLOCK_RESTORE": 1,
+            "REPORT_RESTORE_RISK": 1,
+            "VERIFY_RESTORE_BLOCKED": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 6,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "BLOCK_RESTORE": 1,
+            "REPORT_RESTORE_RISK": 1,
+            "VERIFY_RESTORE_BLOCKED": 1
+          },
+          "verifier_codes": {
+            "OMITTED_RESOURCE": 3,
+            "UNSUPPORTED_CITATION": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_28",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 7,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 83276,
+      "tokens_out": 2793,
+      "tool_usage": {
+        "activity_timeline": 1,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 3
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 62,
+        "discovered_resource_handle_count": 26,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 6,
+          "expected_steps": 6,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "BLOCK_RESTORE": 1,
+            "DELETE_RECORD": 1,
+            "REPORT_ACTIVE_DATA_FLOW": 1,
+            "REPORT_RESTORE_RISK": 1,
+            "VERIFY_RECORD_ABSENT": 1,
+            "VERIFY_RESTORE_BLOCKED": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "NON_DELETION",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 6,
+          "expected_steps": 6,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "BLOCK_RESTORE": 1,
+            "DISABLE_DATA_FLOW": 1,
+            "REPORT_ACTIVE_DATA_FLOW": 1,
+            "REPORT_RESTORE_RISK": 1,
+            "VERIFY_DATA_FLOW_DISABLED": 1,
+            "VERIFY_RESTORE_BLOCKED": 1
+          },
+          "verifier_codes": {
+            "AUTHORIZATION_UNSUPPORTED": 1,
+            "INTEGRITY": 2,
+            "STATUS_MISMATCH": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "NOT_APPLICABLE",
+          "proposed_steps": 0,
+          "expected_steps": 6,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {},
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_29",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 5,
+      "tool_calls": 5,
+      "live_calls": 5,
+      "cache_hits": 0,
+      "tokens_in": 65098,
+      "tokens_out": 1597,
+      "tool_usage": {
+        "inspect_source": 2,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 1
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 2,
+        "fully_shown_source_line_count": 123,
+        "discovered_resource_handle_count": 38,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 6,
+          "expected_steps": 14,
+          "matching_steps_before_verifier": 3,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "DISABLE_DATA_FLOW": 1,
+            "REPORT_ACTIVE_DATA_FLOW": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_DATA_FLOW_DISABLED": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "OMITTED_RESOURCE": 3,
+            "POLICY_UNDETERMINED": 1,
+            "UNSHOWN_WITNESS": 2,
+            "UNSUPPORTED_ASSOCIATION": 1,
+            "UNSUPPORTED_CITATION": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_30",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 6,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 79277,
+      "tokens_out": 1723,
+      "tool_usage": {
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 2,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 1,
+        "fully_shown_source_line_count": 64,
+        "discovered_resource_handle_count": 20,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "UNRESOLVED",
+          "scope": "NONE",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 0,
+          "expected_steps": 14,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {},
+          "verifier_codes": {
+            "AUTHORIZATION_UNRESOLVED": 1,
+            "INTEGRITY": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ITEM",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 14,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "DELETE_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_ABSENT": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "INVENTED_RESOURCE": 2,
+            "POLICY_MISMATCH": 1,
+            "POLICY_UNDETERMINED": 1,
+            "SCOPE_EXCEEDED": 4,
+            "SCOPE_TARGET_UNGROUNDED": 1,
+            "UNSHOWN_WITNESS": 1,
+            "UNSUPPORTED_ASSOCIATION": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_31",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 7,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 80978,
+      "tokens_out": 2169,
+      "tool_usage": {
+        "activity_timeline": 2,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 2
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 2,
+        "fully_shown_source_line_count": 58,
+        "discovered_resource_handle_count": 26,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 2,
+          "expected_steps": 3,
+          "matching_steps_before_verifier": 1,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_REDACTED": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "OMITTED_RESOURCE": 1,
+            "POLICY_MISMATCH": 1,
+            "UNPROVEN_POLICY": 1,
+            "UNSHOWN_WITNESS": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ACCOUNT",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 3,
+          "matching_steps_before_verifier": 0,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REPORT_REMAINING_RECORD": 2,
+            "VERIFY_RECORD_REDACTED": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_MISMATCH": 2,
+            "UNPROVEN_POLICY": 1
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "case_32",
+      "final_outcome": "SAFE_FALLBACK",
+      "published_status": "INCOMPLETE",
+      "stop_reason": "CASE_BUDGET",
+      "rounds": 6,
+      "tool_calls": 6,
+      "live_calls": 6,
+      "cache_hits": 0,
+      "tokens_in": 80647,
+      "tokens_out": 2093,
+      "tool_usage": {
+        "activity_timeline": 2,
+        "inspect_source": 1,
+        "interpret_request": 1,
+        "search_identifiers": 1,
+        "submit_audit": 1
+      },
+      "retrieval_summary": {
+        "distinct_sources_inspected": 2,
+        "fully_shown_source_line_count": 58,
+        "discovered_resource_handle_count": 26,
+        "proposed_fact_count": 0,
+        "rejected_fact_count": 0
+      },
+      "proposal_summaries": [
+        {
+          "attempt": 1,
+          "accepted": false,
+          "authorization_decision": "DELETE",
+          "scope": "ITEM",
+          "proposed_status": "INCOMPLETE",
+          "proposed_steps": 3,
+          "expected_steps": 5,
+          "matching_steps_before_verifier": 2,
+          "step_set_exact_before_verifier": false,
+          "sequence_exact_before_verifier": false,
+          "operation_counts": {
+            "REDACT_RECORD": 1,
+            "REPORT_REMAINING_RECORD": 1,
+            "VERIFY_RECORD_REDACTED": 1
+          },
+          "verifier_codes": {
+            "INTEGRITY": 2,
+            "POLICY_MISMATCH": 1,
+            "SCOPE_EXCEEDED": 2,
+            "SCOPE_TARGET_UNGROUNDED": 1
+          }
+        }
+      ]
+    }
+  ]
+}

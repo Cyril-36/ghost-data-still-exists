@@ -11,8 +11,10 @@ import json
 import math
 import re
 from dataclasses import asdict, replace
+from collections import Counter
 
 from .casefile import CaseFile, fact_observations
+from .agent_protocol import normalize_proposal
 from .contracts import ContractError, OPERATION_TABLE
 from .corpus import eligible
 from .identity import resolve_subject
@@ -42,12 +44,15 @@ PROPOSAL_SCHEMA = {'type': 'object', 'additionalProperties': False, 'properties'
         'required': ['decision', 'scope', 'target', 'whole_category', 'request_quote', 'reason']},
     'deletion_status': {'type': 'string', 'enum': ['COMPLETE', 'INCOMPLETE', 'NOT_APPLICABLE']},
     'steps': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False,
-        'properties': {**{k: STR for k in ('phase', 'system_id', 'resource_id', 'operation', 'state', 'evidence_id')},
+        'properties': {**{k: STR for k in ('system_id', 'resource_id', 'evidence_id')},
+                       'phase': {'type': 'string', 'enum': list(dict.fromkeys(p for p, _, _ in OPERATION_TABLE))},
+                       'operation': {'type': 'string', 'enum': [op for _, op, _ in OPERATION_TABLE]},
+                       'state': {'type': 'string', 'enum': sorted({s for _, _, s in OPERATION_TABLE})},
                        'step_no': {'type': 'integer'}},
         'required': ['step_no', 'phase', 'system_id', 'resource_id', 'operation', 'state', 'evidence_id']}},
     'witnesses': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False,
         'properties': {'step_no': {'type': 'integer'}, 'source_id': STR, 'locator': STR, 'literal': STR},
-        'required': ['step_no', 'source_id', 'locator', 'literal']}}},
+        'required': ['step_no', 'source_id', 'locator']}}},
     'required': ['authorization', 'deletion_status', 'steps', 'witnesses']}
 AGENT_TOOLS = [t for t in TOOL_SCHEMAS if t['function']['name'] in (*EVIDENCE_TOOLS, 'propose_fact')] + [{
     'type': 'function', 'function': {'name': 'submit_audit', 'description':
@@ -57,6 +62,13 @@ REQUEST_TOOL = {'type': 'function', 'function': {'name': 'interpret_request',
     'description': 'Interpret what the customer requests before investigating whether it has happened. '
                    'Record your own authorization interpretation; you may revise it in your final proposal.',
     'parameters': PROPOSAL_SCHEMA['properties']['authorization']}}
+CATALOG_TOOL = {'type': 'function', 'function': {'name': 'list_sources',
+    'description': 'Browse eligible source metadata, not subject membership or state proof. '
+                   'Filter by content kind or file/origin text and paginate using next_offset.',
+    'parameters': {'type': 'object', 'additionalProperties': False, 'properties': {
+        'offset': {'type': 'integer'}, 'kind': {'type': 'string',
+            'enum': ['', 'pdf', 'image', 'json', 'sql', 'text', 'log']}, 'query': STR}, 'required': []}}}
+AGENT_TOOLS.insert(0, CATALOG_TOOL)
 HALLUCINATION_CODES = {'INVENTED_RESOURCE', 'INELIGIBLE_CITATION', 'UNSHOWN_WITNESS', 'UNSUPPORTED_CITATION',
                        'UNSUPPORTED_ASSOCIATION', 'FACT_UNSUPPORTED', 'CROSS_PERSON'}
 
@@ -76,11 +88,13 @@ def allowed_agent_gateway(gateway, allow_live=False):
 
 
 class ProposalVerifier:
-    """Validate an authored answer. Never generate, fill in, reorder or replace its steps."""
+    """Validate agent semantics; only structural serialization and retrieved-span quoting are automatic."""
 
     def __init__(self, verifier, policy):
         self.verifier, self.policy = verifier, policy
         self.last_authorization_review = None
+        self.last_serialization = None
+        self.resolved_witnesses = []
 
     def review_authorization(self, text):
         return self.authorization_review(text) if getattr(self, 'authorization_review', None) else None
@@ -88,6 +102,9 @@ class ProposalVerifier:
     def verify(self, request, subject, proposal, case):
         findings = []
         self.last_authorization_review = None
+        self.last_serialization = None
+        self.resolved_witnesses = []
+        proposal, self.last_serialization = normalize_proposal(proposal)
 
         def reject(code, message):
             findings.append(Finding(code, 'BLOCKING', message))
@@ -160,7 +177,7 @@ class ProposalVerifier:
                 continue
             w = witnesses.get(number)
             try:
-                if not w or (step.evidence_id and w['source_id'] != step.evidence_id) or not w['literal'].strip():
+                if not w or (step.evidence_id and w['source_id'] != step.evidence_id):
                     raise ValueError('Each cited step needs its own matching source witness.')
                 proof_source = step.evidence_id or w['source_id']
                 if parent:
@@ -173,13 +190,18 @@ class ProposalVerifier:
                 if not locator_lines(w['locator']) <= case.shown.get(w['source_id'], set()):
                     raise ValueError('The cited lines were never retrieved in full.')
                 span = self.verifier.texts.span(w['source_id'], w['locator'])
+                literal = w.get('literal', span)
+                if not isinstance(literal, str) or not literal.strip():
+                    raise ValueError('A supplied literal must be non-empty; omit it to quote the retrieved span.')
                 omission = step.operation == 'VERIFY_RECORD_ABSENT' and any(
                     s.source_id == proof_source for s in self.verifier._absence_scopes(
                         step, self.verifier._observations(step.resource_id, request.audit_at,
                             fact_observations(case.facts)), request.audit_at, case.subject_tokens))
-                named = re.search(rf'(?<![\w.@+-]){re.escape(step.resource_id)}(?![\w@+-])', w['literal'])
-                if ' '.join(w['literal'].split()) not in ' '.join(span.split()) or not (named or omission):
+                named = re.search(rf'(?<![\w.@+-]){re.escape(step.resource_id)}(?![\w@+-])', literal)
+                if ' '.join(literal.split()) not in ' '.join(span.split()) or not (named or omission):
                     raise ValueError('The literal must quote the retrieved resource at this locator.')
+                if 'literal' not in w:
+                    self.resolved_witnesses.append({**w, 'literal': literal, 'origin': 'already_retrieved_span'})
             except ValueError as exc:
                 reject('UNSHOWN_WITNESS', str(exc))
         # The baseline verifier independently checks ownership, copies, coverage and cited states.
@@ -221,7 +243,8 @@ class ProposalVerifier:
                 if not profiles:
                     reject('PROFILE_COVERAGE_UNPROVEN', 'No owned profile ID is grounded; cannot certify complete account deletion.')
         findings += self.verifier.verify(plan, case)
-        return plan, findings
+        unique = {(f.code, f.severity, f.message, f.system_id, f.resource_id, f.source_id): f for f in findings}
+        return plan, list(unique.values())
 
 
 class AgentFirst:
@@ -253,6 +276,21 @@ class AgentFirst:
                       self.gateway._worst_case(model, body, output_limit) or 0)
         return tokens + bound <= self.config.max_case_tokens and paise + reserve <= self.config.max_case_paise
 
+    def _catalog(self, cutoff, arguments):
+        offset = arguments.get('offset', 0)
+        if type(offset) is not int or offset < 0:
+            raise ContractError('catalog offset must be a nonnegative integer')
+        kind, query = arguments.get('kind', ''), arguments.get('query', '').casefold()
+        rows = [{**asdict(m), 'kind': self.texts.kind(m.file_id)} for m in self.corpus.context.manifest
+                if m.captured_at <= cutoff]
+        rows = sorted((r for r in rows if (not kind or r['kind'] == kind)
+                       and (not query or query in f"{r['file_id']} {r['file_path']} {r['origin']}".casefold())),
+                      key=lambda r: r['file_id'])
+        page = rows[offset:offset + 20]
+        return {'sources': page, 'total': len(rows), 'offset': offset,
+                'next_offset': offset + len(page) if offset + len(page) < len(rows) else None,
+                'note': 'Metadata is not ownership, membership or state evidence; inspect content.'}
+
     def run(self, request):
         subject = resolve_subject(request.email, request.audit_at, self.index, self.corpus)
         unresolved = Intent(UNRESOLVED, 'No verified agent proposal', method='agent-first-v1')
@@ -264,8 +302,9 @@ class AgentFirst:
                  'identifiers': case.identifiers, 'issues': subject.issues},
                  'policy': [asdict(r) for r in self.corpus.context.rules],
                  'allowed_operations_in_order': OPERATION_TABLE,
-                 'source_inventory': [asdict(m) for m in self.corpus.context.manifest
-                                      if m.captured_at <= request.audit_at],
+                 'source_inventory': {'by_kind': dict(sorted(Counter(self.texts.kind(m.file_id)
+                     for m in self.corpus.context.manifest if m.captured_at <= request.audit_at).items())),
+                     'browse_tool': 'list_sources', 'note': 'Metadata does not establish case membership.'},
                  'limits': self.config.describe()}
         # No deterministic candidates, obligations, status or step list is supplied.
         opening = {'request': brief['request'], 'instruction':
@@ -275,11 +314,13 @@ class AgentFirst:
                     {'role': 'user', 'content': json.dumps(opening, default=str, ensure_ascii=False)}]
         start, seen, attempts = len(self.gateway.usage), {}, []
         processed_tokens = 0  # Payload usage survives cache replay; billed gateway usage does not.
+        request_interpreted = not self.request_first
+        evidence_repair_used = False
         if getattr(self.checker, 'authorization_review', None):
             self.checker.authorization_review.admit = lambda model, messages, limit: self._can_admit(
                 start, model, {'model': model, 'messages': messages, 'max_completion_tokens': limit}, limit)
         for turn in range(self.config.max_rounds):
-            interpreting = self.request_first and turn == 0
+            interpreting = not request_interpreted
             active_tools = [REQUEST_TOOL] if interpreting else AGENT_TOOLS
             choice = {'type': 'function', 'function': {'name': 'interpret_request'}} if interpreting else 'required'
             body = {'model': self.config.model, 'messages': messages, 'tools': active_tools,
@@ -289,11 +330,20 @@ class AgentFirst:
             remaining_tools = max(0, self.config.max_tool_calls - len(case.tool_calls))
             finalize = not interpreting and self.finalize_on_pressure and (remaining_rounds == 1 or remaining_tools <= 1
                 or processed_tokens + 2 * request_bound > self.config.max_case_tokens)
+            evidence_codes = {'OMITTED_RESOURCE', 'UNSHOWN_WITNESS', 'INVENTED_RESOURCE', 'UNPROVEN_POLICY',
+                              'POLICY_UNDETERMINED', 'UNSUPPORTED_CITATION', 'UNSUPPORTED_ASSOCIATION',
+                              'UNPROVEN_CONDITION', 'FACT_UNSUPPORTED'}
+            repair = bool(not interpreting and not evidence_repair_used and attempts and not attempts[-1]['accepted']
+                and remaining_rounds > 1 and remaining_tools > 1
+                and any(f['code'] in evidence_codes for f in attempts[-1]['findings']))
+            if repair:
+                finalize = False  # One chance to retrieve missing proof; all admission bounds still apply.
             if finalize:
                 body['tool_choice'] = {'type': 'function', 'function': {'name': 'submit_audit'}}
             messages.append({'role': 'user', 'content': json.dumps({'execution_budget': {
                 'remaining_rounds': remaining_rounds, 'remaining_tool_calls': remaining_tools,
                 'submission_required': finalize,
+                'evidence_repair_window': repair,
                 'tokens_processed': processed_tokens,
                 'remaining_case_tokens': max(0, self.config.max_case_tokens - processed_tokens),
                 'case_cost_limit_paise': self.config.max_case_paise,
@@ -307,15 +357,20 @@ class AgentFirst:
                 case.stop_reason = 'TOOL_LIMIT'
                 break
             try:
+                if repair:
+                    evidence_repair_used = True
                 payload = self.gateway.chat('primary_agent', self.config.model, messages, self.version,
                     lambda p: None, max_tokens=self.config.max_completion_tokens, tools=active_tools,
                     tool_choice=body['tool_choice'])
             except ProviderError as exc:
-                if str(exc).startswith('invalid') and case.schema_repairs < self.config.max_schema_repairs:
-                    case.schema_repairs += 1
-                    messages.append({'role': 'user', 'content': 'Your tool response failed schema validation: '
-                                     + str(exc)[:300] + '. Correct it using the declared tool schemas.'})
-                    continue
+                if str(exc).startswith('invalid'):
+                    if case.schema_repairs < self.config.max_schema_repairs:
+                        case.schema_repairs += 1
+                        messages.append({'role': 'user', 'content': 'Your tool response failed schema validation: '
+                                         + str(exc)[:300] + '. Correct it using the declared tool schemas.'})
+                        continue
+                    case.stop_reason = 'SCHEMA_REPAIR_LIMIT'
+                    break
                 case.stop_reason = f'MODEL_UNAVAILABLE: {type(exc).__name__}'
                 break
             usage = payload.get('usage') or {}
@@ -330,6 +385,16 @@ class AgentFirst:
             for call in message['tool_calls']:
                 if len(case.tool_calls) >= self.config.max_tool_calls:
                     result = {'error': 'TOOL_LIMIT'}
+                elif call['function']['name'] == 'list_sources':
+                    from .casefile import ToolCall
+                    arguments = strict_json(call['function']['arguments'])
+                    try:
+                        result = self._catalog(request.audit_at, arguments)
+                        case.tool_calls.append(ToolCall(case.rounds, 'list_sources', arguments, True,
+                                                       {'returned': len(result['sources'])}))
+                    except ContractError as exc:
+                        result = {'error': str(exc)}
+                        case.tool_calls.append(ToolCall(case.rounds, 'list_sources', arguments, False, error=str(exc)))
                 elif interpreting and call['function']['name'] == 'interpret_request':
                     from .casefile import ToolCall
                     interpretation = strict_json(call['function']['arguments'])
@@ -339,9 +404,12 @@ class AgentFirst:
                     result = {'recorded': valid, 'note': 'This is your interpretation, not permission granted '
                         'by code. Re-evaluate ambiguous wording if necessary; final authorization and all '
                         'evidence still require independent verification.'}
+                    request_interpreted = valid
                 elif call['function']['name'] == 'submit_audit':
                     proposal = strict_json(call['function']['arguments'])
                     self.checker.last_authorization_review = None
+                    self.checker.last_serialization = None
+                    self.checker.resolved_witnesses = []
                     try:
                         if call is not message['tool_calls'][-1]:
                             raise ContractError('submit_audit must be the final tool call of a turn')
@@ -349,12 +417,16 @@ class AgentFirst:
                     except (ContractError, ValueError) as exc:
                         findings = [Finding('INTEGRITY', 'BLOCKING', str(exc))]
                     blocking = [f for f in findings if f.blocking]
+                    case.lookup_handles.update(f.resource_id for f in blocking
+                                               if f.code == 'OMITTED_RESOURCE' and f.resource_id)
                     if blocking:
                         case.feedback_rounds += 1
                     attempts.append({'proposal': proposal, 'accepted': not blocking,
                                      'findings': [f.record() for f in findings],
                                      'authorization_model': self.authorization_model,
-                                     'authorization_review': self.checker.last_authorization_review})
+                                     'authorization_review': self.checker.last_authorization_review,
+                                     'serialization': self.checker.last_serialization,
+                                     'resolved_witnesses': self.checker.resolved_witnesses})
                     case.verifier_findings.append([f.record() for f in findings])
                     from .casefile import ToolCall
                     case.tool_calls.append(ToolCall(case.rounds, 'submit_audit', proposal, not blocking))
@@ -365,7 +437,7 @@ class AgentFirst:
                     result = self.executor._execute(case, itools, call, seen)
                 messages.append({'role': 'tool', 'tool_call_id': call['id'],
                                  'content': json.dumps(result, ensure_ascii=False, default=str)})
-            if interpreting:
+            if interpreting and request_interpreted:
                 messages.append({'role': 'user', 'content': json.dumps(brief, default=str, ensure_ascii=False)})
             # Every batched call is processed; a later rejection cannot be hidden by an earlier acceptance.
             if accepted is not None and attempts[-1]['accepted']:

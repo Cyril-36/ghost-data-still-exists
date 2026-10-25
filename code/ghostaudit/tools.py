@@ -286,7 +286,7 @@ class InvestigationTools:
 
     # -- scope ---------------------------------------------------------------------------------
     def _allowed_value(self, value):
-        return value in self.case.identifier_values or value in self.case.handles
+        return value in self.case.identifier_values or value in self.case.handles or value in self.case.lookup_handles
 
     def _eligible_source(self, source_id):
         if not self.texts.available(source_id, self.case.audit_at):
@@ -344,9 +344,11 @@ class InvestigationTools:
                 for s in sources if n < len(grouped[s])]
         shown = hits[start_match:start_match + 25]
         next_match = start_match + len(shown)
-        return ({'matches': [{'source_id': s, 'locator': loc, 'text': line[:200]} for s, loc, line in shown],
+        return ({'matches': [{'source_id': s, 'locator': loc, 'text': line[:200],
+                             'text_complete': len(line) <= 200} for s, loc, line in shown],
                  'total_matches': len(hits), 'truncated': next_match < len(hits), 'start_match': start_match,
                  'next_match': next_match if next_match < len(hits) else None,
+                 'citation_note': 'A clipped match is a preview: inspect its source lines before citing it.',
                  'activity_ids_naming_value': activity[:25], 'activity_truncated': len(activity) > 25},
                 [(s, loc, line[:200], len(line) <= 200) for s, loc, line in shown])
 
@@ -366,7 +368,8 @@ class InvestigationTools:
         parsed = [o for o in self.tools.corpus.by_source.get(source_id, ()) if eligible(o, self.case.audit_at)]
         return ({'source_id': source_id, 'origin': entry.origin if entry else self.texts.kind(source_id),
                  'available_at': self.texts.refs[source_id].available_at.isoformat(), 'page': page,
-                 'lines': [{'locator': f'{prefix}L{n}', 'text': visible_text[n]} for n in numbers],
+                 'lines': [{'locator': f'{prefix}L{n}', 'text': visible_text[n],
+                            'text_complete': visible_text[n] == lines[n - 1]} for n in numbers],
                  'total_lines': len(lines), 'truncated': start + count - 1 < len(lines)
                  or any(visible_text[n] != lines[n - 1] for n in numbers),
                  'parsed_observations': len(parsed)},
@@ -405,12 +408,16 @@ class InvestigationTools:
                 [(file_id, loc, t, True) for loc, t in lines])
 
     def activity_timeline(self, resource_id):
-        if resource_id not in self.case.handles:
+        if resource_id not in self.case.handles and resource_id not in self.case.lookup_handles:
             raise ToolError(f'{resource_id!r} is not a candidate or returned resource handle')
         events = sorted(self.tools.corpus.resource_observations(resource_id, self.case.audit_at),
                         key=lambda o: (o.observed_at, o.obs_id))[:30]
         items = [{'source_id': o.source_id, 'locator': o.locator, 'kind': o.kind, 'proves_state': o.kind == STATE,
                   'system_id': o.system_id, 'location': o.location, 'presence': o.presence,
+                  'category': o.category, 'exposed': o.exposed, 'enabled': o.enabled,
+                  'restore_allowed': o.restore_allowed,
+                  'retention_until': o.retention_until.isoformat() if o.retention_until else None,
+                  'references': list(o.refs),
                   'observed_at': o.observed_at.isoformat(), 'excerpt': o.excerpt[:160]} for o in events]
         total = len(self.tools.corpus.resource_observations(resource_id, self.case.audit_at))
         # Excerpts are summaries, not source lines: they yield handles but no citable lines.

@@ -83,6 +83,7 @@ class CaseFile:
     conflicts: list = field(default_factory=list)
     questions: list = field(default_factory=list)
     handles: set = field(default_factory=set)        # resource IDs the model may name
+    lookup_handles: set = field(default_factory=set)  # verifier hints: discovery only, never retrieved proof
     inspected: set = field(default_factory=set)      # source IDs whose content was shown to the model
     shown: dict = field(default_factory=dict)        # source ID -> line locators shown in full (citable)
     facts: list = field(default_factory=list)        # accepted Fact
@@ -124,6 +125,7 @@ class CaseFile:
         out = {k: v for k, v in asdict(self).items() if k not in ('facts', 'subject_token', 'subject_tokens')}
         out['audit_at'] = self.audit_at.isoformat()
         out['handles'], out['inspected'] = sorted(self.handles), sorted(self.inspected)
+        out['lookup_handles'] = sorted(self.lookup_handles)
         out['shown'] = {k: sorted(v) for k, v in sorted(self.shown.items())}
         out['facts'] = [{**{k: v for k, v in asdict(f).items() if k not in ('available_at', 'observed_at',
                                                                              'subject_token')},

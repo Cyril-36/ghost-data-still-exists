@@ -1,0 +1,24 @@
+{
+  "fixture": "synthetic-verifier-feedback-repair",
+  "purpose": "Exercise discovery of a verifier-named resource without pre-authorizing its ownership or state.",
+  "synthetic_only": true,
+  "initial_state": {
+    "retrieved_resource_handles": ["fx_account_P"],
+    "unretrieved_resource_named_by_verifier": "fx_search_P",
+    "source_available_by_audit_cutoff": "fx_file_L"
+  },
+  "expected_flow": [
+    "submit an incomplete proposal that is rejected with an omitted-resource finding",
+    "search the hinted resource ID during one bounded repair window",
+    "independently validate source eligibility, ownership, category, state, and cutoff",
+    "submit a corrected proposal only if the evidence supports it",
+    "otherwise retain the disclosed safe fallback"
+  ],
+  "safety_invariants": [
+    "feedback hints permit lookup only; they do not add an ownership association",
+    "no planner or verifier writes semantic proposal steps",
+    "the verifier can still reject the corrected proposal",
+    "no model transport or paid API is used by the test"
+  ],
+  "test": "code/tests/test_agent_root_cause.py::RootCauseFixes.test_verifier_hint_can_be_investigated_before_corrected_agent_submission"
+}
