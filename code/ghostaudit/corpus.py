@@ -49,6 +49,10 @@ class Corpus:
     def resource_observations(self, resource_id, cutoff):
         return [o for o in self.by_resource.get(resource_id, ()) if eligible(o, cutoff)]
 
+    def categories_for(self, system_id, cutoff):
+        return {o.category for o in self.observations if o.system_id == system_id and o.category
+                and eligible(o, cutoff)}
+
     def token_observations(self, token, cutoff):
         return [o for o in self.by_token.get(token, ()) if eligible(o, cutoff)]
 

@@ -27,6 +27,7 @@ from ghostaudit.contracts import ContractError
 from ghostaudit.corpus import build_corpus
 from ghostaudit.inputs import load_context, load_requests
 from ghostaudit.output import read_output, validate_output
+from ghostaudit.providers import ProviderError
 
 DEFAULT_DATASET = Path(__file__).resolve().parent.parent / 'dataset'
 PROBES = Path('.cache/ghostaudit/tool_probes.json')     # gitignored; written only by probe-tools
@@ -213,7 +214,7 @@ def main(argv=None) -> int:
                   f'Checked: exact case set, order, '
                   f'step contract, citation existence and audit_at eligibility. '
                   f'NOT checked: whether citations semantically support each step.')
-    except (ContractError, ValueError, FileNotFoundError) as exc:
+    except (ContractError, ProviderError, ValueError, FileNotFoundError) as exc:
         print(f'ERROR: {exc}', file=sys.stderr)
         return 1
     return 0

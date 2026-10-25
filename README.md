@@ -17,13 +17,13 @@ Read [`problem_statement.md`](./problem_statement.md) for the complete challenge
 Clone the repository and move into the project directory:
 
 ```bash
-git clone https://github.com/interviewstreet/hackerrank-orchestrate-october26.git
-cd hackerrank-orchestrate-october26
+git clone https://github.com/Cyril-36/ghost-data-still-exists.git
+cd ghost-data-still-exists
 ```
 
 Start your AI coding tool from the **repository root** so it automatically reads [`AGENTS.md`](./AGENTS.md) and logs your session turns to `log.txt` in the root directory.
 
-Build your solution in `code/main.py`, or use another language and document its setup and run command clearly in your README.
+The implemented solution is in `code/main.py`. See [setup, provider profiles and architecture](code/README.md) and the [independent code audit](code/evaluation/CODE_AUDIT_REPORT.md).
 
 Your solution must:
 
@@ -31,10 +31,11 @@ Your solution must:
 - Generate one prediction row for every request in `dataset/deletion_requests.csv`
 - Write the final predictions to `output.csv` in the repository root
 
-Run the starter Python entry point with:
+Run an offline check using a fresh output directory (no model calls):
 
 ```bash
-python3 code/main.py
+python3 code/main.py audit --requests dataset/deletion_requests.csv \
+    --output .runs/local-check/predictions.csv --run-dir .runs/local-check
 ```
 
 The blank template at `dataset/output.csv` is provided as a reference. Your final generated file for submission must be the root-level `output.csv`.

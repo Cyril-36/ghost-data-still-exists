@@ -224,8 +224,22 @@ def _clip(result: dict) -> dict:
     text = json.dumps(result, ensure_ascii=False, default=str)
     if len(text) <= MAX_RESULT_CHARS:
         return result
-    return {'truncated': True, 'note': f'result exceeded {MAX_RESULT_CHARS} characters; narrow the request',
-            'preview': text[:MAX_RESULT_CHARS]}
+    result = {k: list(v) if isinstance(v, list) else v for k, v in result.items()}
+    result['truncated'] = True
+    # Keep complete structured items, so source+locator identity survives truncation.
+    while len(json.dumps(result, ensure_ascii=False, default=str)) > MAX_RESULT_CHARS:
+        arrays = [k for k, v in result.items() if isinstance(v, list) and v]
+        if not arrays:
+            preview = text[:MAX_RESULT_CHARS // 2]
+            result = {'truncated': True, 'note': 'result too large; narrow the request', 'preview': preview}
+            while len(json.dumps(result, ensure_ascii=False)) > MAX_RESULT_CHARS:
+                result['preview'] = result['preview'][:len(result['preview']) // 2]
+            return result
+        key = max(arrays, key=lambda k: len(json.dumps(result[k], ensure_ascii=False, default=str)))
+        result[key].pop()
+        if key == 'items' and 'returned' in result:
+            result['returned'] = len(result[key])
+    return result
 
 
 def _fn(name, description, properties, required):
@@ -276,12 +290,23 @@ class InvestigationTools:
 
     def _register(self, result, displayed):
         """Record what the model was actually shown. `displayed` is [(source_id, locator | None, text,
-        complete)] for every item in `result`; a clipped result keeps only items whose text survives in
-        the preview. Shown sources become inspected, fully shown lines become citable, and resource IDs
+        complete)] for every item in `result`; only complete returned items with the exact source and
+        locator are registered. Shown sources become inspected, fully shown lines become citable, and resource IDs
         in shown text become handles. Nothing hidden is ever registered."""
-        preview = result.get('preview') if result.get('truncated') and 'preview' in result else None
+        if 'preview' in result:
+            return
+        visible = set()
+        source = result.get('source_id') or result.get('file_id')
+        for item in result.get('lines', []) + result.get('matches', []):
+            visible.add((item.get('source_id', source), item.get('locator'), item.get('text')))
+        for item in result.get('items', []):
+            if 'excerpt' in item:
+                visible.add((item['source_id'], None, item['excerpt']))
+            elif source:
+                visible.add((source, None, json.dumps({k: v for k, v in item.items() if k != 'locator'},
+                                                     default=str)))
         for source_id, locator, text, complete in displayed:
-            if preview is not None and json.dumps(text, ensure_ascii=False)[1:-1] not in preview:
+            if (source_id, locator, text) not in visible:
                 continue
             self.case.inspected.add(source_id)
             if locator and complete:
@@ -320,14 +345,17 @@ class InvestigationTools:
         count = max(1, min(max_lines, 60))
         prefix = f'{page}:' if page else ''
         numbers = range(start, min(len(lines), start + count - 1) + 1)
+        visible_text = {n: lines[n - 1] if len(lines[n - 1]) <= MAX_RESULT_CHARS - 1024 else lines[n - 1][:300]
+                        for n in numbers}
         entry = self.texts.manifest.get(source_id)
         parsed = [o for o in self.tools.corpus.by_source.get(source_id, ()) if eligible(o, self.case.audit_at)]
         return ({'source_id': source_id, 'origin': entry.origin if entry else self.texts.kind(source_id),
                  'available_at': self.texts.refs[source_id].available_at.isoformat(), 'page': page,
-                 'lines': [{'locator': f'{prefix}L{n}', 'text': lines[n - 1][:300]} for n in numbers],
-                 'total_lines': len(lines), 'truncated': start + count - 1 < len(lines),
+                 'lines': [{'locator': f'{prefix}L{n}', 'text': visible_text[n]} for n in numbers],
+                 'total_lines': len(lines), 'truncated': start + count - 1 < len(lines)
+                 or any(visible_text[n] != lines[n - 1] for n in numbers),
                  'parsed_observations': len(parsed)},
-                [(source_id, f'{prefix}L{n}', lines[n - 1][:300], len(lines[n - 1]) <= 300) for n in numbers])
+                [(source_id, f'{prefix}L{n}', visible_text[n], visible_text[n] == lines[n - 1]) for n in numbers])
 
     def inspect_media(self, file_id, page=''):
         self._eligible_source(file_id)
@@ -397,14 +425,16 @@ class InvestigationTools:
         insert = re.compile(rf'INSERT INTO "?{re.escape(table)}"?[ (]')
         for r in found:
             key = str(r.get('resource_id') or value)
-            r['locator'] = next((f'L{n}' for n, line in enumerate(lines, start=1)
-                                 if insert.match(line) and key in line), None)
+            matches = [(n, line) for n, line in enumerate(lines, start=1) if insert.match(line)
+                       and re.search(rf'(?<![\w.@+-]){re.escape(key)}(?![\w@+-])', line)]
+            r['locator'] = (f'L{matches[0][0]}' if len(matches) == 1 and
+                            len(re.findall(r'\bINSERT\s+INTO\b', matches[0][1], re.I)) == 1 else None)
             r.pop('rowid', None)
         page = found[:20]
         return ({'file_id': file_id, 'table': table, 'filter': {column: value},
-                 'note': 'complete for this table at the snapshot time',
+                 'note': 'decoded rows only; inspect_source must show raw lines before citing a locator',
                  'items': page, 'returned': len(page), 'total': len(found), 'truncated': len(found) > 20},
-                [(file_id, r['locator'], json.dumps({k: v for k, v in r.items() if k != 'locator'}, default=str), True)
+                [(file_id, None, json.dumps({k: v for k, v in r.items() if k != 'locator'}, default=str), False)
                  for r in page])
 
     def call(self, name, arguments):

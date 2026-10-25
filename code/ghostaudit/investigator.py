@@ -190,6 +190,15 @@ class Investigator:
                 final_notice = True                  # pacing only: limits and evidence rules are unchanged
                 messages.append({'role': 'user', 'content': 'This is your final turn. In this turn, propose every '
                                  'fact the evidence you inspected supports, then call submit_case_file.'})
+            body = {'model': self.config.model, 'messages': messages,
+                    'max_completion_tokens': self.config.max_completion_tokens,
+                    'tools': TOOL_SCHEMAS, 'tool_choice': 'required'}
+            next_tokens = len(json.dumps(body, ensure_ascii=False).encode('utf-8')) + self.config.max_completion_tokens
+            reserve = max(self.gateway.config.chat_cost_reserve_paise,
+                          self.gateway._worst_case(self.config.model, body, self.config.max_completion_tokens) or 0)
+            if tokens + next_tokens > self.config.max_case_tokens or paise + reserve > self.config.max_case_paise:
+                case.stop_reason = 'CASE_BUDGET'
+                break
             try:
                 payload = self.gateway.chat('investigator', self.config.model, messages, self.version,
                                             lambda p: None, max_tokens=self.config.max_completion_tokens,

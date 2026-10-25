@@ -72,8 +72,9 @@ def reconstruct(corpus: Corpus, system_id: str, resource_id: str, cutoff,
         else:
             state.claims.append(o)
 
-    if not state.categories and len(corpus.system_categories.get(system_id, ())) == 1:
-        state.categories = set(corpus.system_categories[system_id])
+    held = corpus.categories_for(system_id, cutoff) if not state.categories else set()
+    if not state.categories and len(held) == 1:
+        state.categories = held
         state.issues.append(f'NOTE: category taken from the only category {system_id} holds')
 
     # Omission from an exhaustive listing of the same system and category, in a capture
@@ -110,7 +111,11 @@ def reconstruct(corpus: Corpus, system_id: str, resource_id: str, cutoff,
     # was never assessed leaves the outcome unknown (never borrowed from another copy).
     per_copy = {}
     for location in state.present_locations:
-        per_copy[location] = _latest(by_location[location], 'exposed', state.issues, f'{resource_id}@{location}')
+        history = by_location[location]
+        removed = [o.observed_at for o in history if o.presence == ABSENT]
+        if removed:
+            history = [o for o in history if o.observed_at > max(removed)]
+        per_copy[location] = _latest(history, 'exposed', state.issues, f'{resource_id}@{location}')
     state.exposure_by_location = {loc: (o.exposed if o else None) for loc, o in per_copy.items()}
     exposing = [o for o in per_copy.values() if o is not None and o.exposed]
     if exposing:

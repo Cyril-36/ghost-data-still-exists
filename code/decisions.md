@@ -886,3 +886,19 @@ are unchanged. No output prediction changed.
 | P2 malformed cache | `json.loads` on a corrupt entry crashed the call | A corrupt or non-object entry is a miss and is deleted |
 | P2 explicit proxy auth | `--proxy-auth` still sent a local key when one was set | Explicit proxy auth never sends one; the Roar profile default sends a local key if set, else relies on the proxy |
 | P2 cost reporting | `model_spent_paise_header` summed the budget ledger (estimates and reserves) | It now sums provider-reported costs only; `budget_charged_paise` is the ledger; `model_cost_paise` splits actual, estimated and unpriced |
+
+## D073 — Complete repository audit, offline fixes (2026-10-25)
+
+Continue on existing local main from 46f22b2. Reproduce failures before repairs: properly frame
+loopback HTTP responses; ground facts only in fully displayed source items; protect inputs and
+completed runs from output collisions; bind evaluation to evidence bytes; scope state, categories
+and fact metadata to the audit cutoff; independently verify output coverage and treated copies;
+preserve contradictory-request authorization; bound PDF decompression; close SQL/error streams;
+make cache writes atomic under concurrency; reject invalid accounting and admit investigator turns
+against remaining budgets. No provider roles or deterministic decision authority change.
+
+The full findings, regression evidence and current measurements are in
+`evaluation/CODE_AUDIT_REPORT.md`. New measurements use offline inference, copied response caches,
+replay doubles and local HTTP servers only. Historical experiment results, root output, datasets,
+credentials, caches and recovery stashes are preserved. No paid calls or push are authorized for
+this audit; fixes are committed locally for independent review.

@@ -36,9 +36,11 @@ class Policy:
     def __init__(self, rules, presume_retention: bool = False):
         self.presume_retention = presume_retention
         self.by_category = {}
+        self.conflicts = set()
         self.issues = []
         for rule in rules:
             if rule.data_category in self.by_category:
+                self.conflicts.add(rule.data_category)
                 self.issues.append(f'POLICY_CONFLICT: several rules for {rule.data_category}')
             self.by_category[rule.data_category] = rule
         for category, rule in self.by_category.items():
@@ -50,6 +52,8 @@ class Policy:
                                    f'implemented semantics expect {expected}')
 
     def treatment(self, category: str, *, retention_until: datetime | None, audit_at: datetime) -> Treatment:
+        if category in self.conflicts:
+            raise PolicyError(f'POLICY_CONFLICT: several supplied rules for {category}')
         if category == 'DATA_FLOW':
             return Treatment('', 'DISABLE_FLOW', 'active processes that copy the subject must be disabled')
         rule = self.by_category.get(category)

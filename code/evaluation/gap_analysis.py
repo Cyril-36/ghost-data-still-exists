@@ -18,14 +18,16 @@ match the run's source status and media extractions, or the analysis refuses to 
 from __future__ import annotations
 
 import json
+import hashlib
 from collections import Counter
 from pathlib import Path
 
 from ghostaudit.config import EngineConfig
+from ghostaudit.audit import load_disclosures
 from ghostaudit.corpus import build_corpus
 from ghostaudit.identity import IdentityIndex, resolve_subject
 from ghostaudit.inputs import load_context, load_requests
-from ghostaudit.output import read_output
+from ghostaudit.output import read_output, validate_output
 from ghostaudit.planner import discover
 from ghostaudit.providers import Gateway, ProviderConfig
 
@@ -35,6 +37,12 @@ FIELDS = ('phase', 'system_id', 'resource_id', 'operation', 'state')
 def run_corpus(context, run_dir: Path):
     """The audited run's evidence universe: same config, media from cached responses only (no calls)."""
     manifest = json.loads((Path(run_dir) / 'run_manifest.json').read_text(encoding='utf-8'))
+    allowed = {'user_identities.csv', 'user_audit_log.csv', 'system_activity.csv', 'deletion_rules.csv',
+               'evidence_files.csv'} | {m.file_path for m in context.manifest}
+    for name, expected in {**manifest.get('dataset_files_sha256', {}),
+                           **manifest.get('evidence_files_sha256', {})}.items():
+        if name not in allowed or hashlib.sha256((context.root / name).read_bytes()).hexdigest() != expected:
+            raise ValueError(f'input hash differs from audited run: {name}')
     used_gateway = manifest['inference_modes']['gateway_mode'] is not None
     profile = manifest['inference_modes'].get('providers', {}).get('intent')
     if used_gateway and profile is None:
@@ -54,14 +62,21 @@ def run_corpus(context, run_dir: Path):
 
 def analyze(dataset: Path, requests_path: Path, predictions: Path, expected: Path, run_dir: Path) -> dict:
     context = load_context(dataset)
+    manifest = json.loads((Path(run_dir) / 'run_manifest.json').read_text(encoding='utf-8'))
+    if hashlib.sha256(Path(requests_path).read_bytes()).hexdigest() != manifest['requests_sha256']:
+        raise ValueError('requests hash does not match audited run')
+    disclosures = load_disclosures(run_dir, predictions)
     corpus = run_corpus(context, run_dir)
     index = IdentityIndex(context)
     requests = {r.case_id: r for r in load_requests(requests_path)}
-    plans = {json.loads(line)['case_id']: json.loads(line)
-             for line in open(Path(run_dir) / 'case_plans.jsonl', encoding='utf-8')}
+    with open(Path(run_dir) / 'case_plans.jsonl', encoding='utf-8') as handle:
+        plans = {record['case_id']: record for record in map(json.loads, handle)}
     predicted = {r.case_id: r for r in read_output(predictions)}
+    validate_output(list(predicted.values()), list(requests.values()), context.evidence, disclosures)
+    gold_rows = read_output(expected)
+    validate_output(gold_rows, list(requests.values()), context.evidence)
     causes, rows = Counter(), []
-    for gold in read_output(expected):
+    for gold in gold_rows:
         req, plan, pred = requests[gold.case_id], plans[gold.case_id], predicted[gold.case_id]
         have = {tuple(getattr(s, f) for f in FIELDS): s.evidence_id for s in pred.steps}
         subject = resolve_subject(req.email, req.audit_at, index, corpus)

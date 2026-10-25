@@ -265,6 +265,8 @@ class IntentOutcome:
 
 
 def _agrees(det: Intent, other: Intent) -> bool:
+    if det.reason == 'both deletion and preservation statements' and other.scope == ACCOUNT:
+        return False  # a model may narrow to an item, never waive an explicit preservation instruction
     return det.decision == UNRESOLVED or det.decision == other.decision
 
 

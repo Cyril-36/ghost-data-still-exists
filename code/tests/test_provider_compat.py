@@ -189,13 +189,17 @@ def serve(responses, seen):
     """Answer each request with the next (status, headers, body); record (method, path, auth)."""
     class Handler(http.server.BaseHTTPRequestHandler):
         def reply(self):
+            # Drain POST data before closing: unread request bytes cause TCP resets on macOS.
+            self.rfile.read(int(self.headers.get('Content-Length', '0')))
             seen.append((self.command, self.path, self.headers.get('Authorization')))
             status, headers, body = responses.pop(0) if len(responses) > 1 else responses[0]
+            encoded = json.dumps(body).encode()
             self.send_response(status)
             for k, v in headers.items():
                 self.send_header(k, v)
+            self.send_header('Content-Length', str(len(encoded)))
             self.end_headers()
-            self.wfile.write(json.dumps(body).encode())
+            self.wfile.write(encoded)
         do_GET = do_POST = reply
 
         def log_message(self, *a):

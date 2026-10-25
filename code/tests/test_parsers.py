@@ -103,6 +103,7 @@ COMMIT;
             with self.subTest(hostile), self.assertRaises(sqlite3.DatabaseError):
                 load_snapshot(hostile)
         con = load_snapshot('CREATE TABLE t(a); INSERT INTO t VALUES (1);')
+        self.addCleanup(con.close)
         with self.assertRaises(sqlite3.DatabaseError):
             con.execute('INSERT INTO t VALUES (2)')                          # read-only after load
         self.assertEqual(con.execute('SELECT a FROM t').fetchall(), [(1,)])

@@ -130,11 +130,11 @@ def interpret_pdf(entry, raw, corpus, gateway) -> tuple[list, SourceReport, dict
     report = SourceReport(entry.file_id, entry.file_path, 'pdf')
     try:
         pages = extract_pdf_text(raw)
+        facts = harvest(pages)
     except (PdfError, ValueError, KeyError) as exc:
         report.status = 'UNSUPPORTED_MEDIA'
         report.issues.append(f'UNREADABLE_MEDIA: native text extraction failed ({exc}); needs OCR/vision')
         return [], report, {}
-    facts = harvest(pages)
     text = '\n'.join('\n'.join(p) for p in pages)
     extraction = {'pages': len(pages), 'lines': sum(len(p) for p in pages), 'facts': {
         k: [str(v[0]) for v in vals] for k, vals in facts.items()}}

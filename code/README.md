@@ -1,7 +1,8 @@
 # Ghost Data Still Exists — deletion audit
 
-Status: **Phase 4: investigator and independent verifier built and tested offline. Live investigation is
-pending a working gateway; the root `output.csv` remains the Phase 3 provisional output.**
+Status: **Phase 4: investigator and independent verifier implemented. Historical live experiments
+are recorded in `decisions.md`; the current audit uses offline, loopback and replay checks only.
+The root `output.csv` remains the preserved Phase 3 provisional output.**
 The engine parses all structured evidence, resolves current and historical
 identities, reconstructs state at each case's `audit_at`, applies the supplied
 policy, and derives status and steps from validated obligations. Models are used
@@ -31,9 +32,9 @@ runs offline.
 python3 code/main.py audit --requests dataset/sample_deletion_requests.csv \
     --output .runs/sample/predictions.csv --run-dir .runs/sample
 
-# Staged (Jev typed intent -> generative fallback; PDF kind; blind screenshot reader), hard spend ceiling
-python3 code/main.py audit --requests dataset/deletion_requests.csv --output output.csv \
-    --run-dir runs/phase3-hardened --intent staged --env-file .env --budget-paise 1500
+# Staged (paid): use fresh paths; reservations bound admitted estimated spending
+python3 code/main.py audit --requests dataset/deletion_requests.csv --output .runs/staged/predictions.csv \
+    --run-dir .runs/staged --intent staged --env-file .env --budget-paise 1500
 
 # Validate structure, case set, order, citation existence and eligibility, and disclosed fallbacks
 python3 code/main.py validate --requests dataset/deletion_requests.csv \
@@ -48,7 +49,7 @@ python3 code/evaluation/main.py errors ...          # case-by-case differences g
 python3 code/evaluation/main.py fixtures --out .runs/fixtures
 python3 code/evaluation/main.py intent-benchmark --env-file .env --out .runs/intent   # live, bounded
 
-python3 -m unittest discover -s code/tests      # 224 tests, offline (replay doubles, loopback servers)
+python3 -m unittest discover -s code/tests      # offline: replay doubles and loopback servers
 ```
 
 Providers (D070): `--provider tokenbazaar` (default, unchanged) or `--provider roar`. Split them with
@@ -81,9 +82,14 @@ arguments and returned handles, accepted and rejected facts with reasons, verifi
 rounds, and the stop reason. `case_plans.jsonl` gains `routing`, `verifier` and `investigation`, and
 `run_manifest.json` gains a `phase4` summary.
 
-`--intent offline|jev|staged` selects the intent mode. `--budget-paise` is a hard
-spend ceiling: every call reserves a worst-case cost before it is sent (25 paise per
-decision, 120 per chat call), so concurrent calls cannot overrun it. Gateway calls never
+Use a fresh `--run-dir` for every audit. Nonempty directories and paths that could overwrite
+dataset files, requests or diagnostics are rejected. Existing results remain available for validation.
+
+`--intent offline|jev|staged` selects the intent mode. `--budget-paise` bounds admitted
+spending against one shared reservation ledger. Reservations use catalog estimates when available
+and defaults (25 paise per decision, 120 per chat call) otherwise. Unknown prices, incomplete
+catalogs or larger actual charges prevent a guarantee about the eventual provider invoice; configure
+a provider-side spending limit before paid runs. Gateway calls never
 follow redirects, so the bearer token cannot reach another origin. Validated model
 responses are cached under `.cache/ghostaudit/` (gitignored), keyed by endpoint,
 requested model, prompt hash and input, and re-validated on every read. A rerun with a warm cache makes 0 network calls, and the manifest
@@ -95,7 +101,7 @@ Each run directory contains:
 - `coverage.json`: per-source parse and interpretation status.
 - `media_extractions.json`: what was read from each PDF or screenshot.
 - `usage.jsonl`: one line per model attempt, recording requested and returned model, tokens (including cached input tokens), latency, cost header, retries and cache use.
-- `run_manifest.json`: input hashes, code and prompt hashes, engine config, inference modes, and the output SHA-256.
+- `run_manifest.json`: input and evidence-body hashes, code and prompt hashes, engine config, inference modes, and the output SHA-256. Historical manifests without evidence-body hashes cannot prove those original bytes.
 
 ## Pipeline
 
@@ -147,9 +153,11 @@ The defaults are strict. Relaxations exist only as recorded experiments
 - **Retention:** 52 of the 61 fallbacks are retained records with no supplied retention period. They stay UNRESOLVED under the strict policy.
 - **Subject-level absence:** 58 COMPLETE rows prove profile absence at subject level, without a citable resource ID.
 
-**Planned:**
-- An investigator using bounded tool calls and `choose_candidate`.
-- An independent verifier.
-- The final submission run.
+**Implemented Phase 4:** bounded investigation with shown-text grounding, validated fact proposals,
+next-turn token/cost admission and an independent verifier. Historical model-dependent tool efficiency
+and accuracy limits remain; passing replay checks does not establish live improvement.
 
-See `evaluation/evaluation_report.md`, `evaluation/usage_report.md` and `decisions.md`.
+**Pending:** independent review and the final submission run.
+
+See `evaluation/CODE_AUDIT_REPORT.md`, `evaluation/evaluation_report.md`,
+`evaluation/usage_report.md` and `decisions.md`.

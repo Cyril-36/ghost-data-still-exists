@@ -86,6 +86,8 @@ class Verifier:
     def __init__(self, corpus, index, context, texts):
         self.corpus, self.index, self.context, self.texts = corpus, index, context, texts
         self.rules = {r.data_category: r for r in context.rules}
+        self.policy_conflicts = {r.data_category for r in context.rules
+                                 if sum(q.data_category == r.data_category for q in context.rules) > 1}
         self._lower = {}
 
     # -- evidence helpers ------------------------------------------------------------------------
@@ -135,15 +137,17 @@ class Verifier:
     def _foreign(self, observations, subject):
         own = set(subject.user_ids)
         return sorted({u for o in observations if o.kind == STATE for t in o.tokens if t not in subject.tokens
-                       for u in self.index.owner.get(t, ()) - own})
+                        for u in self.index.owner.get(t, set()) - own})
 
-    def _categories(self, system, observations):
+    def _categories(self, system, observations, cutoff):
         cats = {o.category for o in observations if o.system_id == system and o.kind == STATE and o.category}
-        held = self.corpus.system_categories.get(system, set())
+        held = self.corpus.categories_for(system, cutoff) if not cats else set()
         return cats or (set(held) if len(held) == 1 else set())
 
     def _allowed(self, category, cutoff, observations):
         """-> (allowed operations, problem or '')."""
+        if category in self.policy_conflicts:
+            return set(), f'several supplied policy rules for {category}'
         if category == 'DATA_FLOW':
             return FAMILY['FLOW'], ''
         rule = self.rules.get(category)
@@ -186,6 +190,8 @@ class Verifier:
                     self._check_citation(s, obs, cutoff, add)
                 if plan.status == 'COMPLETE' and s.operation == 'VERIFY_RECORD_ABSENT':
                     self._check_copies(s, obs, cutoff, subject, add)
+                elif plan.status == 'COMPLETE' and s.operation in ('VERIFY_RECORD_REDACTED', 'VERIFY_RECORD_ANONYMIZED'):
+                    self._check_treatment_copies(s, obs, cutoff, subject, add)
             how = owned.get((system, rid))
             ops = {s.operation for s in steps}
             if how is None:
@@ -198,7 +204,7 @@ class Verifier:
             others = self._foreign([o for o in obs if o.system_id == system], subject)
             if others:
                 add('CROSS_PERSON', 'BLOCKING', f'evidence for {rid} identifies {others}', system, rid)
-            categories = self._categories(system, obs)
+            categories = self._categories(system, obs, cutoff)
             if plan.intent.scope == 'ITEM' and plan.intent.target not in categories:
                 add('SCOPE_EXCEEDED', 'BLOCKING', f'{rid} is not in the authorized category {plan.intent.target}',
                     system, rid)
@@ -265,6 +271,23 @@ class Verifier:
             add('REPLICA_DISAGREEMENT', 'BLOCKING', f'{step.resource_id} is still present at {present} ({source})',
                 step.system_id, step.resource_id, source)
 
+    def _check_treatment_copies(self, step, obs, cutoff, subject, add):
+        states = [o for o in obs if o.kind == STATE and o.system_id == step.system_id]
+        omitted = [(s.location, s.observed_at) for s in self.corpus.scopes if s.system_id == step.system_id
+                   and eligible(s, cutoff) and step.resource_id not in s.members and self.corpus.covers(s, subject.tokens)]
+        for location in {o.location for o in states}:
+            local = [o for o in states if o.location == location]
+            presence = [(o.observed_at, o.presence) for o in local if o.presence]
+            presence += [(at, ABSENT) for loc, at in omitted if loc == location]
+            if presence and max(presence, key=lambda v: (v[0], v[1] == PRESENT))[1] == ABSENT:
+                continue
+            removed = [at for at, value in presence if value == ABSENT]
+            scans = [o for o in local if o.exposed is not None and (not removed or o.observed_at > max(removed))]
+            latest = max((o.observed_at for o in scans), default=None)
+            if not scans or any(o.exposed for o in scans if o.observed_at == latest):
+                add('REPLICA_DISAGREEMENT', 'BLOCKING', f'{step.resource_id} is not proven treated at {location}',
+                    step.system_id, step.resource_id)
+
     def _check_facts(self, facts, case, cutoff):
         out = []
         for f in facts:
@@ -290,14 +313,16 @@ class Verifier:
         return out
 
     def _check_coverage(self, plan, owned, steps_by_resource, extra, cutoff, case, add):
-        accounted = {(o.system_id, o.resource_id) for o in plan.obligations if o.resource_id} | set(steps_by_resource)
+        accounted = set(steps_by_resource)
+        accounted |= {(o.system_id, o.resource_id) for o in plan.obligations
+                      if o.resource_id and o.result == 'UNRESOLVED'}
         target = plan.intent.target if plan.intent.scope == 'ITEM' else None
         single_item = target is not None and not plan.intent.whole_category
         for (system, rid), how in sorted(owned.items()) if not single_item else ():   # one item authorizes one record
             if (system, rid) in accounted or how == 'lookup':
                 continue
             obs = self._observations(rid, cutoff, extra)
-            if target and target not in self._categories(system, obs):
+            if target and target not in self._categories(system, obs, cutoff):
                 continue
             if any(o.kind == STATE and o.system_id == system for o in obs):
                 add('OMITTED_RESOURCE', 'BLOCKING', f'{rid} is tied to the subject by eligible evidence but is not '

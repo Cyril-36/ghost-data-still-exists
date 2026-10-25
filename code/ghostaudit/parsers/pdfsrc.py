@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 _OBJ = re.compile(rb'(\d+)\s+0\s+obj(.*?)endobj', re.S)
 _REF = re.compile(rb'(\d+)\s+0\s+R')
 _TOKEN = re.compile(rb'\((?:\\.|[^\\)])*\)|<[0-9A-Fa-f\s]*>|\[|\]|/[^\s/\[\]()<>]+|[-+]?\d*\.?\d+|[A-Za-z\'"*]+')
+MAX_STREAM_BYTES = 8 * 1024 * 1024
 
 
 class PdfError(ValueError):
@@ -37,7 +38,19 @@ def _dict(body: bytes) -> bytes:
 def _stream(body: bytes) -> bytes:
     head = _dict(body)
     start = body.index(b'stream') + len(b'stream')
-    data = body[start:body.rindex(b'endstream')].lstrip(b'\r\n').rstrip(b'\r\n')
+    if body[start:start + 2] == b'\r\n':
+        start += 2
+    elif body[start:start + 1] in (b'\r', b'\n'):
+        start += 1
+    length = re.search(rb'/Length\s+(\d+)\s*(?=/|>>)', head)
+    if length:
+        data = body[start:start + int(length.group(1))]
+    else:
+        data = body[start:body.rindex(b'endstream')]
+        if data.endswith(b'\r\n'):
+            data = data[:-2]
+        elif data.endswith((b'\r', b'\n')):
+            data = data[:-1]
     if b'ASCII85Decode' in head:
         data = data.strip()
         if data.startswith(b'<~'):
@@ -46,7 +59,15 @@ def _stream(body: bytes) -> bytes:
             data = data[:-2]
         data = base64.a85decode(data)
     if b'FlateDecode' in head:
-        data = zlib.decompress(data)
+        try:
+            decoder = zlib.decompressobj()
+            data = decoder.decompress(data, MAX_STREAM_BYTES + 1)
+        except zlib.error as exc:
+            raise PdfError('invalid compressed PDF stream') from exc
+        if len(data) > MAX_STREAM_BYTES or decoder.unconsumed_tail or not decoder.eof:
+            raise PdfError('PDF stream exceeds extraction limit or is truncated')
+    if len(data) > MAX_STREAM_BYTES:
+        raise PdfError('PDF stream exceeds extraction limit')
     return data
 
 
@@ -204,6 +225,8 @@ def extract_pdf_text(raw: bytes) -> list[list[str]]:
     if catalog is None:
         raise PdfError('no catalog')
     pages_ref = re.search(rb'/Pages\s+(\d+)\s+0\s+R', _dict(objects[catalog]))
+    if pages_ref is None:
+        raise PdfError('catalog has no page-tree reference')
     pages = []
     for page in _page_refs(objects, int(pages_ref.group(1))):
         body = _dict(objects[page])

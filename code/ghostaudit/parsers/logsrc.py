@@ -115,8 +115,9 @@ def _facts(event, d):
         return 'ANALYTICS_PROFILE', None, dict(presence=PRESENT, exposed=exposed_fields('ANALYTICS_PROFILE', d))
     if event in ('analytics_profile_read', 'analytics_identity_scan'):
         n = _int(d.get('direct_identifiers'))
-        exposed = ('direct_identifiers',) if (n or 0) > 0 else ()
-        if n is None and event == 'analytics_identity_scan':
+        explicit = exposed_fields('ANALYTICS_PROFILE', d)
+        exposed = explicit or (('direct_identifiers',) if n is not None and n > 0 else () if n == 0 else None)
+        if exposed is None and event == 'analytics_identity_scan' and d.get('matched_value'):
             exposed = ('matched_value',)
         return 'ANALYTICS_PROFILE', None, dict(presence=PRESENT, exposed=exposed)
     if event in ('connector_config_read_completed', 'connector_config_loaded', 'connector_heartbeat'):

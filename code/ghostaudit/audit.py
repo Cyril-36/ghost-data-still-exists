@@ -23,6 +23,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .config import STRICT, EngineConfig
+from .contracts import ContractError
 from .corpus import build_corpus
 from .identity import IdentityIndex
 from .intent_models import decide_intents
@@ -35,7 +36,7 @@ from .providers import Gateway
 from .tools import SourceText
 from .verifier import Verifier
 
-ENGINE_VERSION = 'phase4-1'
+ENGINE_VERSION = 'phase4-2'
 
 
 def _sha256(path: Path) -> str:
@@ -84,7 +85,18 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
     generative fallback for escalations). `investigator` + `investigator_gateway`: routed cases are
     investigated (sequentially). `media_cache`: earlier validated screenshot extractions that
     `inspect_media` may show when this run has no reader of its own."""
-    dataset, run_dir = Path(dataset), Path(run_dir)
+    dataset, run_dir, output = Path(dataset).resolve(), Path(run_dir).resolve(), Path(output).resolve()
+    requests_path = Path(requests_path).resolve()
+    if output.is_relative_to(dataset) or output == requests_path or run_dir.is_relative_to(dataset):
+        raise ContractError('output and run directory must not overwrite or live inside dataset inputs')
+    if requests_path.is_relative_to(run_dir) or output == run_dir:
+        raise ContractError('run directory conflicts with requests or output')
+    reserved = {'case_plans.jsonl', 'case_files.jsonl', 'unresolved_cases.jsonl', 'media_extractions.json',
+                'coverage.json', 'usage.jsonl', 'run_manifest.json', 'model_cache'}
+    if output.is_relative_to(run_dir) and output.relative_to(run_dir).parts[0] in reserved:
+        raise ContractError('output conflicts with a run diagnostic')
+    if run_dir.exists() and (not run_dir.is_dir() or any(run_dir.iterdir())):
+        raise ContractError('run directory is not empty; use a fresh path to preserve previous run artifacts')
     context = load_context(dataset)
     requests = load_requests(requests_path)
     corpus = build_corpus(context, config, gateway)
@@ -181,6 +193,7 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
         'dataset_files_sha256': {name: _sha256(dataset / name) for name in sorted(
             ['user_identities.csv', 'user_audit_log.csv', 'system_activity.csv', 'deletion_rules.csv',
              'evidence_files.csv'])},
+        'evidence_files_sha256': {m.file_path: _sha256(dataset / m.file_path) for m in context.manifest},
         'output_file': str(output), 'output_sha256': _sha256(output),
         'cases': len(plans),
         'statuses': dict(Counter(p.status for p in plans)),

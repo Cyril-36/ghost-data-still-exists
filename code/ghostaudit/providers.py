@@ -34,6 +34,7 @@ import math
 import os
 import re
 import threading
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -414,6 +415,15 @@ class Gateway:
 
     def __init__(self, config: ProviderConfig | None = None):
         config = (config or ProviderConfig()).resolved()
+        for name in ('max_cost_paise', 'cost_reserve_paise', 'chat_cost_reserve_paise', 'timeout_s'):
+            value = getattr(config, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise ProviderError(f'{name} must be a finite nonnegative number')
+        if config.timeout_s == 0:
+            raise ProviderError('timeout_s must be positive')
+        for name in ('max_calls', 'max_retries', 'max_rate_limit_retries'):
+            if type(getattr(config, name)) is not int or getattr(config, name) < 0:
+                raise ProviderError(f'{name} must be a nonnegative integer')
         if not config.base_url.startswith(ALLOWED_ORIGINS):
             raise ProviderError(f'base URL outside the allowlist: {config.base_url}')
         self.config = config
@@ -481,9 +491,14 @@ class Gateway:
         if path is None:
             return
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix('.tmp')
-        tmp.write_text(json.dumps(entry, ensure_ascii=False), encoding='utf-8')
-        os.replace(tmp, path)
+        fd, name = tempfile.mkstemp(prefix=f'.{path.stem}.', suffix='.tmp', dir=path.parent)
+        tmp = Path(name)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+                json.dump(entry, handle, ensure_ascii=False, allow_nan=False)
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     # --- transport ----------------------------------------------------------------------
     def _post(self, path, body):
@@ -511,8 +526,17 @@ class Gateway:
             cost = response.headers.get(self.profile.cost_header) if self.profile.cost_header else None
             return json.loads(response.read().decode('utf-8')), (float(cost) if cost else None)
 
-    def _estimate(self, model, rec):
+    def _price(self, model):
         price = self.pricing.get(model)
+        if not isinstance(price, dict) or not price:
+            return None
+        values = [price.get(k, 0) for k in ('inputPer1M', 'outputPer1M')]
+        if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0 for v in values):
+            return None
+        return price
+
+    def _estimate(self, model, rec):
+        price = self._price(model)
         if not price or rec.input_tokens is None:
             return None
         usd = (rec.input_tokens * price.get('inputPer1M', 0) + (rec.output_tokens or 0) * price.get('outputPer1M', 0)) / 1e6
@@ -523,20 +547,22 @@ class Gateway:
         try:
             payload = self._get('models')
         except (urllib.error.URLError, OSError, ValueError, ProviderError) as exc:
+            if isinstance(exc, urllib.error.HTTPError):
+                exc.close()
             self.pricing_error = f'price catalog unavailable: {type(exc).__name__}'   # calls stay unpriced
             return self.pricing
         for entry in payload.get('data', []) if isinstance(payload, dict) else []:
-            if isinstance(entry, dict) and isinstance(entry.get('roar_pricing'), dict):
+            if isinstance(entry, dict) and isinstance(entry.get('id'), str) and isinstance(entry.get('roar_pricing'), dict):
                 self.pricing[entry.get('id')] = entry['roar_pricing']
         return self.pricing
 
     def _worst_case(self, model, body, output_limit):
         """Upper-bound cost of one call from catalog prices: every 3 request bytes counted as a token,
         plus the full output limit. None without a price (the configured flat reserve applies)."""
-        price = self.pricing.get(model)
+        price = self._price(model)
         if not price:
             return None
-        tokens_in = len(json.dumps(body, ensure_ascii=False)) / 3
+        tokens_in = len(json.dumps(body, ensure_ascii=False).encode('utf-8')) / 3
         usd = (tokens_in * price.get('inputPer1M', 0) + output_limit * price.get('outputPer1M', 0)) / 1e6
         return usd * USD_PAISE
 
@@ -558,7 +584,14 @@ class Gateway:
         rec = UsageRecord(role, endpoint, requested_model, payload.get('model'), self.mode, 'ok', latency,
                           retries=retries, request_id=payload.get('id'), cost_paise_header=cost, fingerprint=fp)
         try:                                       # a raising extractor or validator still settles the reserve
+            if cost is not None and (isinstance(cost, bool) or not isinstance(cost, (int, float)) or
+                                     not math.isfinite(cost) or cost < 0):
+                rec.cost_paise_header = None
+                raise ValueError('invalid billed cost')
             for k, v in extract_usage(payload).items():
+                if k in ('input_tokens', 'output_tokens', 'reasoning_tokens', 'cached_input_tokens') \
+                        and v is not None and _count(v) is None:
+                    raise ValueError('invalid token count')
                 setattr(rec, k, v)
             if cost is None:
                 rec.cost_estimate_paise = self._estimate(requested_model, rec)
@@ -608,14 +641,21 @@ class Gateway:
                                          time.time() - started, retries=retries, fingerprint=fp, error=str(exc)),
                              reserve)
                 raise ProviderError(f'{endpoint} returned a non-JSON body') from exc
+            except ProviderError as exc:               # local pre-send failures must also release reservations
+                self._record(UsageRecord(role, endpoint, requested_model, None, self.mode, 'error',
+                                         time.time() - started, retries=retries, fingerprint=fp,
+                                         error=type(exc).__name__), reserve)
+                raise
             retries += 1
             time.sleep(wait if wait is not None else min(20.0, 1.5 * 2 ** retries))
 
     def _error_detail(self, exc) -> str:
         try:
-            raw = exc.read()
+            raw = exc.read(65536)
         except Exception:                          # an unreadable body only loses the explanation
             raw = b''
+        finally:
+            exc.close()
         return provider_message(raw, os.environ.get(self.config.api_key_env))
 
     # --- public API ---------------------------------------------------------------------

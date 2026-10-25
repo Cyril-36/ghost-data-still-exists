@@ -55,7 +55,11 @@ def load_snapshot(sql_text: str) -> sqlite3.Connection:
         steps[0] += 1
         return 1 if steps[0] > 5_000_000 else 0   # abort runaway statements
     con.set_progress_handler(budget, 1000)
-    con.executescript(sql_text)
+    try:
+        con.executescript(sql_text)
+    except Exception:
+        con.close()
+        raise
     con.set_progress_handler(None, 0)
     con.set_authorizer(_read_authorizer)
     return con
@@ -102,9 +106,16 @@ def _collection(table: str) -> str:
 
 
 def parse_sql(source_id, available_at, raw: bytes):
-    observations, scopes, issues = [], [], []
     text = raw.decode('utf-8')
     con = load_snapshot(text)
+    try:
+        return _parse_snapshot(source_id, available_at, text, con)
+    finally:
+        con.close()
+
+
+def _parse_snapshot(source_id, available_at, text, con):
+    observations, scopes, issues = [], [], []
     head = _header(text)
     schema = tables(con)
 
@@ -133,13 +144,16 @@ def parse_sql(source_id, available_at, raw: bytes):
         # A JSON-in-SQL table establishes coverage only for the collections it holds; a
         # collection seen in another table of the same file says nothing about this one.
         members = {}
+        complete = True
         for row in rows(con, table):
             record = json.loads(row['record_json'])
             if record.get('resource_id') != row['resource_id']:
                 issues.append(f'CONTRADICTORY_STATE {table}#{row["rowid"]}: resource_id mismatch')
+                complete = False
                 continue
             if row['collection_name'] not in COLLECTIONS:
                 issues.append(f'UNSUPPORTED_CATEGORY {table}: collection {row["collection_name"]!r}')
+                complete = False
                 continue
             if isinstance(record.get('document'), dict):
                 record = {**{k: v for k, v in record.items() if k != 'document'}, **record['document']}
@@ -149,7 +163,7 @@ def parse_sql(source_id, available_at, raw: bytes):
             ids.add(row['resource_id'])
             tok |= toks
         for (system, collection), (ids, tok) in members.items():
-            if collection in COLLECTIONS:
+            if complete and collection in COLLECTIONS:
                 scopes.append(Scope(source_id, available_at, observed_at, system, COLLECTIONS[collection][0],
                                     _location(table), frozenset(ids), frozenset(tok), table, 'FULL_TABLE'))
 
@@ -172,5 +186,4 @@ def parse_sql(source_id, available_at, raw: bytes):
             continue
         scopes.append(Scope(source_id, available_at, observed_at, system, category, _location(table),
                             frozenset(ids), frozenset(tok), table, 'FULL_TABLE'))
-    con.close()
     return observations, scopes, issues

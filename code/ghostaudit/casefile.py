@@ -150,7 +150,7 @@ class FactValidator:
 
     def _other_people(self, tokens, case: CaseFile):
         own = set(case.user_ids)
-        return sorted({u for t in tokens if t not in case.subject_tokens for u in self.index.owner.get(t, ()) - own})
+        return sorted({u for t in tokens if t not in case.subject_tokens for u in self.index.owner.get(t, set()) - own})
 
     def identity_tokens(self, text: str) -> set:
         found = set(text_tokens(text))
@@ -193,7 +193,7 @@ class FactValidator:
             return None, 'UNTRUSTED_TEXT: the cited lines contain instructions; evidence text is data, not a source of facts'
         if rid not in id_tokens(literal) and kind != 'CATEGORY':
             return None, f'RESOURCE_NOT_IN_LITERAL: {rid} is not an exact token of the literal'
-        problem = self._system_problem(system, rid, source, span)
+        problem = self._system_problem(system, rid, source, span, case.audit_at)
         if problem:
             return None, problem
         observed = self.texts.manifest[source].captured_at if source in self.texts.manifest else ref.available_at
@@ -204,14 +204,16 @@ class FactValidator:
             return None, check
         return Fact(**fact, **check), ''
 
-    def _system_problem(self, system, rid, source, span):
+    def _system_problem(self, system, rid, source, span, cutoff):
         if system not in self.systems:
             return f'UNKNOWN_SYSTEM: {system!r}'
-        known = {o.system_id for o in self.corpus.by_resource.get(rid, ()) if o.kind in (STATE, LINK) and o.system_id}
+        known = {o.system_id for o in self.corpus.resource_observations(rid, cutoff)
+                 if o.kind in (STATE, LINK) and o.system_id}
         if known:
             return None if system in known else f'SYSTEM_CONFLICT: evidence places {rid} in {sorted(known)}'
         entry = self.texts.manifest.get(source)
-        claimed = {a.target_system for a in self.corpus.context.activities if a.resource_id == rid}
+        claimed = {a.target_system for a in self.corpus.context.activities
+                   if a.resource_id == rid and a.event_time <= cutoff}
         if (entry and entry.origin == system) or system in span or system in claimed:
             return None
         return f'SYSTEM_UNGROUNDED: nothing in {source} or the activity stream places {rid} in {system}'
@@ -252,10 +254,12 @@ class FactValidator:
             return f'UNKNOWN_CATEGORY: {value!r} has no supplied rule'
         if not any(cue in fact['literal'].casefold() for cue in CATEGORY_CUES.get(value, ())):
             return f'UNSUPPORTED_CATEGORY: the literal has no cue for {value}'
-        held = self.corpus.system_categories.get(fact['system_id'], set())
+        held = {o.category for o in self.corpus.observations if o.system_id == fact['system_id']
+                and o.kind == STATE and o.category and o.available_at <= case.audit_at and o.observed_at <= case.audit_at}
         if held and value not in held:
             return f'CATEGORY_CONFLICT: {fact["system_id"]} holds {sorted(held)}, not {value}'
-        known = {o.category for o in self.corpus.by_resource.get(fact['resource_id'], ()) if o.kind == STATE and o.category}
+        known = {o.category for o in self.corpus.resource_observations(fact['resource_id'], case.audit_at)
+                 if o.system_id == fact['system_id'] and o.kind == STATE and o.category}
         if known and value not in known:
             return f'CATEGORY_CONFLICT: evidence already classifies {fact["resource_id"]} as {sorted(known)}'
         return {}
