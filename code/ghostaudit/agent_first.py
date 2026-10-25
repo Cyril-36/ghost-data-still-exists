@@ -21,7 +21,7 @@ from .identity import resolve_subject
 from .intent import ACCOUNT, DELETE, ITEM, NON_DELETION, UNRESOLVED, Intent, classify, hypothetical_deletion
 from .investigator import Investigator
 from .output import parse_steps_json, row_problems
-from .planner import CasePlan, Obligation
+from .planner import OPERATIONS, CasePlan, Obligation
 from .policy import PolicyError
 from .providers import ProviderError, ReplayGateway, strict_json
 from .tools import EVIDENCE_TOOLS, TOOL_SCHEMAS, InvestigationTools, locator_lines
@@ -77,6 +77,26 @@ CATALOG_TOOL = {'type': 'function', 'function': {'name': 'list_sources',
 AGENT_TOOLS.insert(0, CATALOG_TOOL)
 HALLUCINATION_CODES = {'INVENTED_RESOURCE', 'INELIGIBLE_CITATION', 'UNSHOWN_WITNESS', 'UNSUPPORTED_CITATION',
                        'UNSUPPORTED_ASSOCIATION', 'FACT_UNSUPPORTED', 'CROSS_PERSON'}
+
+
+def treatment_chain(policy, category, cutoff):
+    """The supplied policy's required operation chain for a category with no supplied period."""
+    try:
+        action = policy.treatment(category, retention_until=None, audit_at=cutoff).action
+    except PolicyError as exc:
+        return f'{category}: undecidable without supplied evidence ({exc})'
+    ops = [op for op in OPERATIONS[action] if op]
+    return f'{category} ({action}): ' + ' -> '.join(ops) + ('' if len(ops) > 1 else ' only, never a finding or remediation')
+
+
+def policy_treatments(policy, rules, cutoff):
+    """Effective treatment per supplied category: the supplied rules as the verifier applies them."""
+    categories = sorted({r.data_category for r in rules} | {'DATA_FLOW'})
+    return {'chains': [treatment_chain(policy, c, cutoff) for c in categories],
+            'note': 'A finding applies only where eligible evidence shows the violation. A record already in '
+                    'its required final state gets only its VERIFICATION step: cited in a COMPLETE row, empty '
+                    'evidence_id in an INCOMPLETE row. A supplied retention or hold period that has ended is a '
+                    'policy conflict.'}
 
 
 def offline_gateway(gateway):
@@ -297,7 +317,8 @@ class ProposalVerifier:
                 continue
             if not problems:
                 reject('DISCLOSURE_UNSUPPORTED', f'The supplied policy decides {key[0]}/{key[1]} '
-                       f'({", ".join(sorted(categories))}); plan its steps instead.')
+                       f'({", ".join(sorted(categories))}); plan its steps instead: '
+                       + '; '.join(treatment_chain(self.policy, c, plan.request.audit_at) for c in sorted(categories)))
                 continue
             disclosed[key] = why.strip()
         return disclosed
@@ -357,6 +378,7 @@ class AgentFirst:
                  'subject': {'user_ids': subject.user_ids,
                  'identifiers': case.identifiers, 'issues': subject.issues},
                  'policy': [asdict(r) for r in self.corpus.context.rules],
+                 'policy_treatments': policy_treatments(self.policy, self.corpus.context.rules, request.audit_at),
                  'allowed_operations_in_order': OPERATION_TABLE,
                  'source_inventory': {'by_kind': dict(sorted(Counter(self.texts.kind(m.file_id)
                      for m in self.corpus.context.manifest if m.captured_at <= request.audit_at).items())),

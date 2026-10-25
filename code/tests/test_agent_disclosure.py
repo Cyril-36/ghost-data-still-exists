@@ -14,6 +14,7 @@ AUDIT = (T_CAPTURE, 'legal_service', 'fx_audit_P', 'LEGAL_HOLD_RECORD', 'FOUND',
 ATTACH = (T_CAPTURE, 'support_platform', 'fx_attach_L', 'SUPPORT_ATTACHMENT', 'FOUND', EMAIL)
 FOREIGN = (T_CAPTURE, 'legal_service', 'fx_audit_Q', 'LEGAL_HOLD_RECORD', 'FOUND', OTHER)
 GONE = (T_CAPTURE, 'legal_service', 'fx_audit_N', 'LEGAL_HOLD_RECORD', 'NOT_FOUND', EMAIL)
+SECURITY = (T_CAPTURE, 'security_service', 'fx_sec_P', 'SECURITY_AUDIT_LOG', 'FOUND', EMAIL)
 UNTYPED = (T_CAPTURE, 'ledger_service', 'fx_misc_P', '', 'FOUND', EMAIL)
 
 
@@ -129,6 +130,37 @@ class ContractFeedback(unittest.TestCase):
         self.assertEqual([f['message'].split(': ', 1)[1] for f in integrity],
                          ['proposed DELETE_RECORD fx_account_A must have empty evidence_id'])
         self.assertEqual((summary['fallback_count'], row.steps), (1, ()))
+
+
+
+class PolicyTreatmentAffordances(unittest.TestCase):
+    def setUp(self):
+        self.actor = scripted.AgentFirstTests()
+        self.actor.setUp()
+        self.addCleanup(self.actor.doCleanups)
+
+    def test_brief_states_each_supplied_category_chain_as_the_verifier_applies_it(self):
+        root = world(self.actor.base / 'chains', lookup_rows=[SECURITY])
+        p = scripted.proposal(root, 'fx_account_P', 'fx_file_L')
+        p['policy_undecided'] = undecided(('security_service', 'fx_sec_P'))
+        summary, row, received = self.actor.run_agent(
+            [self.actor.inspect('fx_file_L'), [scripted.call('submit_audit', p)]], root=root)
+        brief = json.loads(received[0]['messages'][1]['content'])['policy_treatments']['chains']
+        self.assertIn('SECURITY_AUDIT_LOG (RETAIN): VERIFY_RECORD_PRESENT only, never a finding or remediation', brief)
+        self.assertIn('USER_PROFILE (DELETE): REPORT_REMAINING_RECORD -> DELETE_RECORD -> VERIFY_RECORD_ABSENT', brief)
+        self.assertTrue(any(c.startswith('LEGAL_HOLD_RECORD: undecidable') for c in brief))
+        trace = json.loads((self.actor.base / 'agent/case_files.jsonl').read_text())
+        rejected = [f['message'] for f in trace['agent_proposals'][0]['findings'] if f['code'] == 'DISCLOSURE_UNSUPPORTED']
+        self.assertIn('VERIFY_RECORD_PRESENT only', rejected[0])     # a decidable record names its treatment
+        self.assertEqual((summary['fallback_count'], row.steps), (1, ()))
+
+    def test_a_finding_without_remediation_is_told_the_whole_chain(self):
+        p = copy.deepcopy(self.actor.good)
+        p['steps'] = p['steps'][:1]
+        self.actor.run_agent([self.actor.inspect(), [scripted.call('submit_audit', p)]])
+        trace = json.loads((self.actor.base / 'agent/case_files.jsonl').read_text())
+        message = next(f['message'] for f in trace['agent_proposals'][0]['findings'] if f['code'] == 'INTEGRITY')
+        self.assertIn('REPORT_REMAINING_RECORD -> DELETE_RECORD -> VERIFY_RECORD_ABSENT', message)
 
 
 if __name__ == '__main__':

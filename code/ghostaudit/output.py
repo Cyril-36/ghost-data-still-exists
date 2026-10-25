@@ -145,7 +145,10 @@ def _plan_chain_problems(steps):
         name = f'{system_id}/{resource_id} ({facet})'
         finding, remedy, check = ops.get('FINDING'), ops.get('REMEDIATION'), ops.get('VERIFICATION')
         if finding and remedy not in FINDING_REMEDIATIONS[finding]:
-            yield f'{name}: {finding} needs one of {FINDING_REMEDIATIONS[finding]}, got {remedy}'
+            fix = FINDING_REMEDIATIONS[finding][0]
+            yield (f'{name}: {finding} needs one of {FINDING_REMEDIATIONS[finding]}, got {remedy}; every finding '
+                   f'needs its REMEDIATION and that remediation\'s VERIFICATION step, both with empty evidence_id '
+                   f'(for example {finding} -> {fix} -> {REMEDIATION_VERIFICATION[fix]})')
         elif remedy and not finding:
             yield f'{name}: {remedy} has no supporting finding'
         elif remedy and check != REMEDIATION_VERIFICATION[remedy]:
