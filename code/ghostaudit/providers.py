@@ -381,6 +381,52 @@ def tool_call_problem(payload, tools, tool_choice=None) -> str | None:
     return None
 
 
+def _decode_nested(value, schema, where, decoded):
+    """Where the schema wants an object/array and the model sent a JSON string of exactly that type,
+    use the decoded value. Nothing else is coerced; the result is still fully schema-checked."""
+    if not isinstance(schema, dict):
+        return value
+    kind = schema.get('type')
+    if isinstance(value, str) and kind in ('object', 'array'):
+        try:
+            parsed = strict_json(value)
+        except (ValueError, RecursionError):
+            return value
+        if not isinstance(parsed, dict if kind == 'object' else list):
+            return value
+        decoded.append(where)
+        value = parsed
+    if isinstance(value, dict) and isinstance(schema.get('properties'), dict):
+        return {k: _decode_nested(v, schema['properties'].get(k), f'{where}.{k}', decoded) for k, v in value.items()}
+    if isinstance(value, list) and 'items' in schema:
+        return [_decode_nested(v, schema['items'], f'{where}[{i}]', decoded) for i, v in enumerate(value)]
+    return value
+
+
+def decode_tool_arguments(payload, tools):
+    """Undo one JSON string-encoding of nested object/array tool arguments, recording each path in
+    `ghostaudit_decoded_arguments`. Malformed calls are left untouched for `tool_call_problem`."""
+    specs = _tool_specs(tools, None)[0]
+    decoded = []
+    for choice in payload.get('choices') or () if isinstance(payload, dict) else ():
+        message = choice.get('message') if isinstance(choice, dict) else None
+        for call in (message.get('tool_calls') or ()) if isinstance(message, dict) else ():
+            fn = call.get('function') if isinstance(call, dict) else None
+            if not isinstance(fn, dict) or fn.get('name') not in specs or not isinstance(fn.get('arguments'), str):
+                continue
+            try:
+                args = strict_json(fn['arguments'])
+            except (ValueError, RecursionError):
+                continue
+            before = len(decoded)
+            fixed = _decode_nested(args, specs[fn['name']], fn['name'], decoded) if isinstance(args, dict) else args
+            if len(decoded) > before:
+                fn['arguments'] = json.dumps(fixed, ensure_ascii=False)
+    if decoded:
+        payload['ghostaudit_decoded_arguments'] = decoded
+    return payload
+
+
 def adapt_roar_answers(payload):
     """Roar /evaluate answers -> the internal decision shape. Booleans `{type: boolean, probability}`
     become `{type: noul, noul}`; choices are already `{choice, probabilities}`. Anything else is left
@@ -710,7 +756,8 @@ class Gateway:
                     'reasoning_tokens': (u.get('completion_tokens_details') or {}).get('reasoning_tokens'),
                     'cached_input_tokens': cached_input_tokens(u)}
         return self._call(role, 'chat/completions', model, body, fp, validate, usage,
-                          reserve=self._worst_case(model, body, limit))
+                          reserve=self._worst_case(model, body, limit),
+                          adapt=(lambda p: decode_tool_arguments(p, tools)) if tools else None)
 
     def list_models(self) -> list[dict]:
         """Read-only GET {base}/models -> [{'id', 'kind'}] for entries with a usable string ID.

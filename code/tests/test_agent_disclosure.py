@@ -145,7 +145,8 @@ class PolicyTreatmentAffordances(unittest.TestCase):
         p['policy_undecided'] = undecided(('security_service', 'fx_sec_P'))
         summary, row, received = self.actor.run_agent(
             [self.actor.inspect('fx_file_L'), [scripted.call('submit_audit', p)]], root=root)
-        brief = json.loads(received[0]['messages'][1]['content'])['policy_treatments']['chains']
+        policy = json.loads(received[0]['messages'][1]['content'])['policy']
+        brief = [r['verifier_treatment'] for r in policy['rules']] + [policy['flows']]
         self.assertIn('SECURITY_AUDIT_LOG (RETAIN): VERIFY_RECORD_PRESENT only, never a finding or remediation', brief)
         self.assertIn('USER_PROFILE (DELETE): REPORT_REMAINING_RECORD -> DELETE_RECORD -> VERIFY_RECORD_ABSENT', brief)
         self.assertTrue(any(c.startswith('LEGAL_HOLD_RECORD: undecidable') for c in brief))

@@ -50,9 +50,9 @@ Order FINDING, REMEDIATION, VERIFICATION; number from 1. Within a phase use the 
 order then system_id and resource_id. COMPLETE has only evidence-backed final verification steps.
 INCOMPLETE needs grounded findings, safe ordered remediation, then future verification. Future
 steps have empty evidence_id. NOT_APPLICABLE has no steps. Every owned record needs the chain that
-policy_treatments gives for its category; that list is how the verifier applies the supplied rules,
+the verifier_treatment of its policy rule gives; that is how the verifier applies the supplied rule,
 including which retained categories need no supplied period. Never invent a period or hold. Only a
-category that policy_treatments marks undecidable may be left out of the steps: list that record
+category whose verifier_treatment says undecidable may be left out of the steps: list that record
 under policy_undecided with your reason and keep the status INCOMPLETE.
 Stop flows and unsafe restores before dependent records.
 

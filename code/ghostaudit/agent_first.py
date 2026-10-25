@@ -44,7 +44,11 @@ PROPOSAL_SCHEMA = {'type': 'object', 'additionalProperties': False, 'properties'
         'required': ['decision', 'scope', 'target', 'whole_category', 'request_quote', 'reason']},
     'deletion_status': {'type': 'string', 'enum': ['COMPLETE', 'INCOMPLETE', 'NOT_APPLICABLE']},
     'steps': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False,
-        'properties': {**{k: STR for k in ('system_id', 'resource_id', 'evidence_id')},
+        'properties': {**{k: STR for k in ('system_id', 'resource_id')},
+                       'evidence_id': {'type': 'string', 'description': 'FINDING steps cite the source that '
+                           'shows the violation. In an INCOMPLETE row every REMEDIATION and VERIFICATION step '
+                           'is future work with empty evidence_id, even for a record already in its final '
+                           'state. In a COMPLETE row every VERIFICATION step cites its proof.'},
                        'phase': {'type': 'string', 'enum': list(dict.fromkeys(p for p, _, _ in OPERATION_TABLE))},
                        'operation': {'type': 'string', 'enum': [op for _, op, _ in OPERATION_TABLE]},
                        'state': {'type': 'string', 'enum': sorted({s for _, _, s in OPERATION_TABLE})},
@@ -90,9 +94,10 @@ def treatment_chain(policy, category, cutoff):
 
 
 def policy_treatments(policy, rules, cutoff):
-    """Effective treatment per supplied category: the supplied rules as the verifier applies them."""
-    categories = sorted({r.data_category for r in rules} | {'DATA_FLOW'})
-    return {'chains': [treatment_chain(policy, c, cutoff) for c in categories],
+    """The supplied rules, each with the treatment chain the policy and verifier apply to it."""
+    return {'rules': [{**asdict(r), 'verifier_treatment': treatment_chain(policy, r.data_category, cutoff)}
+                      for r in rules],
+            'flows': treatment_chain(policy, 'DATA_FLOW', cutoff),
             'note': 'A finding applies only where eligible evidence shows the violation. A record already in '
                     'its required final state gets only its VERIFICATION step: cited in a COMPLETE row, empty '
                     'evidence_id in an INCOMPLETE row. A supplied retention or hold period that has ended is a '
@@ -377,8 +382,7 @@ class AgentFirst:
         brief = {'request': {k: v for k, v in asdict(request).items() if k != 'case_id'},
                  'subject': {'user_ids': subject.user_ids,
                  'identifiers': case.identifiers, 'issues': subject.issues},
-                 'policy': [asdict(r) for r in self.corpus.context.rules],
-                 'policy_treatments': policy_treatments(self.policy, self.corpus.context.rules, request.audit_at),
+                 'policy': policy_treatments(self.policy, self.corpus.context.rules, request.audit_at),
                  'allowed_operations_in_order': OPERATION_TABLE,
                  'source_inventory': {'by_kind': dict(sorted(Counter(self.texts.kind(m.file_id)
                      for m in self.corpus.context.manifest if m.captured_at <= request.audit_at).items())),
