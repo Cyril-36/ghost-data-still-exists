@@ -57,7 +57,10 @@ outputs on both pilot cases. Optional `--agent-request-first --agent-finalize-on
 permission interpretation from evidence investigation and reserves a submission window. The primary
 agent still authors every semantic field. See
 [`AGENT_FIRST_LIVE_CONTINUATION.md`](evaluation/AGENT_FIRST_LIVE_CONTINUATION.md) for exact results,
-limits and closed cumulative spending; no broader accuracy gain or further paid run is authorized.
+limits and the earlier pilot spending. The subsequent
+[`32-case frozen benchmark`](evaluation/AGENT_FIRST_SAMPLE32.md) produced four verified answers and
+28 fallbacks, with 6.22% step recall versus 70.47% for the fresh baseline. This configuration is
+experimental and is not ready for a full 518-case run. Paid testing is closed.
 
 ```sh
 # Offline: explicit English intent, narrowly recognized native PDF structures, screenshots unread

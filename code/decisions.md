@@ -1001,3 +1001,23 @@ Close the entire pilot at 1,438.012 paise conservative exposure, 671.725 paise c
 assumed Rs100/USD, actual billing unavailable. All failed and successful attempts are included;
 prior 8,947.98576-paise campaign stays closed and unchanged. Preserve original root output and logs;
 commit locally without pushing. See `evaluation/AGENT_FIRST_LIVE_CONTINUATION.md`.
+
+## D079 — Freeze and evaluate all 32 samples; decline full-scale agent run
+
+The user explicitly authorizes all 32 public samples and a Rs100 cumulative pilot cap. Freeze main
+3a8583b's successful two-case settings, reuse its 11 response-cache entries, and process the other
+30 cases with Roar Haiku. No prompt/model/limit tuning during inference and no expected-label reads
+until it finishes. All 32 cases complete; 165 new API attempts include four invalid responses and
+two timeouts, with no transport retries. Four final answers verify and 28 remain disclosed fallbacks.
+
+Full results: exact rows 1/32, statuses 22/32, precision 12/12, recall 12/193, expected cited steps
+4/75. Fresh baseline: exact 1/32, statuses 27/32, precision 136/137, recall 136/193, citations 54/75.
+The small pilot did not generalize. Preserve the real result; do not silently substitute baseline
+steps or relax ownership, policy, source, coverage or verifier constraints. No 518-case paid run.
+
+Close the expanded pilot at 7,086.048 paise cumulative conservative exposure, including 5,648.036
+new batch exposure and 2,468.792 paise batch catalog estimate at assumed Rs100/USD. Actual billing
+is unavailable; prior 8,947.98576-paise campaign stays closed and untouched. All 32 predictions
+validate and replay byte-identically with zero network calls on Python 3.11/3.14. Preserve all 1,371
+protected hashes and root output. Commit evaluation evidence locally without pushing. See
+`evaluation/AGENT_FIRST_SAMPLE32.md` and `evaluation/agent_first_sample32_metrics.json`.

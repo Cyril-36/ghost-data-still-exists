@@ -1,5 +1,9 @@
 # Agent-first continuation: two verified live outputs
 
+This records the earlier two-case phase. The later user-authorized
+[`AGENT_FIRST_SAMPLE32.md`](AGENT_FIRST_SAMPLE32.md) reports the full frozen benchmark and supersedes
+its readiness assessment and cumulative budget totals.
+
 2026-10-25. Continue existing main from `c8e12c9`. The user reopened paid testing for the two
 pilot cases and authorized another ₹10: **the cumulative pilot cap became ₹20 (2,000 paise)**.
 No prior exposure was reset. The earlier 8,947.98576-paise campaign remains closed and unchanged.
