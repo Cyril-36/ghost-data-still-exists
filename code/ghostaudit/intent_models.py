@@ -30,7 +30,7 @@ from .intent import ACCOUNT, DELETE, ITEM, NON_DELETION, UNRESOLVED, Intent, cla
 from .providers import Gateway, ProviderError, fingerprint
 
 PROMPTS = Path(__file__).resolve().parent.parent / 'prompts'
-JEV_MODEL = 'typesafe/jev-latest'
+JEV_MODEL = 'typesafe/jev-latest'           # TokenBazaar profile defaults; the gateway's role models decide
 GENERATIVE_MODEL = 'google/gemini-2.5-flash'
 LABELS = ('DELETE_ACCOUNT', 'VERIFY_PRIOR_DELETION', 'SCOPED_DELETION', 'NON_DELETION', 'AMBIGUOUS')
 DELETION_LABELS = {'DELETE_ACCOUNT', 'VERIFY_PRIOR_DELETION', 'SCOPED_DELETION'}
@@ -144,7 +144,7 @@ def _validate_jev(questions):
 def jev_signals(gateway: Gateway, text: str) -> Signals:
     spec, version = _load_jev()
     questions = spec['questions']
-    payload = gateway.decide('intent', JEV_MODEL, spec['state_template'].format(text=text), questions, version,
+    payload = gateway.decide('intent', gateway.config.jev_model, spec['state_template'].format(text=text), questions, version,
                              _validate_jev(questions))
     a = payload['answers']
     label = a['intent']['choice']
@@ -168,7 +168,7 @@ def jev_target(gateway: Gateway, text: str) -> tuple[str | None, float, bool, st
         whole = (p.get('answers') or {}).get('whole_category')
         return choice_problem(p, 'target', labels) or (
             None if isinstance(whole, dict) and _probability(whole.get('noul')) else 'whole_category noul invalid')
-    payload = gateway.decide('intent_target', JEV_MODEL, spec['state_template'].format(text=text), questions,
+    payload = gateway.decide('intent_target', gateway.config.jev_model, spec['state_template'].format(text=text), questions,
                              version, check)
     answer = payload['answers']['target']
     target, p = answer['choice'], float(answer['probabilities'][answer['choice']])
@@ -212,6 +212,9 @@ def generative_signals(gateway: Gateway, items: list[tuple[str, str]], batch_siz
     unparseable batch is retried once (it is never cached).
     """
     prompt, version = _load_generative()
+    model = gateway.config.intent_fallback_model
+    if not model:
+        return {h: 'PROVIDER_FAILURE: no intent fallback model configured for this provider' for h, _ in items}
     out = {}
     for start in range(0, len(items), batch_size):
         batch = items[start:start + batch_size]
@@ -230,7 +233,7 @@ def generative_signals(gateway: Gateway, items: list[tuple[str, str]], batch_siz
         payload, error = None, ''
         for _attempt in range(2):
             try:
-                payload = gateway.chat('intent_fallback', GENERATIVE_MODEL,
+                payload = gateway.chat('intent_fallback', model,
                                        [{'role': 'system', 'content': prompt}, {'role': 'user', 'content': user}],
                                        version, check, max_tokens=max_tokens)
                 break
@@ -365,7 +368,7 @@ def choose_candidate(gateway: Gateway, role: str, question: str, context: str,
         raise ValueError('need 2-12 non-empty candidates')
     questions = {'choice': {'type': 'choice', 'instructions': question, 'criteria': dict(candidates)}}
 
-    payload = gateway.decide(role, JEV_MODEL, context, questions, f'choose-candidate-v1:{role}',
+    payload = gateway.decide(role, gateway.config.jev_model, context, questions, f'choose-candidate-v1:{role}',
                              lambda p: choice_problem(p, 'choice', candidates))
     answer = payload['answers']['choice']
     handle = answer['choice']

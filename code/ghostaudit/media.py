@@ -23,13 +23,13 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from .intent_models import JEV_MODEL, PROMPTS, _strict_json, choice_problem
+from .intent_models import PROMPTS, _strict_json, choice_problem
 from .observations import PRESENT, STATE, Observation, SourceReport, classify_token, tokens_from
 from .parsers import sniff
 from .parsers.pdfsrc import PdfError, extract_pdf_text, harvest
 from .providers import Gateway, ProviderError, fingerprint
 
-VISION_MODEL = 'google/gemini-2.5-flash'
+VISION_MODEL = 'google/gemini-2.5-flash'   # TokenBazaar profile default; the gateway's vision_model decides
 RESOURCE_ID = re.compile(r'^[a-z]+(?:_[a-z]+)*_\d+$')
 PAGE_KINDS = {
     'ACCOUNT_PROFILE': ('account_service', 'USER_PROFILE'),
@@ -120,7 +120,7 @@ def _doc_kind(gateway, text):
     version = f'{spec["version"]}:{fingerprint(spec)[:12]}'
     questions = spec['questions']
 
-    payload = gateway.decide('document_kind', JEV_MODEL, spec['state_template'].format(text=text[:6000]),
+    payload = gateway.decide('document_kind', gateway.config.jev_model, spec['state_template'].format(text=text[:6000]),
                              questions, version, lambda p: choice_problem(p, 'kind', questions['kind']['criteria']))
     a = payload['answers']['kind']
     return a['choice'], float(a['probabilities'][a['choice']]), payload.get('model')
@@ -227,7 +227,7 @@ def extract_screenshot(gateway, raw: bytes) -> dict:
     last = None
     for _attempt in range(2):
         try:
-            payload = gateway.chat('vision_reader', VISION_MODEL, messages, version, _vision_check, max_tokens=12000)
+            payload = gateway.chat('vision_reader', gateway.config.vision_model, messages, version, _vision_check, max_tokens=12000)
             data = _strict_json(payload['choices'][0]['message']['content'])
             data['_model'] = payload.get('model')
             return data
@@ -243,6 +243,10 @@ def interpret_screenshot(entry, raw, corpus, gateway) -> tuple[list, SourceRepor
     if gateway is None:
         report.status = 'UNSUPPORTED_MEDIA'
         report.issues.append('UNREADABLE_MEDIA: vision reader not configured (offline run)')
+        return [], report, {}
+    if not gateway.config.vision_model:
+        report.status = 'UNSUPPORTED_MEDIA'
+        report.issues.append(f'UNREADABLE_MEDIA: no vision model configured for provider {gateway.config.provider}')
         return [], report, {}
     try:
         data = extract_screenshot(gateway, raw)

@@ -1,12 +1,17 @@
 """Provider-neutral model gateway (plan section 21) with budget, telemetry and caching.
 
+Provider profiles (`PROFILES`): tokenbazaar (default; historical behaviour and cache keys) and roar.
+Each names its endpoints, credential variable or proxy-injected auth, and a model per role
+(jev_model, intent_fallback_model, vision_model, investigator_model).
+
 Two distinct API shapes, never mixed:
-  decide(model, state, questions)  POST {base}/decisions        typed answers + probabilities
+  decide(model, state, questions)  POST {base}/decisions (TokenBazaar) | /evaluate (Roar)  typed answers
   chat(model, messages, ...)       POST {base}/chat/completions generative text (optional native tool calls)
   list_models()                    GET  {base}/models           read-only catalog: model IDs and kinds
 
 Rules enforced here:
-- Credentials come only from the environment (TOKENBAZAAR_API_KEY); never logged.
+- Credentials come only from the environment (TOKENBAZAAR_API_KEY / ROAR_API_KEY) or are injected by
+  the egress proxy (Roar default, or proxy_auth=True); never logged.
 - Every call reserves its worst-case cost before it is sent, so concurrent calls cannot
   together exceed the ceiling; a live response without a cost header is charged that reserve.
 - Redirects are never followed, so the bearer token cannot reach another origin.
@@ -31,11 +36,44 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 DEFAULT_BASE_URL = 'https://tokenbazaar.in/api/public/v1'
-ALLOWED_ORIGINS = ('https://tokenbazaar.in/',)
+ALLOWED_ORIGINS = ('https://tokenbazaar.in/', 'https://api.roar-ai.com/')
+
+
+@dataclass(frozen=True)
+class Profile:
+    """One API provider: endpoints, credentials and the model for each role. A role set to None is
+    not configured (e.g. no investigator before a passed tool-call probe); callers then skip it."""
+    name: str
+    base_url: str
+    key_env: str
+    decisions_path: str            # typed-decision endpoint
+    cost_header: str | None        # actual billed cost per response, if the provider sends one
+    proxy_auth: bool               # send no Authorization when the key variable is unset (proxy injects it)
+    jev_model: str
+    intent_fallback_model: str | None
+    vision_model: str | None
+    investigator_model: str | None
+    decide_reserve_paise: float
+    chat_reserve_paise: float
+
+
+PROFILES = {
+    # Unchanged TokenBazaar behaviour; responses to gemini-2.5-flash were served as google/gemini-3.8-flash
+    # (recorded per call as returned_model). No investigator model was ever validated here.
+    'tokenbazaar': Profile('tokenbazaar', DEFAULT_BASE_URL, 'TOKENBAZAAR_API_KEY', 'decisions', 'x-tokenbaazar-cost-paise',
+                           False, 'typesafe/jev-latest', 'google/gemini-2.5-flash', 'google/gemini-2.5-flash', None,
+                           25.0, 120.0),
+    # Roar: jev and gpt-oss-20b native tool calls passed live smoke tests; gpt-oss-20b as intent fallback is a
+    # candidate pending contract and multilingual validation; no vision model is chosen until one is validated.
+    'roar': Profile('roar', 'https://api.roar-ai.com/v1', 'ROAR_API_KEY', 'evaluate', None, True,
+                    'jev', 'gpt-oss-20b', None, 'gpt-oss-20b', 5.0, 50.0),
+}
+ROLE_MODELS = ('jev_model', 'intent_fallback_model', 'vision_model', 'investigator_model')
+USD_PAISE = 8800.0      # estimate conversion (1 USD ~ Rs 88) for providers that bill in USD; estimates only
 MAX_WAIT_S = 30.0                      # longest server-requested wait honoured before a retry
 _WAIT_MESSAGE = re.compile(r'please wait\s+(\S+?)\s*s\b', re.IGNORECASE)
 _HTTP_MEANING = {401: 'authentication failed', 402: 'payment required: account credit exhausted',
@@ -61,16 +99,31 @@ _OPENER = urllib.request.build_opener(_NoRedirect)
 
 @dataclass(frozen=True)
 class ProviderConfig:
-    base_url: str = DEFAULT_BASE_URL
-    api_key_env: str = 'TOKENBAZAAR_API_KEY'
+    provider: str = 'tokenbazaar'
+    base_url: str | None = None            # None: the profile's
+    api_key_env: str | None = None
+    proxy_auth: bool | None = None         # None: the profile's default
+    jev_model: str | None = None           # role models; None: the profile's
+    intent_fallback_model: str | None = None
+    vision_model: str | None = None
+    investigator_model: str | None = None
     timeout_s: float = 90.0
     max_retries: int = 2
     max_rate_limit_retries: int = 5        # HTTP 429 gets a longer, still bounded, backoff
     max_cost_paise: float = 2000.0         # whole-run ceiling (Rs 20) unless raised explicitly
     max_calls: int = 3000
-    cost_reserve_paise: float = 25.0       # assumed worst-case cost of one /decisions call
-    chat_cost_reserve_paise: float = 120.0  # assumed worst-case cost of one chat call
+    cost_reserve_paise: float | None = None       # assumed worst-case cost of one decision call (profile default)
+    chat_cost_reserve_paise: float | None = None  # assumed worst-case cost of one chat call (profile default)
     cache_dir: str | None = '.cache/ghostaudit'
+
+    def resolved(self) -> 'ProviderConfig':
+        if self.provider not in PROFILES:
+            raise ProviderError(f'unknown provider {self.provider!r}; choose from {sorted(PROFILES)}')
+        prof = PROFILES[self.provider]
+        fill = {'base_url': prof.base_url, 'api_key_env': prof.key_env, 'proxy_auth': prof.proxy_auth,
+                'cost_reserve_paise': prof.decide_reserve_paise, 'chat_cost_reserve_paise': prof.chat_reserve_paise,
+                **{r: getattr(prof, r) for r in ROLE_MODELS}}
+        return replace(self, **{k: v for k, v in fill.items() if getattr(self, k) is None})
 
 
 @dataclass
@@ -86,7 +139,8 @@ class UsageRecord:
     output_tokens: int | None = None
     reasoning_tokens: int | None = None
     cached_input_tokens: int | None = None
-    cost_paise_header: float | None = None
+    cost_paise_header: float | None = None        # actual billed cost, when the provider reports it
+    cost_estimate_paise: float | None = None      # catalog price x tokens, when no actual cost is reported
     cost_usd_reported: float | None = None
     retries: int = 0
     request_id: str | None = None
@@ -324,6 +378,22 @@ def tool_call_problem(payload, tools, tool_choice=None) -> str | None:
     return None
 
 
+def adapt_roar_answers(payload):
+    """Roar /evaluate answers -> the internal decision shape. Booleans `{type: boolean, probability}`
+    become `{type: noul, noul}`; choices are already `{choice, probabilities}`. Anything else is left
+    as is, so the caller's validator rejects it rather than this function guessing."""
+    answers = payload.get('answers') if isinstance(payload, dict) else None
+    if not isinstance(answers, dict):
+        return payload
+    out = {}
+    for name, a in answers.items():
+        if isinstance(a, dict) and a.get('type') == 'boolean' and 'probability' in a:
+            out[name] = {'type': 'noul', 'noul': a['probability']}
+        else:
+            out[name] = a
+    return {**payload, 'answers': out}
+
+
 def load_env_file(path: Path) -> list[str]:
     """Explicit development helper: export KEY=VALUE lines from a local .env (values never returned)."""
     names = []
@@ -341,10 +411,12 @@ class Gateway:
     mode = 'live'
 
     def __init__(self, config: ProviderConfig | None = None):
-        config = config or ProviderConfig()
+        config = (config or ProviderConfig()).resolved()
         if not config.base_url.startswith(ALLOWED_ORIGINS):
             raise ProviderError(f'base URL outside the allowlist: {config.base_url}')
         self.config = config
+        self.profile = PROFILES[config.provider]
+        self.pricing: dict = {}            # model -> catalog pricing (USD per 1M tokens), when loaded
         self.usage: list[UsageRecord] = []
         self._lock = threading.Lock()
         self._spent = 0.0
@@ -373,7 +445,7 @@ class Gateway:
             self.usage.append(rec)
             self._reserved -= reserve
             if reserve and rec.mode == 'live' and rec.status != 'error':
-                self._spent += reserve if rec.cost_paise_header is None else rec.cost_paise_header
+                self._spent += next(c for c in (rec.cost_paise_header, rec.cost_estimate_paise, reserve) if c is not None)
 
     # --- cache --------------------------------------------------------------------------
     def _cache_path(self, fp):
@@ -405,19 +477,34 @@ class Gateway:
 
     def _request(self, method, path, body=None):
         key = os.environ.get(self.config.api_key_env)
-        if not key:
+        if not key and not self.config.proxy_auth:
             raise ProviderError(f'{self.config.api_key_env} is not set')
-        headers = {'Authorization': f'Bearer {key}'}
+        headers = {'Authorization': f'Bearer {key}'} if key else {}   # else the egress proxy injects it
         if body is not None:
             headers['Content-Type'] = 'application/json'
         request = urllib.request.Request(
             f'{self.config.base_url.rstrip("/")}/{path}', method=method, headers=headers,
             data=None if body is None else json.dumps(body).encode('utf-8'))
         with _OPENER.open(request, timeout=self.config.timeout_s) as response:
-            cost = response.headers.get('x-tokenbaazar-cost-paise')
+            cost = response.headers.get(self.profile.cost_header) if self.profile.cost_header else None
             return json.loads(response.read().decode('utf-8')), (float(cost) if cost else None)
 
-    def _call(self, role, endpoint, requested_model, body, fp, validate, extract_usage):
+    def _estimate(self, model, rec):
+        price = self.pricing.get(model)
+        if not price or rec.input_tokens is None:
+            return None
+        usd = (rec.input_tokens * price.get('inputPer1M', 0) + (rec.output_tokens or 0) * price.get('outputPer1M', 0)) / 1e6
+        return round(usd * USD_PAISE, 6)
+
+    def load_pricing(self):
+        """Catalog prices for cost estimates (one free GET); providers without them keep header costs only."""
+        payload = self._get('models')
+        for entry in payload.get('data', []) if isinstance(payload, dict) else []:
+            if isinstance(entry, dict) and isinstance(entry.get('roar_pricing'), dict):
+                self.pricing[entry.get('id')] = entry['roar_pricing']
+        return self.pricing
+
+    def _call(self, role, endpoint, requested_model, body, fp, validate, extract_usage, adapt=None):
         cached = self._cache_get(fp)
         if cached is not None:
             problem = ('cache entry metadata mismatch' if cached.get('requested_model') != requested_model
@@ -427,7 +514,8 @@ class Gateway:
             if not problem:
                 return cached['response']
             self._cache_path(fp).unlink()          # invalid entry: discard it and ask again
-        reserve = self.config.cost_reserve_paise if endpoint == 'decisions' else self.config.chat_cost_reserve_paise
+        reserve = self.config.cost_reserve_paise if endpoint == self.profile.decisions_path \
+            else self.config.chat_cost_reserve_paise
         self._reserve(reserve)
         payload, cost, retries, latency = self._send(role, endpoint, requested_model, body, fp, reserve)
         rec = UsageRecord(role, endpoint, requested_model, payload.get('model'), self.mode, 'ok', latency,
@@ -435,6 +523,10 @@ class Gateway:
         try:                                       # a raising extractor or validator still settles the reserve
             for k, v in extract_usage(payload).items():
                 setattr(rec, k, v)
+            if cost is None:
+                rec.cost_estimate_paise = self._estimate(requested_model, rec)
+            if adapt:
+                payload = adapt(payload)
             problem = _checked(validate, payload)
         except Exception as exc:
             problem = f'usage extraction raised {type(exc).__name__}'
@@ -491,15 +583,26 @@ class Gateway:
 
     # --- public API ---------------------------------------------------------------------
     def decide(self, role, model, state, questions, version, validate):
-        """Typed decision call. `questions` maps question names to {type, instructions, criteria}."""
-        body = {'model': model, 'state': state, 'questions': questions}
-        fp = fingerprint('decisions', model, version, questions, state)
+        """Typed decision call. `questions` maps question names to {type, instructions, criteria}.
+        Internally answers use the TokenBazaar shape (`noul` booleans); Roar's /evaluate takes
+        `boolean` questions and answers `{type: boolean, probability}`, adapted here before validation."""
+        if self.profile.name == 'tokenbazaar':
+            body = {'model': model, 'state': state, 'questions': questions}
+            fp = fingerprint('decisions', model, version, questions, state)    # historical cache keys
+
+            def usage(p):
+                u = p.get('usage') or {}
+                return {'input_tokens': u.get('input_tokens'), 'output_tokens': u.get('output_tokens'),
+                        'cached_input_tokens': cached_input_tokens(u), 'cost_usd_reported': u.get('cost')}
+            return self._call(role, 'decisions', model, body, fp, validate, usage)
+        sent = {k: {**q, 'type': 'boolean'} if q.get('type') == 'noul' else q for k, q in questions.items()}
+        body = {'model': model, 'state': state, 'questions': sent}
+        fp = fingerprint(self.profile.name, self.profile.decisions_path, model, version, sent, state)
 
         def usage(p):
             u = p.get('usage') or {}
-            return {'input_tokens': u.get('input_tokens'), 'output_tokens': u.get('output_tokens'),
-                    'cached_input_tokens': cached_input_tokens(u), 'cost_usd_reported': u.get('cost')}
-        return self._call(role, 'decisions', model, body, fp, validate, usage)
+            return {'input_tokens': u.get('inputTokens'), 'output_tokens': u.get('outputTokens')}
+        return self._call(role, self.profile.decisions_path, model, body, fp, validate, usage, adapt=adapt_roar_answers)
 
     def chat(self, role, model, messages, version, validate, max_tokens=4000, *,
              max_completion_tokens=None, tools=None, tool_choice=None):
@@ -510,6 +613,8 @@ class Gateway:
         limit = max_tokens if max_completion_tokens is None else max_completion_tokens
         body = {'model': model, 'messages': messages, 'max_completion_tokens': limit}
         parts = ['chat/completions', model, version, messages, limit]
+        if self.profile.name != 'tokenbazaar':
+            parts.insert(0, self.profile.name)            # provider-isolated cache; TokenBazaar keys unchanged
         if tools is not None or tool_choice is not None:
             problem = _tool_specs(tools, tool_choice)[2]
             if problem:
@@ -556,12 +661,15 @@ class Gateway:
         for r in self.usage:
             key = f'{r.role}|{r.requested_model}->{r.returned_model}|{r.mode}|{r.status}'
             s = out.setdefault(key, {'calls': 0, 'input_tokens': 0, 'output_tokens': 0, 'reasoning_tokens': 0,
-                                     'cached_input_tokens': 0, 'cost_paise_header': 0.0, 'latency_s': 0.0,
-                                     'retries': 0})
+                                     'cached_input_tokens': 0, 'cost_paise_header': 0.0, 'cost_estimate_paise': 0.0,
+                                     'unpriced_live_calls': 0, 'latency_s': 0.0, 'retries': 0})
             s['calls'] += 1
             for f in ('input_tokens', 'output_tokens', 'reasoning_tokens', 'cached_input_tokens', 'retries'):
                 s[f] += getattr(r, f) or 0
             s['cost_paise_header'] += r.cost_paise_header or 0
+            s['cost_estimate_paise'] += r.cost_estimate_paise or 0
+            s['unpriced_live_calls'] += int(r.mode == 'live' and r.status != 'error' and r.cost_paise_header is None
+                                            and r.cost_estimate_paise is None)
             s['latency_s'] += r.latency_s
         return out
 

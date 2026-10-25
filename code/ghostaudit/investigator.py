@@ -112,8 +112,8 @@ class Investigator:
         records = self.gateway.usage[start:]
         tokens = sum((r.input_tokens or 0) + (r.output_tokens or 0) for r in records)
         reserve = self.gateway.config.chat_cost_reserve_paise
-        paise = sum(r.cost_paise_header if r.cost_paise_header is not None else
-                    (reserve if r.mode == 'live' and r.status != 'error' else 0.0) for r in records)
+        paise = sum(next(c for c in (r.cost_paise_header, r.cost_estimate_paise, reserve) if c is not None)
+                    if r.mode == 'live' and r.status != 'error' else (r.cost_paise_header or 0.0) for r in records)
         return tokens, paise
 
     def _replan(self, plan, facts):

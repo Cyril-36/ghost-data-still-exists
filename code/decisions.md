@@ -798,3 +798,50 @@ Tests: `tests/test_review_e98dcea.py` (4 tests, 7 failing subtests on e98dcea).
   `max_feedback_rounds` (2) feedback rounds may use `max_feedback_turns` (2) model turns. So a case
   makes at most 4 + 2 × 2 = 8 model turns, plus one schema repair, all under the per-case token and
   paise caps and the run ceiling.
+
+## D070 — Two provider profiles with role-based models (TokenBazaar default, Roar AI)
+
+Tests: `tests/test_providers_dual.py` (13 tests). They use the response shapes recorded in the live Roar
+smoke tests; no credentials were recorded. `providers.PROFILES` holds one profile per provider, with its
+endpoints, credentials and a model for each role. A role set to None is skipped and disclosed, never
+substituted:
+
+| Role | TokenBazaar | Roar AI |
+|---|---|---|
+| `jev_model`: intent, flags, scoped target, PDF document kind | `typesafe/jev-latest` (`/decisions`) | `jev` (`/evaluate`), live-tested |
+| `intent_fallback_model`: unresolved or conflicting intent only | `google/gemini-2.5-flash`, served as `google/gemini-3.8-flash` | `gpt-oss-20b`, a candidate: response contract and multilingual behaviour not yet validated |
+| `vision_model`: blind screenshot reading | `google/gemini-2.5-flash` | none until one is validated; `--vision-model` must be catalogued with `roar_image_input: yes` |
+| `investigator_model`: Phase 4 native tool calls | none (never validated) | `gpt-oss-20b`, live probe passed |
+
+How each provider is used:
+- **TokenBazaar.** Base URL, `/decisions`, model IDs, the cost header, reserves (25 and 120 paise) and
+  cache keys are unchanged. All 390 historical cache keys are still requested, and the fixture,
+  offline and zero-budget staged outputs are byte-identical. It needs `TOKENBAZAAR_API_KEY`, or proxy
+  authentication with `--proxy-auth`.
+- **Roar AI.** Base URL `https://api.roar-ai.com/v1`. `/evaluate` takes `boolean` questions where
+  TokenBazaar takes `noul`. Answers `{type: boolean, probability}` are adapted to the internal `noul`
+  shape before the same validators run; choices already match. Usage arrives as
+  `inputTokens`/`outputTokens`, there is no cost header, and evaluate responses carry no model field.
+  Roar uses `ROAR_API_KEY` locally; without it, no Authorization header is sent and the Claude Cloud
+  egress proxy injects it.
+- **Caches.** Roar cache keys are prefixed with the provider name, so a provider never serves another
+  provider's entry.
+- **Costs.** `cost_paise_header` is the actual billed cost, and Roar reports none. `cost_estimate_paise`
+  is catalog price × tokens × `USD_PAISE` (1 USD ≈ ₹88, an assumption). The usage summary counts
+  `unpriced_live_calls`. The budget charges the actual cost, else the estimate, else the reserve.
+  Roar reserves are 5 paise per decision and 50 per chat call.
+- **Selection.** `--provider`, `--intent-provider` and `--investigator-provider` choose providers, and
+  `--jev-model`, `--intent-fallback-model`, `--vision-model` and `--investigator-model` override role
+  models. Probe records are keyed `provider:model`.
+
+The investigator, verifier, deterministic policy, output contract and Phase 4 limits are shared
+unchanged. PDFs still use native text and Jev document kind, never a vision model.
+
+Live smoke tests, 2026-10-25 (synthetic inputs only):
+- `jev` `/evaluate`: HTTP 200, a valid choice distribution and a boolean probability, 412 input and 55
+  output tokens. The first request was refused with HTTP 400 because it used `noul`, and was resent
+  once with `boolean`.
+- `claude-haiku-5-5` forced tool call: HTTP 200, valid; 510 and 39 tokens.
+- `gpt-oss-20b` forced tool call: HTTP 200, valid; 130 and 34 tokens, 8 of them reasoning.
+
+No cost headers were returned. The catalog estimate for all calls together is about USD 0.00011.

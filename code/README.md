@@ -48,7 +48,18 @@ python3 code/evaluation/main.py errors ...          # case-by-case differences g
 python3 code/evaluation/main.py fixtures --out .runs/fixtures
 python3 code/evaluation/main.py intent-benchmark --env-file .env --out .runs/intent   # live, bounded
 
-python3 -m unittest discover -s code/tests      # 211 tests, offline (replay doubles, loopback servers)
+python3 -m unittest discover -s code/tests      # 224 tests, offline (replay doubles, loopback servers)
+```
+
+Providers (D070): `--provider tokenbazaar` (default, unchanged) or `--provider roar`. Split them with
+`--intent-provider tokenbazaar --investigator-provider roar`. Roar needs `ROAR_API_KEY`, or Claude
+Cloud's proxy-injected secret for `api.roar-ai.com`. Role models come from the provider profile
+and can be overridden with `--jev-model`, `--intent-fallback-model`, `--vision-model` and
+`--investigator-model`.
+
+```sh
+python3 code/main.py audit --requests dataset/sample_deletion_requests.csv --output .runs/r/p.csv --run-dir .runs/r \
+    --provider roar --intent staged --investigator live --budget-paise 200     # investigator: gpt-oss-20b
 ```
 
 Phase 4 (decisions D065-D068):

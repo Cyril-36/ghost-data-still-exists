@@ -1,5 +1,12 @@
 # Usage report — PROVISIONAL run (Phase 3)
 
+**Roar AI smoke tests (D070):** 4 live requests, all synthetic:
+- `jev` evaluate: HTTP 400 schema rejection, then HTTP 200 (412/55 tokens);
+- `claude-haiku-5-5` tool call: 510/39 tokens;
+- `gpt-oss-20b` tool call: 130/34 tokens.
+
+Roar returned no cost headers. The catalog estimate for all of them is about USD 0.00011 (under 1 paisa).
+
 **Phase 4 (D065–D068):** no model call was made. The investigator ran only in replay mode, where cached
 responses are the only source and a zero ceiling refuses everything else, and in a scripted-transcript
 demonstration. Both spent **0 paise** and used 0 tokens. The full-dataset run behind `output.csv` is still
