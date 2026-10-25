@@ -922,3 +922,22 @@ unknown failed-call reserves. Catalog estimate is 2,752.399012 paise; provider a
 unavailable. No further paid calls. See `evaluation/QUALITY_EXPERIMENTS.md` for comparisons,
 budget assumptions, tests, limitations and the unchanged best staged measurements. Preserve the
 original output and historical artifacts; commit locally without pushing.
+
+## D075 — Primary agent owns final proposals; baseline remains selectable
+
+Add `--decision-mode agent-first`: identity/policy/source context → dynamic evidence tools → full
+agent-authored authorization, status and structured steps → independent verification and feedback.
+Do not run `decide_intents`, `plan_case`, investigator `_replan` or baseline `withhold` on this path.
+Preserve verified semantic choices; emit a hash-bound explicit fallback if no proposal verifies.
+
+The first implementation is strictly offline. Jev media is optional and cached; live gateways,
+network cache misses, environment loading and pricing requests are disabled on the agent-first CLI.
+Tests demonstrate preserved alternative citations, authored COMPLETE/NOT_APPLICABLE, unparsed
+attachment discovery changing three baseline steps into six, correction after rejected fabrication,
+and unchanged baseline behavior. Strict scope, retention, cutoff and witness gates remain enforced.
+
+Four scripted scenarios improve exact rows from 3/4 to 4/4 and recall from 8/11 to 11/11; this is
+an architecture/control test, not real-model accuracy. Public historical caches contain no compatible
+new-protocol proposals, so the public agent replay produces only disclosed fallbacks. No new paid
+campaign is opened. See `evaluation/AGENT_FIRST_ARCHITECTURE.md` for metrics, limitations and the
+separately authorized model experiment still needed before adopting this as a submission path.

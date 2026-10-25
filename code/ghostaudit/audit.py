@@ -80,7 +80,9 @@ def _plan_record(p: CasePlan, stage: str = '', phase4: dict | None = None) -> di
 def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
               config: EngineConfig = STRICT, gateway: Gateway | None = None,
               use_generative: bool = True, investigator: InvestigatorConfig | None = None,
-              investigator_gateway: Gateway | None = None, media_cache: dict | None = None) -> dict:
+              investigator_gateway: Gateway | None = None, media_cache: dict | None = None,
+              decision_mode: str = 'baseline', agent_gateway: Gateway | None = None,
+              agent_config: InvestigatorConfig | None = None) -> dict:
     """gateway=None: offline intent (deterministic only). With a gateway: staged intent (Jev decisions,
     generative fallback for escalations). `investigator` + `investigator_gateway`: routed cases are
     investigated (sequentially). `media_cache`: earlier validated screenshot extractions that
@@ -106,6 +108,14 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
             raise ContractError('refusing to replace an existing file that is not a prediction CSV') from exc
     if run_dir.exists() and (not run_dir.is_dir() or any(run_dir.iterdir())):
         raise ContractError('run directory is not empty; use a fresh path to preserve previous run artifacts')
+    if decision_mode not in ('baseline', 'agent-first'):
+        raise ContractError('decision_mode must be baseline or agent-first')
+    if decision_mode == 'agent-first' and (not config.is_default or investigator is not None):
+        raise ContractError('agent-first requires strict configuration and no baseline investigator')
+    if decision_mode == 'agent-first':
+        from .agent_first import offline_gateway
+        if agent_config is None or not offline_gateway(agent_gateway) or (gateway is not None and not offline_gateway(gateway)):
+            raise ContractError('agent-first requires offline replay gateways before loading any evidence')
     context = load_context(dataset)
     requests = load_requests(requests_path)
     corpus = build_corpus(context, config, gateway)
@@ -113,8 +123,10 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
     index = IdentityIndex(context)
     # Case IDs are only in-process keys here: Jev sees the request text alone and the
     # generative fallback sees opaque handles.
-    intents = decide_intents({r.case_id: r.request_text for r in requests}, gateway, use_generative)
-    plans = [plan_case(r, corpus, policy, index, intents[r.case_id].intent) for r in requests]
+    intents = decide_intents({r.case_id: r.request_text for r in requests}, gateway, use_generative) \
+        if decision_mode == 'baseline' else {}
+    plans = [plan_case(r, corpus, policy, index, intents[r.case_id].intent) for r in requests] \
+        if decision_mode == 'baseline' else []
 
     if investigator_gateway is not None and gateway is not None and investigator_gateway is not gateway \
             and investigator_gateway.mode == 'live':
@@ -124,7 +136,18 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
     agent = Investigator(investigator_gateway, investigator, corpus, index, policy, texts, verifier.verify) \
         if investigator and investigator_gateway else None
     phase4, case_files = {}, []
-    for i, p in enumerate(plans):
+    if decision_mode == 'agent-first':
+        from .agent_first import AgentFirst
+        if agent_config is None:
+            raise ContractError('agent-first needs an explicit agent model/configuration')
+        primary = AgentFirst(agent_gateway, agent_config, corpus, index, policy, texts, verifier)
+        for request in requests:
+            p, case, attempts = primary.run(request)
+            plans.append(p)
+            case_files.append({**case.record(), 'agent_proposals': attempts})
+            phase4[p.request.case_id] = {'routing': ['agent-first'], 'verifier': attempts[-1]['findings'] if attempts else [],
+                                       'withheld_by_verifier': p.fallback, 'investigation': _investigation(case)}
+    for i, p in enumerate(plans if decision_mode == 'baseline' else []):
         findings = verifier.verify(p)
         routed = route_reasons(p, findings)
         case = None
@@ -145,7 +168,8 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
     fallbacks = [p for p in plans if p.fallback]
     with open(run_dir / 'case_plans.jsonl', 'w', encoding='utf-8') as f:
         for p in plans:
-            f.write(json.dumps(_plan_record(p, intents[p.request.case_id].stage, phase4[p.request.case_id]),
+            f.write(json.dumps(_plan_record(p, intents[p.request.case_id].stage if decision_mode == 'baseline'
+                                           else 'primary-agent', phase4[p.request.case_id]),
                                ensure_ascii=False) + '\n')
     with open(run_dir / 'case_files.jsonl', 'w', encoding='utf-8') as f:
         for record in case_files:
@@ -168,7 +192,7 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
         'status_counts': dict(Counter(r.status for r in corpus.reports)),
         'policy_issues': policy.issues}, indent=2) + '\n', encoding='utf-8')
 
-    gateways = [g for g in (gateway, investigator_gateway) if g is not None]
+    gateways = [g for g in (gateway, investigator_gateway, agent_gateway) if g is not None]
     gateways = [g for n, g in enumerate(gateways) if g not in gateways[:n]]
     usage = [u for g in gateways for u in g.usage]
     for g in gateways:          # the run's own validated responses: offline replay and analysis need no paid call
@@ -188,6 +212,7 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
 
     code_dir = Path(__file__).resolve().parent
     summary = {
+        'decision_mode': decision_mode,
         'artifact_status': ('Phase 4 engine: every plan independently verified; '
                             + (f'investigator {getattr(investigator_gateway, "mode", "?")} ({investigator.model})'
                                if agent else 'investigator not run (no live or replayed model)')
@@ -235,6 +260,20 @@ def run_audit(dataset: Path, requests_path: Path, output: Path, run_dir: Path,
                                   getattr(investigator_gateway, 'mode', None) if agent else None),
         'run_quality': 'best_effort_with_unresolved' if fallbacks else 'strict',
     }
+    if decision_mode == 'agent-first':
+        from .agent_first import proposal_metrics
+        summary['artifact_status'] = 'Agent-first: verified agent-authored answers or explicitly disclosed fallbacks; no planner overwrite.'
+        summary['agent_first'] = {**proposal_metrics(case_files), 'config': agent_config.describe(),
+                                  'accepted_cases': len(plans) - len(fallbacks), 'fallback_cases': len(fallbacks),
+                                  'network_calls': sum(u.mode == 'live' for u in usage),
+                                  'rounds': sum(r['rounds'] for r in case_files),
+                                  'tool_calls': sum(len(r['tool_calls']) for r in case_files),
+                                  'feedback_turns': sum(r['feedback_turns'] for r in case_files)}
+        summary['phase4'] = None  # baseline investigator metrics do not describe the primary agent
+        summary['inference_modes']['intent'] = 'primary agent interpretation with deterministic authorization guards'
+        summary['inference_modes']['gateway_mode'] = agent_gateway.mode
+        summary['inference_modes']['providers']['primary_agent'] = {
+            'provider': agent_gateway.config.provider, 'model': agent_config.model}
     (run_dir / 'run_manifest.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
     return summary
 

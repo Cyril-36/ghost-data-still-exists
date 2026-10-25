@@ -37,6 +37,8 @@ FIELDS = ('phase', 'system_id', 'resource_id', 'operation', 'state')
 def run_corpus(context, run_dir: Path):
     """The audited run's evidence universe: same config, media from cached responses only (no calls)."""
     manifest = json.loads((Path(run_dir) / 'run_manifest.json').read_text(encoding='utf-8'))
+    if manifest.get('decision_mode') == 'agent-first':
+        raise ValueError('agent-first gap attribution needs proposal traces; do not reconstruct a baseline planner run')
     allowed = {'user_identities.csv', 'user_audit_log.csv', 'system_activity.csv', 'deletion_rules.csv',
                'evidence_files.csv'} | {m.file_path for m in context.manifest}
     for name, expected in {**manifest.get('dataset_files_sha256', {}),

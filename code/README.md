@@ -8,7 +8,10 @@ identities, reconstructs state at each case's `audit_at`, applies the supplied
 policy, and derives status and steps from validated obligations. Models are used
 only for bounded decisions: request intent (Jev typed answers, generative
 fallback), PDF document kind (Jev), and blind literal screenshot reading (vision).
-Final status, evidence validation and CSV construction are deterministic.
+In the default baseline, final status and steps are deterministic. The selectable agent-first mode
+instead lets the primary agent author authorization, status and all steps; code accepts or rejects
+the proposal without replacing it with a planner answer. See
+[`AGENT_FIRST_ARCHITECTURE.md`](evaluation/AGENT_FIRST_ARCHITECTURE.md).
 
 The root `output.csv` (518 rows) is **provisional**. Its run diagnostics are in
 `runs/phase3-hardened/` (produced by the hardened code; byte-identical to the earlier
@@ -26,6 +29,20 @@ TokenBazaar gateway `https://tokenbazaar.in/api/public/v1`. A local, uncommitted
 runs offline.
 
 ## Commands (from the repository root)
+
+```sh
+# Agent-first prototype: cached responses only, no keys, pricing GETs or paid calls.
+# Historical investigator caches use a different protocol; missing responses yield disclosed fallbacks.
+python3 code/main.py audit --decision-mode agent-first --provider roar --agent-model claude-haiku-5-5 \
+    --requests dataset/sample_deletion_requests.csv --output .runs/agent-first/predictions.csv \
+    --run-dir .runs/agent-first --agent-max-rounds 8
+```
+
+Jev is optional here: `--intent jev` enables cached typed media interpretation, never precomputed
+request intent. `--media-cache` supplies earlier screenshot readings for agent tools. The primary
+model is chosen with `--agent-model` (Gemini, Claude or another native tool-calling model); its new
+proposal protocol still needs separately authorized live evaluation. `--agent-cache` is copied
+before use so invalid/missing entries cannot alter the original cache. Live gateways are refused.
 
 ```sh
 # Offline: explicit English intent, narrowly recognized native PDF structures, screenshots unread

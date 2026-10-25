@@ -83,6 +83,37 @@ def inventory(dataset: Path) -> dict:
     }
 
 
+def run_agent_first_offline(args):
+    """Read cached responses through an isolated copy; never load secrets or contact a catalog."""
+    import shutil
+    import tempfile
+    from ghostaudit.investigator import InvestigatorConfig
+    from ghostaudit.providers import Gateway, ProviderConfig
+    if args.investigator != 'off':
+        raise ContractError('agent-first is the primary agent; disable the baseline investigator')
+    if args.agent_max_rounds < 1 or args.agent_max_tool_calls < 1 or args.agent_max_completion_tokens < 1:
+        raise ContractError('agent round and tool limits must be positive')
+    with tempfile.TemporaryDirectory(prefix='ghost-agent-replay-') as temporary:
+        cache = Path(temporary) / 'cache'
+        if args.agent_cache.exists():
+            shutil.copytree(args.agent_cache, cache)
+        else:
+            cache.mkdir()
+        g = Gateway(ProviderConfig(provider=args.provider, max_calls=0, max_cost_paise=0,
+                                   cache_dir=str(cache), jev_model=args.jev_model, vision_model=args.vision_model))
+        g.mode = 'replay'
+        model = args.agent_model or g.config.investigator_model
+        if not model:
+            raise ContractError('agent-first needs --agent-model for this provider')
+        config = InvestigatorConfig(model, max_rounds=args.agent_max_rounds,
+                                    max_tool_calls=args.agent_max_tool_calls, max_case_tokens=120000,
+                                    max_completion_tokens=args.agent_max_completion_tokens)
+        media = json.loads(args.media_cache.read_text(encoding='utf-8')) if args.media_cache else None
+        return run_audit(args.dataset, args.requests, args.output, args.run_dir,
+                         gateway=g if args.intent != 'offline' else None, media_cache=media,
+                         decision_mode='agent-first', agent_gateway=g, agent_config=config)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -94,6 +125,12 @@ def main(argv=None) -> int:
     aud.add_argument('--requests', type=Path, required=True)
     aud.add_argument('--output', type=Path, required=True)
     aud.add_argument('--run-dir', type=Path, required=True, help='diagnostics directory bound to the output')
+    aud.add_argument('--decision-mode', choices=['baseline', 'agent-first'], default='baseline')
+    aud.add_argument('--agent-model', help='general-purpose tool-calling model ID for agent-first cached replay')
+    aud.add_argument('--agent-cache', type=Path, default=Path('.cache/ghostaudit'))
+    aud.add_argument('--agent-max-rounds', type=int, default=8)
+    aud.add_argument('--agent-max-tool-calls', type=int, default=40)
+    aud.add_argument('--agent-max-completion-tokens', type=int, default=6000)
     aud.add_argument('--intent', choices=['offline', 'jev', 'staged'], default='offline',
                      help='offline: deterministic English only; jev: Jev + deterministic check; staged: + generative')
     aud.add_argument('--env-file', type=Path, help='explicitly load credentials from a local .env')
@@ -150,6 +187,11 @@ def main(argv=None) -> int:
             print(json.dumps(records[f'{args.provider}:{args.model}'], indent=2))
             return 0 if result['ok'] else 2
         elif args.command == 'audit':
+            if args.decision_mode == 'agent-first':
+                summary = run_agent_first_offline(args)
+                print(json.dumps({k: v for k, v in summary.items() if k not in
+                                  ('fallback_ids', 'model_usage', 'code_sha256')}, indent=2))
+                return 0
             if args.output.resolve() == (args.dataset / 'sample_output.csv').resolve():
                 raise ContractError('refusing to overwrite supplied labels')
             gateway = investigator_gateway = investigator = None
