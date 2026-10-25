@@ -1,0 +1,444 @@
+{
+  "evidence_04": {
+    "page_kind": "ACCOUNT_PROFILE",
+    "page_title": "Haruka Sato",
+    "entities": {
+      "account_5762": {
+        "Account identifier": "account_5762",
+        "Email": "haruka.s1838@zoho.com",
+        "Last contact": "24 Sep 2026 09:14 JST",
+        "Loyalty tier": "Silver",
+        "Market": "JP",
+        "Phone": "+81 90 7610 2507",
+        "Preferred language": "Japanese",
+        "Signup channel": "mobile_app",
+        "User identifier": "user_11"
+      },
+      "support_9538": {
+        "Default address": "2-18-4 Kichijoji, Musashino, Tokyo 180-0004",
+        "Loyalty tier": "Silver",
+        "Member since": "12 Jan 2024",
+        "Support": "CS-8538 · support_9538"
+      }
+    },
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  },
+  "evidence_09": {
+    "page_kind": "SEARCH_RESULTS",
+    "page_title": "Customer Search",
+    "entities": {
+      "search_1874": {
+        "Customer reference": "—",
+        "Display name": "—",
+        "Email": "g.silva76.jr@gmail.com",
+        "Last indexed": "05:55:03 UTC",
+        "Score": "4.12",
+        "_id": "search_1874"
+      },
+      "search_428": {
+        "Customer reference": "user_13",
+        "Display name": "Gabriel Silva",
+        "Email": "g.silva76@gmail.com",
+        "Last indexed": "05:58:21 UTC",
+        "Score": "9.84",
+        "_id": "search_428",
+        "_index": "customer_directory_v3",
+        "customer_reference": "user_13",
+        "display_name": "Gabriel Silva",
+        "email": "g.silva76@gmail.com",
+        "indexed_at": "2026-09-01T05:58:21Z"
+      }
+    },
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  },
+  "evidence_14": {
+    "page_kind": "DATA_FLOWS",
+    "page_title": "Connections",
+    "entities": {
+      "data_flow_1121": {
+        "Connector": "data_flow_1121",
+        "Destination": "customer_analytics_warehouse",
+        "Events/hour": "1,284",
+        "Last contact": "07:59:42",
+        "Last response": "200 OK · 1.8 s",
+        "Mode": "Continuous",
+        "Owner": "Data Platform",
+        "Selector": "jain.aditi@gmail.com",
+        "Status": "Healthy",
+        "Sync mode": "Continuous sync"
+      },
+      "data_flow_9846": {
+        "Connector": "data_flow_9846",
+        "Destination": "customer_analytics_warehouse",
+        "Events/hour": "842",
+        "Last contact": "07:59:36",
+        "Mode": "Continuous",
+        "Selector": "lucia-torres@gmail.com"
+      }
+    },
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  },
+  "evidence_18": {
+    "pages": 2,
+    "lines": 20,
+    "facts": {
+      "resource_ids": [
+        "user_18"
+      ],
+      "emails": [
+        "ingrid.dahl@outlook.com"
+      ],
+      "phones": [],
+      "labels": [
+        "NST-2026-0718-1842",
+        "NST-2026-0718-1842",
+        "ORD-20261260"
+      ],
+      "retain_until": [],
+      "user_refs": []
+    },
+    "kind": {
+      "choice": "CUSTOMER_STATEMENT_OR_EXPORT",
+      "p": 1.0,
+      "model": "typesafe/jev-1.13-20260917"
+    }
+  },
+  "evidence_19": {
+    "page_kind": "ANALYTICS_PROFILE",
+    "page_title": "Omar Darwish",
+    "entities": {
+      "analytics_7438": {
+        "Analytics ID": "analytics_7438",
+        "Email": "darwish.omar@icloud.com",
+        "Time Range": "Last 90 days",
+        "User ID": "user_20"
+      }
+    },
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  },
+  "evidence_23": {
+    "page_kind": "DATA_EXPORTS",
+    "page_title": "Data exports",
+    "entities": {
+      "export_1258": {
+        "Created": "16 Jun 09:27 UTC",
+        "Export ID": "export_1258",
+        "Filename": "customer_export_1258.zip",
+        "Owner": "daniel.park@northstar.shop",
+        "Status": "Ready"
+      },
+      "export_1259": {
+        "Created": "17 Jun 11:03 UTC",
+        "Export ID": "export_1259",
+        "Filename": "customer_export_1259.zip",
+        "Owner": "sara.kim@northstar.shop",
+        "Status": "Packaging"
+      },
+      "export_1260": {
+        "Activity": "06:46 Ready for download; 06:45 Package created; 06:43 Collecting customer records; 06:42 Export requested",
+        "Checksum": "SHA-256 · 41ca09...",
+        "Created": "18 Jun 2026 06:42 UTC",
+        "Download count": "0",
+        "Expires": "25 Jun 2026 06:42 UTC",
+        "Export ID": "export_1260",
+        "Filename": "customer_export_1260.zip",
+        "Included": "Profile · Orders · Saved addresses",
+        "Owner": "ingrid.dahl@outlook.com",
+        "Size": "18.4 MB",
+        "Status": "Ready"
+      },
+      "export_1261": {
+        "Created": "20 Jun 14:18 UTC",
+        "Export ID": "export_1261",
+        "Filename": "customer_export_1261.zip",
+        "Owner": "marcus.lee@northstar.shop",
+        "Status": "Collecting"
+      }
+    },
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  },
+  "evidence_27": {
+    "pages": 2,
+    "lines": 17,
+    "facts": {
+      "resource_ids": [
+        "user_08",
+        "user_12",
+        "user_17",
+        "user_21",
+        "user_24",
+        "user_29"
+      ],
+      "emails": [],
+      "phones": [],
+      "labels": [
+        "ORD-20264118",
+        "ORD-20264207",
+        "ORD-20264319",
+        "ORD-20264402",
+        "ORD-20264511",
+        "ORD-20264600"
+      ],
+      "retain_until": [
+        "2033-05-04 00:00:00+00:00",
+        "2033-05-09 00:00:00+00:00",
+        "2033-05-14 00:00:00+00:00",
+        "2033-05-18 00:00:00+00:00",
+        "2033-05-23 00:00:00+00:00",
+        "2033-05-28 00:00:00+00:00"
+      ],
+      "user_refs": []
+    },
+    "kind": {
+      "choice": "LEGAL_RETENTION_REGISTER",
+      "p": 1.0,
+      "model": "typesafe/jev-1.13-20260917"
+    }
+  },
+  "evidence_28": {
+    "page_kind": "SUPPORT_TICKET",
+    "page_title": "CS-5034 · Where is my delivery?",
+    "entities": {
+      "support_1034": {
+        "Assigned": "Maya Chen",
+        "Breadcrumb": "Northstar Shop / Helpline Console / Inbox",
+        "Customer": "Kofi Agyeman",
+        "Email": "kagyeman8947@fastmail.com",
+        "Priority": "Normal priority",
+        "SLA": "01:42",
+        "Tags": "Delivery · Tracking · Order update"
+      }
+    },
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  },
+  "evidence_32": {
+    "page_kind": "BACKUP_ARCHIVES",
+    "page_title": "Customer-platform archives",
+    "entities": {
+      "backup_9286": {
+        "Account": "summit-retail@company.com",
+        "Archive ID": "backup_9286",
+        "Created": "26 Apr 02:00",
+        "Encryption": "AES-256",
+        "Region": "us-east-1",
+        "Size": "91.4 GB",
+        "Tier": "Archive"
+      },
+      "backup_9287": {
+        "Account": "areed1433@gmail.com",
+        "Archive ID": "backup_9287",
+        "Checksum": "Verified",
+        "Created": "26 Apr 2026 02:00 UTC",
+        "Encryption": "AES-256",
+        "Last drill": "29 Mar 2026",
+        "Path": "s3://northstar-backups/customer-platform/weekly/segment-42-20260426.tar.zst",
+        "Region": "eu-west-1",
+        "Retention end": "26 Jul 2026",
+        "Size": "84.7 GB",
+        "Tier": "Archive"
+      },
+      "backup_9288": {
+        "Account": "miller.logistics@company.com",
+        "Archive ID": "backup_9288",
+        "Created": "26 Apr 02:00",
+        "Encryption": "AES-256",
+        "Region": "us-west-2",
+        "Size": "67.1 GB",
+        "Tier": "Archive"
+      },
+      "backup_9291": {
+        "Account": "bluepeakco@outlook.com",
+        "Archive ID": "backup_9291",
+        "Created": "26 Apr 02:00",
+        "Encryption": "AES-256",
+        "Region": "ap-southeast-1",
+        "Size": "102.3 GB",
+        "Tier": "Archive"
+      }
+    },
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  },
+  "evidence_37": {
+    "page_kind": "SECURITY_EVENTS",
+    "page_title": "Account events",
+    "entities": {
+      "audit_record_001": {
+        "Actor": "User (self)",
+        "Category": "Authentication",
+        "Event": "Recovery challenge completed",
+        "Integrity": "Valid",
+        "Reference": "audit_record_001",
+        "Subject": "user_03",
+        "Time (UTC)": "24 Aug 16:14"
+      },
+      "audit_record_002": {
+        "Actor": "Security system",
+        "Category": "Session management",
+        "Event": "Session revoked",
+        "Integrity": "Valid",
+        "Reference": "audit_record_002",
+        "Subject": "user_03",
+        "Time (UTC)": "25 Aug 03:21"
+      },
+      "audit_record_003": {
+        "Actor": "Automated workflow",
+        "Category": "Account lifecycle",
+        "Event": "Account closure recorded",
+        "Integrity": "Valid",
+        "Reference": "audit_record_003",
+        "Subject": "user_03",
+        "Time (UTC)": "25 Aug 04:03",
+        "actor": "automated account workflow",
+        "event_type": "account_closure_recorded",
+        "fingerprint": "8f0c...31ad",
+        "journal": "2026-Q3",
+        "recorded_at": "2026-08-25T04:03:00Z",
+        "signature": "Valid",
+        "subject": "user_03"
+      },
+      "audit_record_004": {
+        "Actor": "User (self)",
+        "Category": "Authentication",
+        "Event": "Password changed",
+        "Integrity": "Valid",
+        "Reference": "audit_record_004",
+        "Subject": "user_03",
+        "Time (UTC)": "18 Aug 14:05"
+      },
+      "audit_record_005": {
+        "Actor": "User (self)",
+        "Category": "Authentication",
+        "Event": "Login from new device",
+        "Integrity": "Valid",
+        "Reference": "audit_record_005",
+        "Subject": "user_03",
+        "Time (UTC)": "20 Aug 09:42"
+      },
+      "audit_record_006": {
+        "Actor": "User (self)",
+        "Category": "Profile update",
+        "Event": "Email change confirmed",
+        "Integrity": "Valid",
+        "Reference": "audit_record_006",
+        "Subject": "user_03",
+        "Time (UTC)": "22 Aug 11:27"
+      }
+    },
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  },
+  "evidence_42": {
+    "page_kind": "CUSTOMER_REFERENCE",
+    "page_title": "user_17",
+    "entities": {
+      "tombstone_17": {
+        "Created": "11 Jan 2024 08:42 UTC",
+        "Most recent update": "10 Mar 2026 07:18 UTC",
+        "Owner team": "Account Platform",
+        "Reference type": "Customer key",
+        "Status": "Retained reference",
+        "Subtext": "Customer key · Account Platform · eu-west"
+      }
+    },
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  },
+  "evidence_46": {
+    "page_kind": "OBJECT_STORAGE",
+    "page_title": "northstar-customer-data",
+    "entities": {},
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  },
+  "evidence_55": {
+    "pages": 1,
+    "lines": 18,
+    "facts": {
+      "resource_ids": [
+        "audit_record_003",
+        "user_03"
+      ],
+      "emails": [],
+      "phones": [],
+      "labels": [
+        "CJX-20260905",
+        "CJX-20260905"
+      ],
+      "retain_until": [
+        "2027-08-25 04:03:00+00:00"
+      ],
+      "user_refs": []
+    },
+    "kind": {
+      "choice": "SECURITY_AUDIT_RECORD",
+      "p": 1.0,
+      "model": "typesafe/jev-1.13-20260917"
+    }
+  },
+  "evidence_58": {
+    "pages": 2,
+    "lines": 25,
+    "facts": {
+      "resource_ids": [
+        "support_001",
+        "support_001"
+      ],
+      "emails": [
+        "priya.raman@gmail.com"
+      ],
+      "phones": [
+        "+91 98765 73142"
+      ],
+      "labels": [
+        "CS-4827",
+        "CS-4827",
+        "ORD-20264827",
+        "delivery_address_correction.pdf",
+        "CS-4827"
+      ],
+      "retain_until": [],
+      "user_refs": []
+    },
+    "kind": {
+      "choice": "SUPPORT_ATTACHMENT",
+      "p": 1.0,
+      "model": "typesafe/jev-1.13-20260917"
+    }
+  },
+  "evidence_60": {
+    "page_kind": "MARKETING_PROFILE",
+    "page_title": "Soo-jin Park",
+    "entities": {
+      "marketing_001": {
+        "Email": "sj.park@naver.com",
+        "Email opt-in": "Yes",
+        "Language": "Korean",
+        "Last refreshed": "15 Sep 2026 23:40 UTC",
+        "Market": "South Korea",
+        "Phone": "+82 10-5837-9451",
+        "SMS opt-in": "No",
+        "Status": "Live"
+      }
+    },
+    "rejected_ids": [],
+    "unreadable": [],
+    "model": "google/gemini-3.8-flash"
+  }
+}
