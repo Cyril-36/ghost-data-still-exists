@@ -38,6 +38,16 @@ class RootCauseFixes(unittest.TestCase):
         trace = json.loads((self.actor.base / 'agent/case_files.jsonl').read_text())
         self.assertEqual(trace['agent_proposals'][0]['serialization']['step_number_map']['3'], 1)
 
+    def test_future_step_citations_in_an_incomplete_row_are_cleared_and_recorded(self):
+        p = copy.deepcopy(self.actor.good)
+        p['steps'][1]['evidence_id'] = p['steps'][2]['evidence_id'] = 'fx_file_A'
+        summary, row, _ = self.actor.run_agent([self.actor.inspect(), [scripted.call('submit_audit', p)]])
+        self.assertEqual(summary['fallback_count'], 0)
+        self.assertEqual([s.evidence_id for s in row.steps], ['fx_file_A', '', ''])   # the finding keeps its proof
+        trace = json.loads((self.actor.base / 'agent/case_files.jsonl').read_text())
+        cleared = trace['agent_proposals'][0]['serialization']['cleared_future_evidence']
+        self.assertEqual([c['operation'] for c in cleared], ['DELETE_RECORD', 'VERIFY_RECORD_ABSENT'])
+
     def test_source_reference_quotes_only_an_already_retrieved_span(self):
         p = copy.deepcopy(self.actor.good)
         del p['witnesses'][0]['literal']

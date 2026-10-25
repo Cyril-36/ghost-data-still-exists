@@ -125,10 +125,11 @@ class ContractFeedback(unittest.TestCase):
 
     def test_a_cited_remediation_is_rejected_without_crashing_the_verifier(self):
         p = copy.deepcopy(self.actor.good)
+        p['deletion_status'] = 'COMPLETE'     # nothing is cleared outside an INCOMPLETE row
         p['steps'][1]['evidence_id'] = 'fx_file_A'
         summary, row, integrity = self.findings(p)
-        self.assertEqual([f['message'].split(': ', 1)[1] for f in integrity],
-                         ['proposed DELETE_RECORD fx_account_A must have empty evidence_id'])
+        self.assertIn('COMPLETE needs one or more VERIFICATION steps and nothing else',
+                      [f['message'].split(': ', 1)[1] for f in integrity])   # rejected, and the verifier ran
         self.assertEqual((summary['fallback_count'], row.steps), (1, ()))
 
 

@@ -1,5 +1,6 @@
 """Structural serialization of an agent proposal; never infer or add semantic steps."""
 import json
+from dataclasses import replace
 
 from .contracts import ContractError, Step, STEP_FIELDS
 from .output import canonical_steps, steps_to_json
@@ -8,8 +9,10 @@ from .output import canonical_steps, steps_to_json
 def normalize_proposal(proposal):
     """Sort/number unchanged steps and rebind witnesses by the agent's unique step IDs.
 
+    In an INCOMPLETE row every REMEDIATION and VERIFICATION step is future work, which the output
+    contract writes with an empty evidence_id; a citation the agent put there is cleared and recorded.
     Conflicting/duplicate steps, ambiguous IDs and orphan witnesses are errors, not repairs.
-    Authorization, status, resources, operations, states and evidence IDs are never changed.
+    Authorization, status, resources, operations, states and FINDING evidence are never changed.
     """
     originals = proposal['steps']
     ids = [s['step_no'] for s in originals]
@@ -20,6 +23,13 @@ def normalize_proposal(proposal):
         if set(row) != set(STEP_FIELDS):
             raise ContractError('proposal steps must have exactly the output step fields')
         steps.append(Step(**{k: row[k] for k in STEP_FIELDS if k != 'step_no'}))
+    cleared = []
+    if proposal['deletion_status'] == 'INCOMPLETE':
+        for i, step in enumerate(steps):
+            if step.phase != 'FINDING' and step.evidence_id:
+                cleared.append({'operation': step.operation, 'system_id': step.system_id,
+                                'resource_id': step.resource_id, 'evidence_id': step.evidence_id})
+                steps[i] = replace(step, evidence_id='')
     ordered = canonical_steps(steps)
     if len(ordered) != len(steps):
         raise ContractError('duplicate agent steps must be resolved by the agent')
@@ -37,4 +47,5 @@ def normalize_proposal(proposal):
     changed = serialized != originals
     return {**proposal, 'steps': serialized, 'witnesses': witnesses}, {
         'changed': changed, 'step_number_map': {str(k): v for k, v in remap.items()} if changed else {},
-        'semantics': 'unchanged; structural ordering/numbering only'}
+        'cleared_future_evidence': cleared,
+        'semantics': 'unchanged; ordering/numbering and future-step evidence serialization only'}
